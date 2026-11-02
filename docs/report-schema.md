@@ -1,4 +1,4 @@
-# JSON report schema, version 1 (M1)
+# JSON report schema, version 1 (M2)
 
 The root contains `schemaVersion: 1`, `entities` and `findings`. No timestamps, absolute local filenames on successful comparisons, or random run IDs are added, allowing byte-stable output for the same normalized data/configuration. Source errors describe the observed input location and may naturally vary with row order or environment. Object properties follow configuration order; findings are sorted with binary string ordering by entity, key, field, source, type. Entity summaries sort by entity name.
 
@@ -14,6 +14,7 @@ The root contains `schemaVersion: 1`, `entities` and `findings`. No timestamps, 
       "field": "payout",
       "expected": "101",
       "actual": "100",
+      "blocking": true,
       "message": "export: key S000001, field payout differs from reference api; check formatting, rounding and business rules."
     }
   ],
@@ -21,7 +22,9 @@ The root contains `schemaVersion: 1`, `entities` and `findings`. No timestamps, 
 }
 ```
 
-Each finding has string fields `type`, `entity`, `source`, `key`, `field`, and `message`. `expected` and `actual` are optional normalized scalar values. Money values serialize as decimal **integer minor-unit strings**, avoiding JSON number precision loss. Datetimes serialize as UTC epoch milliseconds. Consumers should read the config to interpret currency and normalization types; a numeric-looking string is not sufficient to infer currency.
+Each finding has string fields `type`, `entity`, `source`, `key`, `field`, and `message`. `expected` and `actual` are optional normalized scalar values. M2 engine findings include `blocking: boolean` after entity failure policies are applied. Older findings or direct reporter inputs without this property default to blocking. Source errors always block. Optional `screenshot` paths support relative screenshot links in HTML; the UI adapter remains planned for M3.
+
+Money serializes as decimal **integer minor-unit strings**, avoiding JSON number precision loss. Datetimes serialize as UTC epoch milliseconds. Consumers should read the config to interpret currency/types; a numeric-looking string alone does not identify currency.
 
 | Finding type | Key/field | Meaning |
 | --- | --- | --- |
@@ -30,6 +33,8 @@ Each finding has string fields `type`, `entity`, `source`, `key`, `field`, and `
 | field_mismatch | key and field set, expected/actual present | Normalized values exceed tolerance. |
 | duplicate_key | key and entity key field set | Repeated key within one source; first record retained. |
 | source_error | key and field empty | Read/normalization failed; message includes available source/row/key/field details. |
-| aggregate_mismatch | Reserved | Aggregate reporting begins in M2; M1 never emits this type. |
+| aggregate_mismatch | key empty, field is aggregate name | Normalized count/sum differs beyond aggregate tolerance; expected/actual present. |
 
-`entities[].counts` contains total successfully read rows (including duplicates). Failed sources have no count; a failed reference stops comparisons for that entity. No partial comparisons from a failed source are published. All findings cause exit 1, with source errors taking precedence as exit 2. JSON schema changes will increment schemaVersion; new optional properties can be added within a version. HTML, JUnit and Markdown formats begin in M2.
+`entities[].counts` contains successfully read rows, including duplicates. Failed sources have no count; a failed reference stops comparisons for that entity. No partial comparisons from failed sources are published. Optional `entities[].aggregates` contains `{name, type, values, skippedSources}`: `values` maps source names to numbers or minor-unit strings; `skippedSources` lists partial sources missing aggregate inputs. Failed sources publish no aggregate values. Aggregates count unique keys and ignore null sum values.
+
+Exit 0 means no blocking findings; exit 1 means blocking ordinary findings, with source errors taking precedence as exit 2. Thresholds apply per entity/category across sources; all findings remain in reports. Schema changes will increment schemaVersion; optional properties may be added within a version. See report-formats.md for HTML/JUnit/Markdown.

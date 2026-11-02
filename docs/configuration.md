@@ -1,6 +1,6 @@
-# Configuration reference (M1)
+# Configuration reference (M2)
 
-The strict Zod schema is [packages/core/src/config.ts](../packages/core/src/config.ts). Unknown options fail with the file and configuration path; this includes future milestone options such as `aggregates`, `failOn`, `ui`, `sql` and HTML report outputs. YAML syntax errors include line/column. A missing environment variable is reported by name, without echoing its value.
+The strict Zod schema is [packages/core/src/config.ts](../packages/core/src/config.ts). Unknown options fail with the file and configuration path; UI and SQL sources remain future M3 features. YAML syntax errors include line/column. A missing environment variable is reported by name, without echoing its value. `logiparity init [--config path]` writes a commented starter without loading sources or overwriting existing files.
 
 Required root fields: `version: 1` and a nonempty `entities` array. Optional `environment` is `test` (default) or `staging`; `production` is rejected. This declaration cannot verify a target's actual deployment environment. Entity names must be unique. `variables` maps names to quoted strings. Every scalar string supports `${ENV_VAR}` substitution followed by `{{variable}}`; interpolation occurs after YAML parsing so values cannot inject additional YAML structure.
 
@@ -71,4 +71,32 @@ Empty and null are equivalent by default; `emptyAsNull: false` preserves empty s
 
 ## Reports
 
-`report: {outputs: [console, json], dir: ./logiparity-report}` is the default. At least one supported output is required. `dir` is relative to the configuration file; `report.json` is overwritten on each completed check. JSON output includes source errors even when another source fails. Configuration errors occur before a report is produced. All findings fail in M1; source/runtime failures use exit 2 and take precedence over ordinary findings (exit 1).
+`report: {outputs: [console, json], dir: ./logiparity-report}` is the default. Other outputs: html, junit and markdown. At least one supported output is required. `dir` is relative to the configuration file; selected output files are overwritten on each completed check. Reports include source errors even when another source fails. Configuration errors occur before a new report is produced. See report-formats.md for file names and CI interpretation.
+
+## Aggregates
+
+```yaml
+aggregates:
+  - { name: delivered_count, type: count, where: { status: delivered } }
+  - { name: payout_total, type: sum, field: payout, tolerance: 0 }
+```
+
+Names must be unique per entity. `where` defaults to an empty mapping (all records) and combines equality predicates with AND. Values normalize using each source's field rule, including enum/case/locale handling, then compare exactly without field tolerances. Count counts matching unique keys. Sum requires a number or money rule and a reference mapping for its field. Null sum values contribute nothing; an empty set sums to zero. Duplicate keys contribute their first row once and still produce duplicate findings.
+
+Aggregate `tolerance` defaults to zero, independently of per-record tolerances. Count tolerances must be nonnegative safe integers; money tolerances are integer minor units; numeric tolerances are finite nonnegative numbers. Money adds bigint minor units. Numeric sums add canonical normalized decimals exactly before converting back to a finite number, avoiding arrival-order differences and 0.1 + 0.2 artifacts. Numeric overflow becomes a source error.
+
+Reference sources must map every aggregate input and predicate field. Partial compared sources skip an aggregate if they lack any input mapping. Aggregate summaries contain `values` for evaluated sources and `skippedSources` for partial mappings; failed sources publish no partial totals. Mismatch findings have an empty key and the aggregate name in `field`.
+
+## Failure selection and thresholds
+
+The default per-entity policy is `failOn: [missing, extra, mismatch, aggregate, duplicate]`. Categories map respectively to missing_in_source, extra_in_source, field_mismatch, aggregate_mismatch and duplicate_key. A list means zero allowed findings in each selected category; omitted categories are nonblocking. `failOn: []` or `{}` allows ordinary findings as observations.
+
+For inclusive allowed counts:
+
+```yaml
+failOn: { missing: 2, mismatch: 10, aggregate: 0 }
+```
+
+Exactly two missing findings or ten field mismatches are allowed; a category fails when its count exceeds its limit. Counts span all sources within the entity and remain isolated between entities. When a category exceeds its limit, all its findings become blocking. Every finding remains in the report. Thresholds must be nonnegative safe integers; typos and unsupported categories are configuration errors.
+
+Exit 0 means no blocking ordinary findings; exit 1 means at least one blocking finding. Source errors always block and force exit 2; failOn cannot suppress them. Invalid config, startup or report write failures also return 2. Policy does not change normalization, comparison tolerances or source data. Existing files from an earlier run may remain when configuration validation fails before writing; CI must use the exit code.
