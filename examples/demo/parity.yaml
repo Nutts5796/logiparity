@@ -1,0 +1,37 @@
+# Test and staging only. Run npm run demo:export before this check.
+version: 1
+environment: test
+entities:
+  - name: shipment
+    key: shipment_id
+    sources:
+      api: # First source is the reference.
+        type: rest
+        baseUrl: ${DEMO_API_URL}
+        path: /api/shipments?date={{date}}
+        pagination: { type: page, pageParam: page, sizeParam: limit, size: 200 }
+        items: $.data[*]
+        fields:
+          shipment_id: $.id
+          status: $.status
+          payout: $.driver_payout
+          delivered_at: $.delivered_at
+      export:
+        type: xlsx
+        file: ./out/shipments-{{date}}.xlsx
+        sheet: Shipments
+        headerRow: 1
+        fields: { shipment_id: "Shipment ID", status: Status, payout: "Driver payout", delivered_at: "Delivered at" }
+      csv:
+        type: csv
+        file: ./out/shipments-{{date}}.csv
+        fields: { shipment_id: "Shipment ID", status: Status, payout: "Driver payout", delivered_at: "Delivered at" }
+    compare:
+      status: { type: enum, map: { "In transit": in_transit, Delivered: delivered } }
+      payout: { type: money, currency: USD, tolerance: 0 }
+      delivered_at: { type: datetime, toleranceSeconds: 60 }
+variables:
+  date: "2026-11-02"
+report:
+  outputs: [console, json]
+  dir: ../../logiparity-report
