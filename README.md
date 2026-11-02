@@ -27,6 +27,17 @@ An endpoint test can pass while another surface shows different records. A contr
 
 LogiParity combines keyed record parity across UI, API, exports and SQL with exact money and timezone handling, plus disruption scenarios with operational invariants. YAML defines the sources, mappings, tolerances and failure rules. Reports connect each difference to its source, key and field.
 
+## Install
+
+Install the CLI in your project with Node.js 20 or later:
+
+```sh
+npm install --save-dev logiparity@1.0.1
+./node_modules/.bin/logiparity --version
+```
+
+Versioned tarballs with checksums are another option; see the [release guide](docs/release.md). For the synthetic demo and source development, use the checkout below. CI tests Node 20 and 22.
+
 ## Quickstart
 
 Use Node.js 20 or later; CI tests Node 20 and 22. The demo contains 55 synthetic drivers and 2,750 orders. No browser or database installation is needed for this first report.
@@ -43,6 +54,7 @@ DEMO_PORT=3010 npm run demo
 ```sh
 export DEMO_API_URL=http://127.0.0.1:3010
 npm run demo:export
+./node_modules/.bin/logiparity validate --config examples/demo/parity.yaml
 ./node_modules/.bin/logiparity check --config examples/demo/parity.yaml
 ```
 
@@ -62,84 +74,61 @@ HTML and Markdown show currency values beside minor units, and ISO UTC beside ep
 
 ## Try it on your staging
 
-Save this as `parity.yaml`. Set `STAGING_API_URL` and `STAGING_API_TOKEN` in your environment. Read the export and API at the same cutoff time. Alternatively, compare a closed day so in-flight updates do not become parity findings.
+Save this as `parity.yaml`, or generate the identical starter with `./node_modules/.bin/logiparity init`. It works against the running demo without a token; change only `STAGING_API_URL` below to use a different demo port. For your own API, edit paths, mappings and completion metadata to match its contract. Uncomment bearer authentication if your staging API requires it and set `STAGING_API_TOKEN`.
 
 ```yaml
+# LogiParity starter — TEST AND STAGING ENVIRONMENTS ONLY.
+# First source is the reference. Paths resolve relative to this YAML file.
+# Set STAGING_API_URL to your test/staging API, then edit path and fields.
+# Keep secrets in environment variables; do not write credentials here.
 version: 1
-environment: staging
+environment: test
 entities:
   - name: shipment
-    key: id
+    key: shipment_id
     sources:
       api:
         type: rest
         baseUrl: ${STAGING_API_URL}
-        path: /shipments
-        auth: {type: bearer, tokenEnv: STAGING_API_TOKEN}
-        pagination: {type: page, size: 25, totalPagesPath: $.pagination.totalPages}
-        fields: {id: $.id, status: $.status, payout: $.payout}
-      accounting:
+        path: /api/shipments
+        items: $.data[*]
+        pagination: { type: page, totalPath: $.pagination.total, pageParam: page, sizeParam: limit, size: 200 }
+        # auth: { type: bearer, tokenEnv: STAGING_API_TOKEN }
+        fields: { shipment_id: $.id, status: $.status, payout: $.driver_payout }
+      export:
         type: csv
         file: ./shipments.csv
-        fields: {id: "Shipment ID", status: Status, payout: "Driver payout"}
+        headerRow: 1
+        fields: { shipment_id: "Shipment ID", status: Status, payout: "Driver payout" }
     compare:
-      status: {type: enum}
-      payout: {type: money, currency: USD, allowNumber: true}
+      status: { type: enum, map: { Delivered: delivered, "In transit": in_transit } }
+      # Money defaults to decimal strings; numeric input requires allowNumber: true.
+      # Tolerance is in minor units.
+      payout: { type: money, currency: USD, tolerance: 0 }
+    aggregates:
+      - { name: delivered_count, type: count, where: { status: delivered } }
+      - { name: payout_total, type: sum, field: payout }
+    # List: any finding in a selected category fails. [] is report-only.
+    failOn: [missing, extra, mismatch, aggregate, duplicate]
+    # Or use allowed counts: { missing: 2, mismatch: 10, aggregate: 0 }
+    # Runtime/source errors always exit 2, regardless of failOn.
 report:
-  outputs: [console, html, json, markdown, junit]
+  outputs: [console, html, junit, json, markdown]
   dir: ./logiparity-report
 ```
 
-Match the paths, headers and pagination metadata to your API, then run `./node_modules/.bin/logiparity validate --config parity.yaml` to check the file without reading any source. `logiparity init` writes a commented starter config. `totalPagesPath` detects a server that caps pages below the requested size. `allowNumber` accepts numeric API payouts through their decimal string representation; decimal strings remain the safest money input. Read the [configuration reference](docs/configuration.md) for precision rules, SQL and browser sources.
+Download a current export, validate the configuration, then compare:
 
-This GitHub Actions job downloads the export and preserves reports after either kind of failure. Run shared staging checks manually or nightly; enable pull requests only with an isolated target.
-
-```yaml
-name: Staging parity
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 3 * * *'
-permissions: {contents: read}
-jobs:
-  parity:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      STAGING_API_URL: ${{ vars.STAGING_API_URL }}
-      STAGING_API_TOKEN: ${{ secrets.STAGING_API_TOKEN }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with: {node-version: '22', cache: npm, cache-dependency-path: parity.yaml}
-      - name: Verify and install the release
-        run: |
-          base=https://github.com/Nutts5796/logiparity/releases/download/v1.0.0
-          curl --fail --silent --show-error --location "$base/logiparity-1.0.0.tgz" --output logiparity-1.0.0.tgz
-          curl --fail --silent --show-error --location "$base/logiparity-1.0.0.tgz.sha256" --output logiparity-1.0.0.tgz.sha256
-          sha256sum --check logiparity-1.0.0.tgz.sha256
-          npm install --no-save --ignore-scripts ./logiparity-1.0.0.tgz
-      - run: >-
-          curl --fail --silent --show-error
-          -H "Authorization: Bearer $STAGING_API_TOKEN"
-          "$STAGING_API_URL/exports/shipments.csv" --output shipments.csv
-      - name: Compare
-        run: |
-          set +e
-          ./node_modules/.bin/logiparity check --config parity.yaml
-          code=$?
-          set -e
-          if [ "$code" -eq 1 ]; then echo '::error::Data findings'; fi
-          if [ "$code" -eq 2 ]; then echo '::error::Source or configuration error'; fi
-          exit "$code"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: parity-report
-          path: logiparity-report/
+```sh
+export STAGING_API_URL=http://127.0.0.1:3010
+curl --fail --silent --show-error "$STAGING_API_URL/exports/shipments.csv" --output shipments.csv
+./node_modules/.bin/logiparity validate --config parity.yaml
+./node_modules/.bin/logiparity check --config parity.yaml
 ```
 
-The installation URL targets the v1.0.0 release asset. Until that asset is attached, use the source checkout above or a locally built tarball. Once npm publication is available, `npm install logiparity@1.0.0` is the registry option. The [CI guide](docs/ci.md) and [templates](templates/github-actions.yml) cover report retention, credentials and browser setup.
+Read the export and API at the same cutoff time, or compare a closed day to avoid in-flight updates. `totalPath` detects capped pages and confirms completion. Money uses decimal strings by default; opt into numeric input only after reviewing precision. The [configuration reference](docs/configuration.md) also covers SQL, browser sources and `validate --allow-missing-env` for CI lint steps without secrets.
+
+The [npm-based GitHub Actions template](templates/github-actions.yml) installs `logiparity@1.0.1`, downloads a staging export and retains reports for seven days. Tokens are scoped to the download and comparison steps. Shared staging checks run manually or nightly; enable pull requests only with an isolated target. [Container-job](templates/github-actions-container.yml) and [GitLab](templates/gitlab-ci.yml) variants use `LOGIPARITY_IMAGE`; their clearly marked 1.0.1 slim digest placeholder is completed after release as described in the [release guide](docs/release.md).
 
 ## Disruption scenarios
 

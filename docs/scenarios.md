@@ -53,7 +53,7 @@ name: staging-delivery
 environment: staging
 allowMutations: true
 baseUrl: ${STAGING_API_URL}
-headersEnv: {Authorization: STAGING_AUTHORIZATION} # Include "Bearer " in the env value.
+headersEnv: {Authorization: {env: STAGING_API_TOKEN, prefix: "Bearer "}} # Reuse the raw token.
 events:
   vehicle_breakdown:
     method: POST
@@ -113,6 +113,8 @@ Built-ins validate and read only their required sources and fields. Unknown or m
 
 Affected-order checks additionally need orders.zone for traffic_delay, or drivers.id and drivers.vehicle_id when capacity_change identifies a vehicle. Driver-based events derive affected keys from assignments. single_assignment verifies cardinality, cancellation and order references; capacity_respected verifies driver and vehicle resources. Custom modules and JSONPath checks can access any configured source, so a run containing a custom check reads all configured sources.
 
+Orders and assignments alone cannot establish that replanning executed: unchanged snapshots can satisfy both `no_order_lost` and `single_assignment` even if no replan ran. Add a completion source that identifies the requested run, a custom check of reassignment away from the absent driver, or appropriate ETA/resource checks for the intended behavior.
+
 A minimal no-show scenario can use `invariants: [no_order_lost, single_assignment]` with only orders, assignments and its chosen wait source. See the [bring-your-own-API target](../examples/staging/driver-no-show-target.yaml) and [scenario](../examples/staging/driver-no-show.yaml). Their paths, IDs and payloads are placeholders to replace with your staging contract; they use no demo-specific replan or clock endpoint.
 
 ## Custom checks
@@ -127,6 +129,20 @@ invariants:
   - name: custom order contract
     module: ./invariants/order-contract.ts
 ```
+
+A custom module receives `InvariantState` with this shape:
+
+```ts
+{
+  before: Record<string, Record<string, unknown>[]>;
+  after: Record<string, Record<string, unknown>[]>;
+  events: {step: number; type: string; at?: string; params: Record<string, unknown>}[];
+  affectedKeys: string[];
+  cancelledKeys: string[];
+}
+```
+
+The actual exported `ScenarioEvent` type narrows `type` to supported events. `state.events` is the ordered array of configured scenario events (step, type, optional at and params), not HTTP response objects or the target's event log. Source snapshots contain mapped field names. A target state source named `events`, if configured, is instead available as `state.before.events` / `state.after.events`; that source does not replace `state.events`.
 
 TypeScript/JavaScript modules require `scenario run --allow-modules` and must export a default function. Entry paths must be relative to and resolve inside the scenario directory; absolute paths, parent escapes and escaping symlinks are rejected. This opt-in applies to library callers through `{allowModules: true}` in runScenario options, or the third argument to prepareInvariant. Jiti 2.7.0 supplies TypeScript loading on both supported Node versions. Opted-in modules are imported during preflight and may execute top-level code. The function receives a cloned snapshot and must return (or resolve) exactly an `InvariantResult`; thrown exceptions or malformed results exit 2.
 
@@ -150,3 +166,5 @@ Optional target `artifacts` are GET requests with safe basename filenames ending
 The existing comparison engine supplies normalization, aggregates and `failOn`. A consistent API/export can pass Parity while an operational invariant fails: losing an order from every surface is still a loss. The five shipped scenarios exercise 55 drivers/2,750 orders with spare capacity and a deterministic synthetic planner. `BUG_REPLAN_LOSES_ORDER` and `BUG_DOUBLE_ASSIGN` reproduce the independent domain failures; see [bug switches](../apps/demo-delivery/BUGS.md).
 
 Rendered request path segments equal to `.` or `..`, including percent-encoded forms, are rejected before URL normalization or sending. Configuration files and opted-in modules are trusted input; the module entry restriction does not sandbox its imports or Node permissions. AI-generated scenario drafts cannot contain module invariants.
+
+For target request headers, `headersEnv: {Authorization: {env: STAGING_API_TOKEN, prefix: "Bearer "}}` reuses the raw token also named by REST `auth.tokenEnv`. A string value remains supported for an environment variable already containing the complete header value. All referenced variables are checked in preflight; configured secret values are redacted from errors and reports.

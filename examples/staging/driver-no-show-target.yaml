@@ -5,7 +5,7 @@ environment: staging
 allowMutations: true
 baseUrl: ${STAGING_API_URL}
 headersEnv:
-  Authorization: STAGING_AUTHORIZATION # Full "Bearer ..." value from the environment.
+  Authorization: {env: STAGING_API_TOKEN, prefix: "Bearer "} # Reuse the state-source token.
 events:
   driver_no_show:
     method: POST

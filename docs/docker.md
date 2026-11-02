@@ -3,8 +3,8 @@
 Build the local image from the repository root:
 
 ```sh
-docker build --tag logiparity:1.0.0 .
-docker run --rm --network=none logiparity:1.0.0 --help
+docker build --tag logiparity:1.0.1 .
+docker run --rm --network=none logiparity:1.0.1 --help
 ```
 
 The multi-stage Dockerfile builds and packs the same single npm artifact, installs it offline in the runtime stage, installs matching Chromium/system dependencies explicitly at image build, and runs as the existing non-root node user. No credentials are baked into the image. The Docker context allowlist excludes auth state, exports, reports, node_modules and environment files. The Node 22.23.4/Debian base is pinned by an immutable manifest digest. Review/update that digest and scan the final image before publication.
@@ -15,7 +15,7 @@ Run a configured test/staging check with a writable report directory:
 docker run --rm --init --shm-size=1g \
   --mount type=bind,src="$PWD",dst=/work \
   --env STAGING_API_URL --env STAGING_API_TOKEN \
-  logiparity:1.0.0 check --config parity.yaml
+  logiparity:1.0.1 check --config parity.yaml
 ```
 
 Config and source file paths resolve inside /work. The host workspace must permit writes by container UID 1000, or select an appropriate --user UID:GID; do not solve access errors with a privileged container. Keep authentication state read-only/private except the report destination. Pass only required test variables; the image has no automatic AI invocation.
@@ -31,8 +31,10 @@ The image entrypoint is logiparity, so all check/init/scenario/AI commands accep
 For API, file and SQL checks without Chromium:
 
 ```sh
-docker build --target slim --tag logiparity:1.0.0-slim .
-docker run --rm --network=none logiparity:1.0.0-slim --version
+docker build --target slim --tag logiparity:1.0.1-slim .
+docker run --rm --network=none logiparity:1.0.1-slim --version
 ```
 
 The default runtime target includes Chromium. Both targets run as node. BuildKit bind mounts keep the package tarball and temporary Playwright installer out of image layers; the full runtime copies only the installed package from the package stage. The slim target retains the JavaScript adapter dependencies but installs no browsers or browser system libraries. A UI check needs the full image.
+
+The release workflow builds the slim image for `linux/amd64,linux/arm64`. The full image currently targets linux/amd64. Use the verified image/index digest in release notes when selecting a published image. The [GitHub container](../templates/github-actions-container.yml) and [GitLab](../templates/gitlab-ci.yml) templates read `LOGIPARITY_IMAGE`; the GitLab template clears the CLI entrypoint for runner shell commands. GitHub container jobs select UID 0 for checkout/workspace access; ordinary image runs still default to UID 1000. See the [release guide](release.md) for the intentional 1.0.1 digest placeholder and follow-up commit.

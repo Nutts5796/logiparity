@@ -24,9 +24,9 @@ backoffMs: 100
 maxPages: 10000
 ```
 
-Use either bearer auth or `auth: {type: basic, usernameEnv: API_USER, passwordEnv: API_PASSWORD}`. `headersEnv` values are environment variable names. Literal Authorization, Proxy-Authorization, Cookie and X-API-Key values in `headers` are rejected. Embedded URL credentials are rejected. `path` and pagination URLs must remain on the configured origin. Every request uses GET; redirects are errors, including same-origin redirects, to prevent implicit forwarding.
+Use either bearer auth or `auth: {type: basic, usernameEnv: API_USER, passwordEnv: API_PASSWORD}`. `headersEnv` accepts an environment variable name for a full header value, or `{env: STAGING_API_TOKEN, prefix: "Bearer "}` to construct a Bearer header from a raw token. The same form works in scenario targets. Literal Authorization, Proxy-Authorization, Cookie and X-API-Key values in `headers` are rejected. Embedded URL credentials are rejected. `path` and pagination URLs must remain on the configured origin. Every request uses GET; redirects are errors, including same-origin redirects, to prevent implicit forwarding.
 
-`items` defaults to `$.data[*]`; `$.data` is also supported when it selects one array. Field paths must select one value per record. Paths support `$`, `.property`, `['quoted property']`, `["quoted property"]`, `[0]`, and `[*]`. No evaluation, filters, slices or recursive descent are supported; unsupported syntax fails when the source is read.
+`items` defaults to `$.data[*]`; `$.data` is also supported when it selects one array. Field paths must select one value per record. Paths support `$`, `.property`, `['quoted property']`, `["quoted property"]`, `[0]`, and `[*]`. No evaluation, filters, slices or recursive descent are supported; unsupported syntax fails during semantic validation, before any source is read.
 
 Pagination options (omit `pagination` for a single request):
 
@@ -77,7 +77,7 @@ maxPages: 1000
 
 Install the pinned browser with `npx playwright install chromium`. URL must be HTTP(S) without embedded credentials. `storageState` is optional and relative to the YAML file. Create it with Playwright on your test/staging login; it can contain credentials and must not be committed. The local demo helper `npm run demo:login` creates ignored state for the public synthetic account only.
 
-Use CSS selectors: table must identify one visible table; rows defaults to tbody tr; field selectors are relative to each row and must match exactly one cell. Text is extracted in one browser batch per page. Money cells must contain decimal text without currency symbols. Optional `readySelector` waits for a visible readiness marker before extraction, useful for asynchronously populated tables. Empty tables are supported; supplying an appropriate readiness marker avoids confusing a loading state with empty data.
+Use CSS selectors: table must identify one visible table; rows defaults to tbody tr; field selectors are relative to each row and must match exactly one cell. Text is extracted in one browser batch per page. Money cells use decimal text; symbols and accounting parentheses require the explicit options below. Optional `readySelector` waits for a visible readiness marker before extraction, useful for asynchronously populated tables. Empty tables are supported; supplying an appropriate readiness marker avoids confusing a loading state with empty data.
 
 Omit nextPage for one page. When configured, the next control must exist on page 1; a disabled, aria-disabled or hidden control ends pagination, and an absent control is accepted after page 1. After clicking, mapped table rows must change. Repeated page fingerprints or exhausting maxPages produce source errors rather than silently truncating. Defaults: timeoutMs 10,000; maxPages 1,000. Chromium startup has a minimum 10-second budget; failure screenshots have a minimum 5-second budget. Navigation/selector/pagination waits use timeoutMs.
 
@@ -114,8 +114,8 @@ Column mappings use result aliases exactly. pg numeric/int8 remain exact decimal
 | string | `caseFold: false`, `locale: en-US`, `emptyAsNull: true`. Trimmed text comparison. |
 | enum | `map: {Delivered: delivered}` followed by optional case folding. Unknown values keep their trimmed text. |
 | number | Locale separators/grouping with Latin digits; finite decimals; `tolerance: 0` by default. Exponents and currency symbols are rejected. |
-| money | Required ISO currency code (e.g. `USD`); decimal string → bigint minor units by default, with opt-in `allowNumber: true` for finite numeric input. Currency fraction digits follow Intl. `tolerance` is a nonnegative safe integer in minor units. No rounding is performed; excess nonzero decimal places fail. |
-| datetime | ISO 8601 → UTC milliseconds; `sourceTimezones: {export: America/Chicago}` for offsetless values; `toleranceSeconds: 0` default. Missing zones, invalid dates, DST gaps and ambiguous local clock times fail. |
+| money | Required ISO currency code (e.g. `USD`); decimal string → bigint minor units by default, with opt-in `allowNumber: true` for finite numeric input. Currency fraction digits follow Intl. `tolerance` is a nonnegative safe integer in minor units. No rounding is performed; excess nonzero decimal places fail. `allowCurrencySymbol: false` and `negativeParentheses: false` are strict defaults; opt in to accept the configured currency symbol/code and accounting negatives such as `(200.00)`. Other currencies and invalid grouping still fail. |
+| datetime | ISO 8601 → UTC milliseconds; optional `format: "MM/dd/yyyy HH:mm"` uses a Luxon export format; `sourceTimezones: {export: America/Chicago}` for offsetless values; `toleranceSeconds: 0` default. Missing zones, invalid dates, DST gaps and ambiguous local clock times fail. A date without a time reports "date has no time". Custom formats retain zone/DST checks; include an explicit offset to disambiguate overlaps. |
 
 Empty and null are equivalent by default; `emptyAsNull: false` preserves empty strings for string/enum fields. Number/money/datetime fields still require valid nonempty values. Comparisons involving null pass only when both sides normalize to null. Keys are nonempty trimmed strings or safe integers, compared as strings; normalization rules do not change key identity. Duplicate keys produce findings, with first record retained and total row counts preserved.
 
@@ -174,10 +174,26 @@ JavaScript may already have lost precision while parsing or computing a number. 
 
 ## Per-key rollups
 
-A source can declare `rollup: {by: load_id, sum: [carrier_pay], first: [status, delivered_at]}` to compare settlement lines against load totals. `by` must equal the entity key; every mapped field belongs to exactly one of by, sum or first. Sum fields require number or money rules. Values normalize before summing; money uses bigint and numbers use exact decimal accumulation. Null sums contribute zero. First retains the first normalized value, including null, in input order. Repeated keys in this source do not create duplicate findings; sources without rollup keep duplicate detection. Source counts still record input rows. See the [freight settlement example](../examples/freight/README.md).
+A source can declare:
+
+```yaml
+rollup:
+  by: load_id
+  sum: [carrier_pay]
+  first: [status, delivered_at]
+  duplicates: {by: [load_id, charge]}
+```
+
+`by` must equal the entity key. Each projected field belongs to exactly one of `by`, `sum` or `first`. Optional `duplicates.by` references mapped fields and includes the entity key; identity-only fields such as `charge` need not be projected into the load total. Identity values cannot be blank. Choose fields that uniquely identify a legitimate line within a load: two valid lines sharing that identity will be flagged, so add a line ID when repeated charge types are legitimate.
+
+Values normalize before summing; money uses bigint and numbers use exact decimal accumulation. `first` retains the first normalized value in input order, including null, and reports every conflicting later value with `reason: rollup_conflict`. A blank money input in `sum` produces `reason: rollup_missing_value`; blank numeric sum inputs continue to contribute zero. Repeated duplicate identities produce `duplicate_key` with `reason: rollup_duplicate` and are excluded before summing.
+
+Conflicts mark their field uncertain; blank money or duplicate identities mark the affected sum fields uncertain. Comparisons involving those fields on that key are skipped on either side, and aggregate sums/predicates depending on them are skipped for that source. This prevents a data-quality problem from producing a misleading rounding or mapping pattern. Counts still record all input rows; count aggregates can operate on the valid unique keys. These findings use the existing mismatch/duplicate failure categories. Sources without rollup retain ordinary key duplicate detection. See the [freight settlement example](../examples/freight/README.md).
 
 ## Validate without reading sources
 
-`logiparity --version` prints the package version. `logiparity validate --config parity.yaml` loads YAML, interpolates variables and validates schemas, field/source references, REST extraction syntax and read-only SQL syntax. It does not open exports, launch a browser, call an API or connect to a database. Source availability and snapshot consistency are checked separately by check.
+`logiparity --version` prints the package version. `logiparity validate --config parity.yaml` loads YAML, interpolates variables and validates schemas, field/source references, REST extraction syntax and read-only SQL syntax. `check` performs the same semantic validation before reading any source. Both commands require all referenced environment variables, including auth/header and SQL variables, to be present and nonempty. `validate --allow-missing-env` permits absent variables for CI linting, lists their names and validates placeholder values; it cannot verify real credentials or source availability. The option is rejected by `check`. Validation does not open exports, launch a browser, call an API or connect to a database. Source availability and snapshot consistency are checked separately by check.
 
-Configuration files are trusted input: they select local files, allowed origins, credentials, queries and scenario mutations. Secret values are redacted from diagnostic paths before errors are printed or saved. A value counts as secret when its variable is referenced by `tokenEnv`, `passwordEnv`, `usernameEnv`, `headersEnv` or `connectionEnv`, when it is interpolated as `${NAME}` and the name contains token, secret, password, apikey, auth, cookie or session, or when it is `LOGIPARITY_AI_API_KEY`. Other environment variables are never redacted, so pass credentials through those fields. Keep configs and generated reports private when they describe internal systems.
+Configuration files are trusted input: they select local files, allowed origins, credentials, queries and scenario mutations. Secret values are redacted from diagnostic paths before errors are printed or saved. A value counts as secret when its variable is referenced by `tokenEnv`, `passwordEnv`, `usernameEnv`, `headersEnv` or `connectionEnv`, when it is interpolated as `${NAME}` and the name contains token, secret, password, passwd, pwd, apikey, auth, cookie, session, credential, privatekey, jwt or signature (case-insensitive, ignoring hyphens, underscores and dots), or when it is `LOGIPARITY_AI_API_KEY`. Other environment variables are never redacted, so pass credentials through those fields. Keep configs and generated reports private when they describe internal systems.
+
+Secret interpolation values are recorded before substitution and preserved through schema parsing for CLI, engine and scenario diagnostics and all report formats. Secret metadata is not serialized into reports.

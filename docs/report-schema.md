@@ -19,11 +19,11 @@ The root contains `schemaVersion: 1`, `entities`, `findings` and additive `group
     }
   ],
   "entities": [{"entity": "shipment", "reference": "api", "counts": {"api": 2750, "export": 2750}}],
-  "groups": [{"entity": "shipment", "source": "export", "field": "payout", "count": 1, "kind": "money_delta", "delta": "-1", "summary": "1 payout value in export differs by exactly -1 USD minor unit."}]
+  "groups": [{"entity": "shipment", "source": "export", "field": "payout", "count": 1, "kind": "money_delta", "delta": "-1", "summary": "1 payout value in export differs by exactly -$0.01 (1 cent) (likely rounding or a fixed adjustment)."}]
 }
 ```
 
-Each finding has string fields type, entity, source, key, field and message. expected/actual are optional normalized scalars. Engine findings include blocking after applying failure policies; older inputs default to blocking. Source errors always block. The UI adapter uses the existing optional screenshot property for relative failure evidence paths; launch/state failures without a page have none.
+Each finding has string fields type, entity, source, key, field and message. expected/actual are optional normalized scalars. Rollup findings may include optional `reason`: `rollup_conflict`, `rollup_missing_value` or `rollup_duplicate`. A missing money input has `actual: null` and no fabricated expected amount; conflict findings preserve both observed normalized values. Intrinsic rollup issues are excluded from pattern grouping. Engine findings include blocking after applying failure policies; older inputs default to blocking. Source errors always block. The UI adapter uses the existing optional screenshot property for relative failure evidence paths; launch/state failures without a page have none.
 
 Money serializes as decimal **integer minor-unit strings**, avoiding JSON number precision loss. Datetimes serialize as UTC epoch milliseconds. Consumers should read the config to interpret currency/types; a numeric-looking string alone does not identify currency.
 
@@ -33,12 +33,12 @@ HTML/Markdown currency equivalents use separate configuration context. They do n
 | --- | --- | --- |
 | missing_in_source | key set, field empty | Key exists in the first/reference source but not this source. |
 | extra_in_source | key set, field empty | Key is absent from the first/reference source. |
-| field_mismatch | key and field set, expected/actual present | Normalized values exceed tolerance. |
+| field_mismatch | key and field set, optional expected/actual | Normalized values exceed tolerance, or a rollup field conflicts/is blank. |
 | duplicate_key | key and entity key field set | Repeated key within one source; first record retained. |
 | source_error | key and field empty | Read/normalization failed; message includes available source/row/key/field details. |
 | aggregate_mismatch | key empty, field is aggregate name | Normalized count/sum differs beyond aggregate tolerance; expected/actual present. |
 
-`entities[].counts` contains successfully read rows, including duplicates. Failed sources have no count; a failed reference stops comparisons for that entity. No partial comparisons from failed sources are published. Optional `entities[].aggregates` contains `{name, type, values, skippedSources}`: `values` maps source names to numbers or minor-unit strings; `skippedSources` lists partial sources missing aggregate inputs. Failed sources publish no aggregate values. Aggregates count unique keys and ignore null sum values.
+`entities[].counts` contains successfully read rows, including duplicates. Failed sources have no count; a failed reference stops comparisons for that entity. No partial comparisons from failed sources are published. Optional `entities[].aggregates` contains `{name, type, values, skippedSources}`: `values` maps source names to numbers or minor-unit strings; `skippedSources` lists sources missing aggregate inputs or containing rollup uncertainty affecting those inputs. Failed sources publish no aggregate values. Aggregates count unique keys and ignore null sum values.
 
 Exit 0 means no blocking findings; exit 1 means blocking ordinary findings, with source errors taking precedence as exit 2. Thresholds apply per entity/category across sources; all findings remain in reports. Schema changes will increment schemaVersion; optional properties may be added within a version. See report-formats.md for HTML/JUnit/Markdown.
 

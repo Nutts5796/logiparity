@@ -16,7 +16,7 @@ entities:
         baseUrl: \${STAGING_API_URL}
         path: /api/shipments
         items: $.data[*]
-        pagination: { type: page, pageParam: page, sizeParam: limit, size: 200 }
+        pagination: { type: page, totalPath: $.pagination.total, pageParam: page, sizeParam: limit, size: 200 }
         # auth: { type: bearer, tokenEnv: STAGING_API_TOKEN }
         fields: { shipment_id: $.id, status: $.status, payout: $.driver_payout }
       export:

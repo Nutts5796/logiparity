@@ -1,16 +1,16 @@
 # Dependency audit
 
-Recorded on 2026-11-02 using npm 11.6.0 and the committed package-lock.json.
+Recorded on 2026-11-03 with npm 11.6.0 and the 1.0.1 lockfile.
 
 | Command | Moderate affected packages | High | Critical |
 | --- | --- | --- | --- |
-| `npm audit` | 17 | 0 | 0 |
-| `npm audit --omit=dev` | 7 | 0 | 0 |
+| `npm audit` | 16 | 0 | 0 |
+| `npm audit --omit=dev` | 6 | 0 | 0 |
 
-The seven runtime package entries are archiver, archiver-utils, exceljs, glob, minimatch, readdir-glob and zip-stream. These are cascading affected-package entries. The root report is [minimatch globparts amplification](https://github.com/advisories/GHSA-g3hv-75wg-m249), affecting minimatch below 11.0.1. Development lint dependencies account for the additional entries.
+The six runtime entries are archiver, archiver-utils, glob, minimatch, readdir-glob and zip-stream. These are cascading affected-package entries for [minimatch globparts amplification](https://github.com/advisories/GHSA-g3hv-75wg-m249), affecting minimatch below 11.0.1. The private ExcelJS runtime still uses that archiver chain; its private package name is not separately counted by npm audit. Development lint dependencies account for the additional entries.
 
-Vitest and its coverage provider are pinned to 4.1.12. ExcelJS's unzipper and uuid versions are overridden to 0.12.5 and 11.1.1. Forcing minimatch 11 into legacy callers that expect the earlier callable interface requires compatibility work. The XLSX reader uses explicit workbook entries and rows. Do not supply adversarial export files.
+Vitest and its coverage provider are pinned to 4.1.12. The private vendored ExcelJS 4.4.0 manifest explicitly requires unzipper 0.12.5 and uuid 11.1.1; its Node runtime is unchanged. Consumer lockfiles therefore agree with the bundled tree without root overrides. Upstream integrity, changes and retained MIT attribution are recorded in [vendor provenance](../vendor/exceljs/PROVENANCE.md).
 
-The runtime inventory contains 109 external package versions with declared licenses. It includes Playwright, PostgreSQL parsing/streaming packages and Jiti for trusted local invariant modules. [License inventory](dependencies.md) records third-party notices, including jszip's MIT alternative and pako's Zlib notice. [Build history](development/milestones.md) records implementation checks.
+Forcing minimatch 11 into legacy callers expecting the earlier callable interface requires compatibility work. The remaining moderate advisory is tracked as a dependency limitation. The XLSX reader uses explicit workbook entries and rows; this does not establish that arbitrary hostile files are safe. Container publication still requires reviewing the final image and its dependency inventory.
 
-Before distribution, choose a tested dependency strategy or document residual exposure, review the final container image, and repeat the audit against the lockfile. Audit counts can change as advisories are published.
+The [license inventory](dependencies.md) lists runtime package versions and notices, including the vendored ExcelJS license, jszip's MIT alternative and pako's Zlib notice. Release preparation generates a CycloneDX SBOM from the installed tarball's bundled tree. Counts can change as advisories are published; repeat both audit commands against the release lockfile. [Build history](development/milestones.md) records the verification performed.

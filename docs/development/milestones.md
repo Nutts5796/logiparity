@@ -11,7 +11,7 @@ LogiParity is written in strict TypeScript and ESM for Node.js 20 or later. Test
 | M5 | Optional AI drafts with local payload previews, redaction and mock-provider tests. |
 | M6 | Standalone bundled package, public API exports, Docker build, CI templates and user guides. |
 
-M6 local verification: 205 unit and adapter tests, 62 end-to-end tests, and 100% core line coverage on Node 20.20.2 and 22.23.4. The standalone package installed offline with an empty cache. The Docker image passed non-root Chromium and report checks on linux/arm64. A clean-source quickstart with fresh dependency downloads finished in 15.33 seconds on the development machine. These are local observations, not cross-machine benchmarks.
+M6 local verification: 205 unit and adapter tests, 62 end-to-end tests, and 100% core line coverage on Node 20.20.2 and 22.23.4. The standalone package installed offline with an empty cache. The Docker image passed non-root Chromium and report checks on linux/arm64. A clean-source quickstart with fresh dependency downloads finished in 15.33 seconds on the development machine.
 
 ## M7 — Pre-release fixes
 
