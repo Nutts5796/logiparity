@@ -1,6 +1,6 @@
 # Synthetic demo bug switches
 
-All records are synthetic. Never connect this application to production data or systems. M4 exposes API/exports, dispatcher login, operational events, a replan trigger/status and a virtual clock. The default snapshot starts at 14:00 UTC; each shipped scenario resets a synthetic operations fixture at 08:00 UTC.
+All records are synthetic. Never connect this application to production data or systems. The demo exposes API/exports, dispatcher login, operational events, a replan trigger/status and a virtual clock. The default snapshot starts at 14:00 UTC; each shipped scenario resets a synthetic operations fixture at 08:00 UTC.
 
 | Flag (`1` enables) | Behavior | Evidence |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ All records are synthetic. Never connect this application to production data or 
 BUG_EXPORT_DROPS_LAST_ROW=1 npm run demo
 # Or:
 BUG_ROUNDING_PAYOUT=1 npm run demo
-# Or the M3 bugs:
+# Or the dispatcher and timezone bugs:
 BUG_STATUS_STALE_UI=1 npm run demo
 BUG_TZ_SHIFT_EXPORT=1 npm run demo
 ```
@@ -28,7 +28,7 @@ For the UI example, also repeat `npm run demo:login`: restart invalidates its se
 
 Both configs declare UTC for offsetless export values because the export contract is UTC. Reinterpreting the broken wall clocks as America/Chicago would recover their instant and hide this serialization defect; it would not repair the exported contract. Normal exports carry explicit UTC offsets. The fixed date 2026-11-02 is six hours behind UTC in Chicago; another selected date may use daylight-saving rules.
 
-## M4 operations
+## Operations
 
 `BUG_REPLAN_LOSES_ORDER=1 npm run demo` and `BUG_DOUBLE_ASSIGN=1 npm run demo` enable the replan defects independently. They have no effect before a breakdown scenario. Use the command in [scenario reference](../../docs/scenarios.md); with both defects off all five examples pass.
 

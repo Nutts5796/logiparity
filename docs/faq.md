@@ -16,7 +16,7 @@
 
 **Does it send data to AI by default?** No. Normal checks/scenarios never invoke AI. AI commands default to a local payload preview; --send and all three provider variables are required. Structured redaction is not general PII detection. Outputs are new marked drafts and never execute automatically; see [AI reference](ai.md).
 
-**How large can datasets be?** Functional checks cover 100,000 records per source for the engine and streaming adapters. Memory also depends on indexed records, mapped fields, XLSX shared strings and findings. Browser/scenario throughput is not benchmarked. No cross-machine timing guarantee is claimed.
+**How large can datasets be?** Functional checks cover 100,000 records per source for the engine and streaming adapters. Memory also depends on indexed records, mapped fields, XLSX shared strings and findings.
 
 **Do I need PostgreSQL/Chromium to try the quickstart?** The API/CSV/XLSX quickstart needs Node/npm only. Chromium is needed for UI sources, and a database for SQL sources. The complete contributor suite additionally needs xmllint and disposable PostgreSQL fixtures.
 

@@ -23,11 +23,11 @@ The root contains `schemaVersion: 1`, `entities`, `findings` and additive `group
 }
 ```
 
-Each finding has string fields type, entity, source, key, field and message. expected/actual are optional normalized scalars. Since M2, engine findings include blocking after applying failure policies; older inputs default to blocking. Source errors always block. The M3 UI adapter uses the existing optional screenshot property for relative failure evidence paths; launch/state failures without a page have none.
+Each finding has string fields type, entity, source, key, field and message. expected/actual are optional normalized scalars. Engine findings include blocking after applying failure policies; older inputs default to blocking. Source errors always block. The UI adapter uses the existing optional screenshot property for relative failure evidence paths; launch/state failures without a page have none.
 
 Money serializes as decimal **integer minor-unit strings**, avoiding JSON number precision loss. Datetimes serialize as UTC epoch milliseconds. Consumers should read the config to interpret currency/types; a numeric-looking string alone does not identify currency.
 
-M3's HTML/Markdown currency equivalents use separate configuration context. They do not change JSON values, units, structure or schemaVersion, and add no display fields to the report.
+HTML/Markdown currency equivalents use separate configuration context. They do not change JSON values, units, structure or schemaVersion, and add no display fields to the report.
 
 | Finding type | Key/field | Meaning |
 | --- | --- | --- |
@@ -42,10 +42,12 @@ M3's HTML/Markdown currency equivalents use separate configuration context. They
 
 Exit 0 means no blocking findings; exit 1 means blocking ordinary findings, with source errors taking precedence as exit 2. Thresholds apply per entity/category across sources; all findings remain in reports. Schema changes will increment schemaVersion; optional properties may be added within a version. See report-formats.md for HTML/JUnit/Markdown.
 
-M4 changes HTML/Markdown presentation only: configured datetime values show epoch milliseconds plus ISO 8601 UTC. Existing Parity JSON retains the same schema and numeric epochs. The separate `scenario.json` envelope uses `schemaVersion: 1`, `kind: scenario`, target/environment, completed event steps, invariant results, optional nested unchanged Parity report, runtime error and exit code; it omits raw snapshots and request bodies. Its format is documented in [scenario reference](scenarios.md).
+For datetime presentation, configured datetime values show epoch milliseconds plus ISO 8601 UTC. Existing Parity JSON retains the same schema and numeric epochs. The separate `scenario.json` envelope uses `schemaVersion: 1`, `kind: scenario`, target/environment, completed event steps, invariant results, optional nested unchanged Parity report, runtime error and exit code; it omits raw snapshots and request bodies. Its format is documented in [scenario reference](scenarios.md).
 
-## Finding groups (M7 additive field)
+## Finding groups (additive field)
 
-New Parity JSON includes `groups: []` when no uniform patterns exist. Schema version stays 1; older reports without groups remain readable. Each group has entity, source, field, count, kind and summary. Kinds are datetime_offset, money_delta and value_mapping. Offset/delta groups contain a signed decimal-integer delta string, defined as actual minus expected; datetime units are milliseconds and money units are configured minor units. Value mappings contain the normalized expected and actual pair. No individual finding is removed or changes blocking status.
+New Parity JSON includes `groups: []` when no uniform patterns exist. Schema version stays 1; older reports without groups remain readable. Each group has entity, source, field, count, kind and summary. Kinds are datetime_offset, money_delta, value_mapping, missing_stride and extra_stride. Stride groups contain a positive decimal-integer stride string and use an empty field. Offset/delta groups contain a signed decimal-integer delta string, defined as actual minus expected; datetime units are milliseconds and money units are configured minor units. Value mappings contain the normalized expected and actual pair. No individual finding is removed or changes blocking status.
 
 Grouping considers all field mismatches in one entity/source/field bucket. A delta group requires a single nonzero delta across every mismatch and a known datetime or money rule. A value mapping requires the same expected/actual pair across the bucket. Mixed patterns remain individual findings. Summaries describe observed patterns; likely-cause labels are investigation hints. AI explain accepts both old reports and the additive groups field.
+
+Missing/extra groups appear first. They require runs of at least three keys sharing a prefix and a uniform numeric suffix stride greater than one. Runs do not overlap; irregular or contiguous keys remain individual findings. Their page-boundary label is a heuristic.

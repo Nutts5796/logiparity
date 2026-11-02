@@ -1,46 +1,31 @@
-# Release guide
+# Release checklist
 
-Release artifacts are built from the reviewed source tree. Keep credentials out of Git, Docker build arguments and reports.
+1. Run the contributor checks on Node 20 and 22, including package, quickstart and both Docker targets. Review the [dependency audit](dependency-audit.md). Confirm the version in package.json matches the intended tag.
+2. Create and push the annotated version tag when the source is ready to distribute:
 
-## Verify
+   ```sh
+   git tag -a v1.0.0 -m 'LogiParity 1.0.0'
+   git push origin v1.0.0
+   ```
 
-```sh
-npm ci --ignore-scripts
-npx playwright install chromium
-npm run lint
-npm run typecheck
-npm test
-npm run test:e2e
-npm run check:docs
-npm run test:package
-npm run test:quickstart
-npm run test:docker
-node scripts/dependencies.mjs
-npm audit
-npm audit --omit=dev
-```
+   [The release workflow](https://github.com/Nutts5796/logiparity/blob/main/.github/workflows/release.yml) first runs the reusable CI workflow, then builds the package and both images. Its publishing job alone has contents: write and packages: write permissions. It attaches the tarball and SHA-256 file and records full/slim GHCR image digests in the release notes.
+3. Download and verify the release assets before installation:
 
-The complete suite needs Chromium, xmllint and disposable PostgreSQL prerequisites described in [CONTRIBUTING.md](../CONTRIBUTING.md). The package check installs into an empty-cache consumer directory, tests public APIs and declarations, and checks CLI reports. The quickstart check installs and builds clean source, starts its own synthetic demo and creates reports. [Build history](development/milestones.md) records completed checks.
+   ```sh
+   base=https://github.com/Nutts5796/logiparity/releases/download/v1.0.0
+   curl --fail --silent --show-error --location "$base/logiparity-1.0.0.tgz" --output logiparity-1.0.0.tgz
+   curl --fail --silent --show-error --location "$base/logiparity-1.0.0.tgz.sha256" --output logiparity-1.0.0.tgz.sha256
+   sha256sum --check logiparity-1.0.0.tgz.sha256
+   npm install --no-save --ignore-scripts ./logiparity-1.0.0.tgz
+   ./node_modules/.bin/logiparity --version
+   ```
 
-## Build artifacts
+   On macOS, use `shasum -a 256 --check` in place of sha256sum. Check both image digests against the release notes and run the package smoke checks against the downloaded artifact.
+4. Publish the verified tarball to npm when registry access is configured:
 
-```sh
-mkdir -p output/release
-npm pack --dry-run
-npm pack --pack-destination output/release
-docker build --tag logiparity:1.0.0 .
-```
+   ```sh
+   npm publish ./logiparity-1.0.0.tgz --access public
+   npx logiparity@1.0.0 --version
+   ```
 
-The root package bundles compiled private workspaces and their locked runtime dependencies and licenses. Consumer APIs are available as logiparity/core, logiparity/adapters, logiparity/scenarios and logiparity/ai. Internal packages do not need separate publication. The allowlist excludes saved auth state, generated exports, reports and development dependencies. Browser binaries are installed explicitly for the npm package and are included in the Docker image.
-
-Record the source commit and artifact integrity. Review [dependency advisories](dependency-audit.md), third-party notices and the image scan before distribution. Verify every intended container architecture. Re-run checks after changing a dependency or rebuilding the artifact.
-
-## Distribute
-
-Attach logiparity-1.0.0.tgz to the versioned GitHub release so these installation instructions work:
-
-```sh
-npm install --no-save --ignore-scripts https://github.com/Nutts5796/logiparity/releases/download/v1.0.0/logiparity-1.0.0.tgz
-```
-
-Once an npm package is published, `npm install logiparity@1.0.0` is the registry alternative. Check the published artifact with a fresh installation and verify image pulls by digest. Update release links and availability after distribution succeeds. CI and package scripts build and test; they do not publish automatically.
+   Confirm the printed version is 1.0.0 in a fresh consumer directory. Until publication, installation uses the verified release tarball. Update availability links after distribution succeeds.

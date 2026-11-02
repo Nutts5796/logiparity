@@ -62,7 +62,7 @@ HTML and Markdown show currency values beside minor units, and ISO UTC beside ep
 
 ## Try it on your staging
 
-Save this as `parity.yaml`. Set `STAGING_API_URL` and `STAGING_API_TOKEN` in your environment. Supply a CSV from the same snapshot as the API.
+Save this as `parity.yaml`. Set `STAGING_API_URL` and `STAGING_API_TOKEN` in your environment. Read the export and API at the same cutoff time. Alternatively, compare a closed day so in-flight updates do not become parity findings.
 
 ```yaml
 version: 1
@@ -76,7 +76,7 @@ entities:
         baseUrl: ${STAGING_API_URL}
         path: /shipments
         auth: {type: bearer, tokenEnv: STAGING_API_TOKEN}
-        pagination: {type: page, size: 100, totalPath: $.pagination.total}
+        pagination: {type: page, size: 25, totalPagesPath: $.pagination.totalPages}
         fields: {id: $.id, status: $.status, payout: $.payout}
       accounting:
         type: csv
@@ -90,7 +90,7 @@ report:
   dir: ./logiparity-report
 ```
 
-Match the paths, headers and pagination metadata to your API. `totalPath` detects a server that caps pages below the requested size. `allowNumber` accepts numeric API payouts through their decimal string representation; decimal strings remain the safest money input. Read the [configuration reference](docs/configuration.md) for precision rules, SQL and browser sources.
+Match the paths, headers and pagination metadata to your API. `totalPagesPath` detects a server that caps pages below the requested size. `allowNumber` accepts numeric API payouts through their decimal string representation; decimal strings remain the safest money input. Read the [configuration reference](docs/configuration.md) for precision rules, SQL and browser sources.
 
 This GitHub Actions job downloads the export and preserves reports after either kind of failure. Run shared staging checks manually or nightly; enable pull requests only with an isolated target.
 
@@ -104,14 +104,21 @@ permissions: {contents: read}
 jobs:
   parity:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       STAGING_API_URL: ${{ vars.STAGING_API_URL }}
       STAGING_API_TOKEN: ${{ secrets.STAGING_API_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with: {node-version: '22'}
-      - run: npm install --no-save --ignore-scripts https://github.com/Nutts5796/logiparity/releases/download/v1.0.0/logiparity-1.0.0.tgz
+        with: {node-version: '22', cache: npm, cache-dependency-path: parity.yaml}
+      - name: Verify and install the release
+        run: |
+          base=https://github.com/Nutts5796/logiparity/releases/download/v1.0.0
+          curl --fail --silent --show-error --location "$base/logiparity-1.0.0.tgz" --output logiparity-1.0.0.tgz
+          curl --fail --silent --show-error --location "$base/logiparity-1.0.0.tgz.sha256" --output logiparity-1.0.0.tgz.sha256
+          sha256sum --check logiparity-1.0.0.tgz.sha256
+          npm install --no-save --ignore-scripts ./logiparity-1.0.0.tgz
       - run: >-
           curl --fail --silent --show-error
           -H "Authorization: Bearer $STAGING_API_TOKEN"
@@ -142,7 +149,13 @@ Run a disruption against the demo after starting it and setting `DEMO_API_URL`:
 ./node_modules/.bin/logiparity scenario run examples/demo/scenarios/02-vehicle-breakdown.yaml --target examples/demo/target.yaml
 ```
 
-Five examples cover no-show, breakdown, traffic delay, cancellation and capacity reduction. Lost-order checks need orders; single assignment also needs assignments. Capacity adds drivers and vehicles; ETA and notification checks use affected-order state. Configure only the required sources and any completion source for `wait`. The [scenario reference](docs/scenarios.md) lists exact dependencies and a bring-your-own-API example.
+Five examples cover no-show, breakdown, traffic delay, cancellation and capacity reduction. Select the state needed by each check:
+
+- Lost-order checks use orders; single assignment adds assignments.
+- Capacity checks add drivers and vehicles.
+- ETA and notification checks use affected-order state.
+
+Wait for a configured completion source, use a fixed delay, or omit wait. The [scenario reference](docs/scenarios.md) lists exact dependencies and a bring-your-own-API example. The [freight example](examples/freight/README.md) compares load totals with rolled-up settlement lines.
 
 ![Synthetic breakdown scenario](docs/images/scenario.png)
 
@@ -152,11 +165,11 @@ Test and staging only. Read-only except scenario events you map yourself. No tel
 
 ## Status
 
-1.0.0, early stage, maintained by one author; feedback and pilots welcome.
+First public release, maintained by one author. Feedback and pilots welcome.
 
 ## About
 
-Built by Sergei Orekhovskii, a QA engineer who previously ran transport logistics for a delivery service and worked in railway operations. Developed with AI coding assistants; design decisions, review and testing by the author.
+Built by Sergei Orekhovskii, a QA engineer who previously ran transport logistics for a delivery service and worked in railway operations. Developed with AI coding assistants; design decisions, review and testing by the author. Read the [technical design decisions](docs/design-decisions.md).
 
 ## Reference
 

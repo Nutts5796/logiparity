@@ -7,7 +7,11 @@ The repository workflow checks lint, strict types, core coverage, CLI integratio
 The [GitHub Actions template](../templates/github-actions.yml) and [GitLab template](../templates/gitlab-ci.yml) install the CLI from the versioned release asset:
 
 ```sh
-npm install --no-save --ignore-scripts https://github.com/Nutts5796/logiparity/releases/download/v1.0.0/logiparity-1.0.0.tgz
+base=https://github.com/Nutts5796/logiparity/releases/download/v1.0.0
+curl --fail --silent --show-error --location "$base/logiparity-1.0.0.tgz" --output logiparity-1.0.0.tgz
+curl --fail --silent --show-error --location "$base/logiparity-1.0.0.tgz.sha256" --output logiparity-1.0.0.tgz.sha256
+sha256sum --check logiparity-1.0.0.tgz.sha256
+npm install --no-save --ignore-scripts ./logiparity-1.0.0.tgz
 ```
 
 Attach that artifact to the release before using the URL. During development, build it with `npm pack --pack-destination output/release` and install the local tarball instead. After npm publication, `npm install logiparity@1.0.0` becomes the registry option.
@@ -48,3 +52,5 @@ SQL checks use a dedicated SELECT-only staging role named through connectionEnv.
 ```
 
 Retain scenario-report/ and expose scenario-report/junit.xml as the JUnit artifact. Choose the state sources required by your selected invariants, as listed in the [scenario reference](scenarios.md). Review each mapped mutation and fixture policy before running it. AI drafts have no automatic execution hook.
+
+Consumer jobs have a 15-minute timeout and cache npm downloads. Replace the GitLab image digest placeholder with the verified digest for your runner platform before enabling it. The release workflow runs only for version tags, waits for CI, and records image digests beside the tarball/checksum assets.

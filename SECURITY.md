@@ -1,6 +1,6 @@
 # Security
 
-Use LogiParity only against test and staging systems. Configuration labels do not detect a production hostname.
+Use LogiParity only against test and staging systems. Configuration labels do not detect a production hostname. Configuration files are trusted input and select file paths, queries, origins and credentials.
 
 ## Report a vulnerability
 
@@ -12,7 +12,7 @@ Parity reads configured sources. REST requests reject redirects and embedded cre
 
 SQL is parsed before connecting and runs in a READ ONLY transaction. Use a dedicated SELECT-only staging role. This is not a sandbox for privileged effects hidden inside database objects. Development database fixtures are separate from the installed read adapter and restricted to disposable loopback databases.
 
-Scenarios send only explicitly mapped requests to a configured test or staging target with allowMutations: true. There is no automatic rollback or retry. Custom invariant modules are trusted Node.js code with local permissions; review their imports and behavior.
+Scenarios send only explicitly mapped requests to a configured test or staging target with allowMutations: true. There is no automatic rollback or retry. Custom invariant modules require --allow-modules and a scenario-local entry path. They are trusted Node.js code with local permissions; review their imports and behavior.
 
 AI commands preview locally by default. --send and complete provider configuration are required for a request; normal checks and scenarios never use AI. Structured field masking is not general PII detection. Review the full prompt and protect preview logs. Draft files are marked for review, written privately and never executed automatically.
 

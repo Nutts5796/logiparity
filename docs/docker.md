@@ -1,6 +1,6 @@
 # Docker
 
-Build the local release candidate from the repository root:
+Build the local image from the repository root:
 
 ```sh
 docker build --tag logiparity:1.0.0 .
@@ -24,4 +24,15 @@ localhost inside a container refers to that container. Use an explicit reachable
 
 The image entrypoint is logiparity, so all check/init/scenario/AI commands accept the same flags. An AI preview requires no network; --send requires explicit provider variables and sends only to that configured provider. Configure absolute/container-relative output paths and inspect the draft before separate execution.
 
-`npm run test:docker` builds and checks the image locally: default help, non-root UID, headless Chromium, mismatch exit 1, all report files, money/UTC presentation and offline AI. Smoke containers use --network=none and no host mounts; the build itself downloads its base/npm/browser/system dependencies. It does not push images or alter Docker contexts. Use LOGIPARITY_DOCKER_IMAGE to select a different local test tag. See the final milestone report for the platform actually verified; do not infer multi-architecture validation from a Dockerfile.
+`npm run test:docker` builds and checks the image locally: default help, non-root UID, headless Chromium, mismatch exit 1, all report files, money/UTC presentation and offline AI. Smoke containers use --network=none and no host mounts; the build itself downloads its base/npm/browser/system dependencies. It does not push images or alter Docker contexts. Use LOGIPARITY_DOCKER_IMAGE to select a different local test tag. See the [build history](development/milestones.md) for verified platforms.
+
+## Slim image
+
+For API, file and SQL checks without Chromium:
+
+```sh
+docker build --target slim --tag logiparity:1.0.0-slim .
+docker run --rm --network=none logiparity:1.0.0-slim --version
+```
+
+The default runtime target includes Chromium. Both targets run as node. BuildKit bind mounts keep the package tarball and temporary Playwright installer out of image layers; the full runtime copies only the installed package from the package stage. The slim target retains the JavaScript adapter dependencies but installs no browsers or browser system libraries. A UI check needs the full image.

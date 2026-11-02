@@ -1,4 +1,4 @@
-# Scenario reference (M4)
+# Scenario reference
 
 Run from the built checkout against an explicitly selected test/staging target:
 
@@ -39,7 +39,7 @@ afterwards:
   parity: ../parity-scenario.yaml
 ```
 
-`setup` and `afterwards` are optional. Invariant names must be unique. Events execute in ascending unique positive `step` order; `at` is a target parameter, not an instruction to sleep. Steps are sent once without automatic retry. The optional target replan request follows all events. Wait polls one configured singleton state source (`source: meta` by default), comparing every `until` field by exact scalar equality. Polling stops at the timeout. The demo advances virtual time by the poll interval (bounded by remaining time); other targets use real delays. Each source/request also has its own configured timeout; an in-flight read may finish after the polling deadline.
+`setup`, `afterwards` and `wait` are optional. Wait was previously required. Omit it to compare immediately after events/replan, or use `wait: {seconds: 2}` for a fixed real delay. Completion polling keeps the source/until form below. Invariant names must be unique. Events execute in ascending unique positive `step` order; `at` is a target parameter, not an instruction to sleep. Steps are sent once without automatic retry. The optional target replan request follows all events. Wait polls one configured singleton state source (`source: meta` by default), comparing every `until` field by exact scalar equality. Polling stops at the timeout. The demo advances virtual time by the poll interval (bounded by remaining time); other targets use real delays. Each source/request also has its own configured timeout; an in-flight read may finish after the polling deadline.
 
 File references resolve relative to their YAML: fixture, custom module and afterwards Parity paths use the scenario directory; adapter paths use their containing target/Parity directory. `${ENV_VAR}` interpolation occurs in parsed YAML scalars. Request placeholders use a separate grammar, described below. Unknown fields, duplicate YAML keys and missing environment values are errors.
 
@@ -128,7 +128,7 @@ invariants:
     module: ./invariants/order-contract.ts
 ```
 
-TypeScript/JavaScript modules must export a default function. Jiti 2.7.0 supplies TypeScript loading on both supported Node versions. Modules are imported during preflight and may execute top-level code. The function receives a cloned snapshot and must return (or resolve) exactly an `InvariantResult`; thrown exceptions or malformed results exit 2.
+TypeScript/JavaScript modules require `scenario run --allow-modules` and must export a default function. Entry paths must be relative to and resolve inside the scenario directory; absolute paths, parent escapes and escaping symlinks are rejected. This opt-in applies to library callers through `{allowModules: true}` in runScenario options, or the third argument to prepareInvariant. Jiti 2.7.0 supplies TypeScript loading on both supported Node versions. Opted-in modules are imported during preflight and may execute top-level code. The function receives a cloned snapshot and must return (or resolve) exactly an `InvariantResult`; thrown exceptions or malformed results exit 2.
 
 ```ts
 import type { InvariantState, InvariantResult } from 'logiparity/scenarios';
@@ -147,4 +147,6 @@ export default function check(state: InvariantState): InvariantResult {
 
 Optional target `artifacts` are GET requests with safe basename filenames ending in `.csv`/`.xlsx`. They are downloaded after invariant evaluation, including when an invariant fails, and before Parity. The runner exposes the absolute artifact directory to that Parity config as `${LOGIPARITY_SCENARIO_ARTIFACT_DIR}` without changing process environment. Downloads use target headers, same-origin/redirect restrictions and the target timeout. Repeated runs replace artifacts in the chosen report directory; all outputs should be treated as sensitive test data.
 
-The existing comparison engine supplies normalization, aggregates and `failOn`. A consistent API/export can pass Parity while an operational invariant fails: losing an order from every surface is still a loss. The five shipped scenarios exercise 55 drivers/2,750 orders with spare capacity and a deterministic synthetic planner, not a production routing optimizer or performance benchmark. `BUG_REPLAN_LOSES_ORDER` and `BUG_DOUBLE_ASSIGN` reproduce the independent domain failures; see [bug switches](../apps/demo-delivery/BUGS.md).
+The existing comparison engine supplies normalization, aggregates and `failOn`. A consistent API/export can pass Parity while an operational invariant fails: losing an order from every surface is still a loss. The five shipped scenarios exercise 55 drivers/2,750 orders with spare capacity and a deterministic synthetic planner. `BUG_REPLAN_LOSES_ORDER` and `BUG_DOUBLE_ASSIGN` reproduce the independent domain failures; see [bug switches](../apps/demo-delivery/BUGS.md).
+
+Rendered request path segments equal to `.` or `..`, including percent-encoded forms, are rejected before URL normalization or sending. Configuration files and opted-in modules are trusted input; the module entry restriction does not sandbox its imports or Node permissions. AI-generated scenario drafts cannot contain module invariants.

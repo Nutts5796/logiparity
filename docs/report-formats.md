@@ -1,6 +1,6 @@
-# Report formats (M3)
+# Report formats
 
-Select any subset of `console`, `html`, `junit`, `json`, `markdown` in `report.outputs`. Defaults remain console and JSON for M1 compatibility. The shipped demo and `logiparity init` example select all five. Paths are relative to `report.dir`; repeated outputs are written once. Console-only checks do not create a report directory. Write failures include the format/path and return exit 2.
+Select any subset of `console`, `html`, `junit`, `json`, `markdown` in `report.outputs`. Defaults remain console and JSON by default. The shipped demo and `logiparity init` example select all five. Paths are relative to `report.dir`; repeated outputs are written once. Console-only checks do not create a report directory. Write failures include the format/path and return exit 2.
 
 | Output | Destination | Content |
 | --- | --- | --- |
@@ -30,7 +30,7 @@ XML markup is escaped and characters illegal in XML 1.0, including unpaired UTF-
 
 Markdown escapes untrusted markup, links/images and table separators. It includes aggregate values and skipped source names; summaries over 50 findings explicitly state the omitted count. Select HTML or JSON as well for a complete finding list. LogiParity writes the comment text to a file and never posts it to another service.
 
-JSON schema version remains 1: M2 adds optional `blocking`, `screenshot` and entity `aggregates` metadata, permitted by the v1 additive-field policy. Consumers should tolerate optional fields. See report-schema.md for units and structure.
+JSON schema version remains 1: Optional `blocking`, `screenshot` and entity `aggregates` metadata are permitted by the v1 additive-field policy. Consumers should tolerate optional fields. See report-schema.md for units and structure.
 
 ## Monetary presentation
 
@@ -38,7 +38,7 @@ HTML/Markdown display configured monetary fields and sum aggregates as `682625 (
 
 The CLI supplies `{entities: config.entities}` as separate presentation context. Library callers can pass that optional context to htmlReport, markdownReport or writeReports; absent metadata means minor units only, with no guessed currency. JSON data/schema/units remain unchanged, and no display/currency properties are attached to Report. Console/JUnit continue to use normalized minor units. Regression tests compare JSON byte-for-byte before/after rendering and writing the human-readable formats.
 
-## M4 UTC presentation and scenario reports
+## UTC presentation and scenario reports
 
 Configured datetime fields in HTML/Markdown show both epoch milliseconds and ISO 8601 UTC: `1793624460000 (2026-11-02T13:01:00Z)`. Nonzero milliseconds are retained (`.123Z`); formatting does not use the machine timezone. JSON and JUnit keep normalized comparison values; console also shows UTC text. Renderer callers pass entity configuration as presentation context, as for currency; numeric fields are not guessed to be datetimes.
 
@@ -51,3 +51,5 @@ Scenario runs write `scenario.html`, `scenario.md`, `scenario.json` and `junit.x
 HTML, Markdown and console show uniform patterns by entity, source and field: constant datetime offsets, exact money deltas or a repeated value mapping. Individual findings remain in JSON and HTML; Markdown retains its first 50 rows and console its first 10 rows. The new JSON groups array is additive and does not change schemaVersion or thresholds. HTML includes totals and blocking counts for every finding type, matching the Markdown count table.
 
 Console datetime fields show ISO 8601 UTC beside epoch milliseconds, including nonzero milliseconds, when comparison rules are supplied. The CLI supplies that context; library callers pass `{entities: config.entities}` to consoleReport, htmlReport and markdownReport. Money remains in minor units in console, while HTML and Markdown retain configured currency equivalents.
+
+Console output strips C0/C1 control characters except newline and tab. Regular missing/extra record strides are shown ahead of value patterns. Scenario HTML repeats post-scenario pattern groups above the Parity report link.

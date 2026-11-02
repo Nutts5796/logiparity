@@ -32,8 +32,8 @@ Pagination options (omit `pagination` for a single request):
 
 | Type | Configuration | Completion |
 | --- | --- | --- |
-| page | `pageParam: page`, `sizeParam: limit`, `size: 200`, `start: 1` | Configured completion metadata says finished; otherwise a short page. |
-| offset | `offsetParam: offset`, `sizeParam: limit`, `size: 200` | Configured metadata says finished; otherwise a short page. Offset begins at 0. |
+| page | `pageParam: page`, `sizeParam: limit`, `size: 200`, `start: 1` | Metadata confirms completion; without metadata, a later short page. |
+| offset | `offsetParam: offset`, `sizeParam: limit`, `size: 200` | Metadata confirms completion; without metadata, a later short page. Offset begins at 0. |
 | cursor | `cursorParam: cursor`, `sizeParam: limit`, `size: 200`, required `next: $.next_cursor` | Next value is null or empty. Response must include the mapped path. |
 | link | No other fields. | No `rel="next"` in the Link header. |
 
@@ -41,7 +41,7 @@ Page and offset pagination accept optional `totalPath`, `totalPagesPath` and `ha
 
 If a response has more items than requested, the source fails. A short page that still advertises more items or pages also fails, naming the page, requested size and received count. Set `size` to the API's actual page-size cap before comparing. The engine does not use an incomplete source to blame another source with extra records. Full final pages stop immediately when metadata says complete. Conflicting signals, invalid counts and missing paths are source errors.
 
-Without a signal, a short first page retains the historical completion behavior and prints one warning suggesting totalPath or hasMorePath. A short first page alone cannot distinguish an API cap from a complete small result. Configure metadata for reliable completeness checks.
+Without a signal, a short first page fails as a source_error with exit 2. Configure totalPath, totalPagesPath or hasMorePath. For an API without completion metadata, pagination.allowShortFirstPage: true explicitly accepts the short first page and prints a warning. This opt-out cannot verify completeness. Later short pages still terminate pagination when no signal is configured.
 
 Page size is 1–10,000. Repeated request URLs/cursors or exhausting `maxPages` produce source errors. 429 and 5xx responses and connection/timeout failures retry with exponential backoff; Retry-After is honored with a maximum 30-second response delay. Other HTTP errors fail immediately. `timeoutMs` covers headers and body reads for each request; the complete run may exceed one request timeout. Full pages may require one final empty-page request.
 
@@ -153,11 +153,11 @@ Exit 0 means no blocking ordinary findings; exit 1 means at least one blocking f
 
 ## Scenario configuration
 
-M4 scenarios and mutation targets have separate schemas from Parity. Use `logiparity scenario run <scenario.yaml> --target <target.yaml>`. Event templates do not use Parity's flat `variables` syntax; they use scoped typed placeholders (`params`, `fixture`, `seconds`). See the [scenario reference](scenarios.md) for target consent, state field mappings, custom checks and fresh post-scenario Parity.
+Scenarios and mutation targets have separate schemas from Parity. Use `logiparity scenario run <scenario.yaml> --target <target.yaml>`. Event templates do not use Parity's flat `variables` syntax; they use scoped typed placeholders (`params`, `fixture`, `seconds`). See the [scenario reference](scenarios.md) for target consent, state field mappings, custom checks and fresh post-scenario Parity.
 
 ## AI settings
 
-M5 AI commands use a separate `--ai-config` file with version 1, redactFields, timeoutMs and maxFindings. Provider URL/model/key come only from the three LOGIPARITY_AI environment variables. Normal Parity/scenario configuration has no automatic AI hook. See [AI reference](ai.md).
+AI commands use a separate `--ai-config` file with version 1, redactFields, timeoutMs and maxFindings. Provider URL/model/key come only from the three LOGIPARITY_AI environment variables. Normal Parity/scenario configuration has no automatic AI hook. See [AI reference](ai.md).
 
 ## Numeric money inputs
 
@@ -171,3 +171,13 @@ compare:
 Finite numbers are converted through `String(value)` and parsed as locale-independent decimals, including exponent notation. Conversion to bigint minor units uses the same exact rule as strings: extra nonzero decimals fail rather than round. For USD, 12.34 becomes 1234 minor units; 12.345 fails. NaN and infinities fail. A computed value such as 0.1 + 0.2 also fails when its decimal string contains extra nonzero digits. String inputs continue to use the configured locale.
 
 JavaScript may already have lost precision while parsing or computing a number. String conversion cannot recover those digits, especially for large amounts. Decimal strings preserve the original decimal amount and remain the recommended interchange format. The option does not change JSON output, money tolerance units or exact aggregate arithmetic.
+
+## Per-key rollups
+
+A source can declare `rollup: {by: load_id, sum: [carrier_pay], first: [status, delivered_at]}` to compare settlement lines against load totals. `by` must equal the entity key; every mapped field belongs to exactly one of by, sum or first. Sum fields require number or money rules. Values normalize before summing; money uses bigint and numbers use exact decimal accumulation. Null sums contribute zero. First retains the first normalized value, including null, in input order. Repeated keys in this source do not create duplicate findings; sources without rollup keep duplicate detection. Source counts still record input rows. See the [freight settlement example](../examples/freight/README.md).
+
+## Validate without reading sources
+
+`logiparity --version` prints the package version. `logiparity validate --config parity.yaml` loads YAML, interpolates variables and validates schemas, field/source references, REST extraction syntax and read-only SQL syntax. It does not open exports, launch a browser, call an API or connect to a database. Source availability and snapshot consistency are checked separately by check.
+
+Configuration files are trusted input: they select local files, allowed origins, credentials, queries and scenario mutations. Configured secret environment values are redacted from diagnostic paths before errors are printed or saved. Keep configs and generated reports private when they describe internal systems.
