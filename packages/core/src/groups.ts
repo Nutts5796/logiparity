@@ -22,6 +22,7 @@ export function groupFindings(findings: readonly Finding[], entities: readonly E
     const first = bucket[0]!; const { entity, source, field } = first;
     const rule = entities.find((e) => e.name === entity)?.compare[field];
     const count = bucket.length; const prefix = `${count.toLocaleString('en-US')} ${field} ${count === 1 ? 'value' : 'values'} in ${source}`;
+    const verb = (plural: string, singular: string) => count === 1 ? singular : plural;
     if (rule?.type === 'money' || rule?.type === 'datetime') {
       const deltas = bucket.map((f) => { const expected = integer(f.expected); const actual = integer(f.actual); return expected === undefined || actual === undefined ? undefined : actual - expected; });
       const delta = deltas[0];
@@ -29,10 +30,10 @@ export function groupFindings(findings: readonly Finding[], entities: readonly E
         const kind = rule.type === 'money' ? 'money_delta' : 'datetime_offset';
         const difference = kind === 'money_delta' ? `${delta > 0n ? '+' : ''}${delta} ${rule.currency} minor ${delta === 1n || delta === -1n ? 'unit' : 'units'}` : duration(delta);
         const hint = kind === 'money_delta' ? 'likely rounding or a fixed adjustment' : delta % 900000n === 0n ? 'likely timezone' : 'consistent datetime offset';
-        groups.push({ entity, source, field, count, kind, delta: delta.toString(), summary: `${prefix} differ by exactly ${difference} (${hint}).` }); continue;
+        groups.push({ entity, source, field, count, kind, delta: delta.toString(), summary: `${prefix} ${verb('differ', 'differs')} by exactly ${difference} (${hint}).` }); continue;
       }
     }
-    if (first.expected !== undefined && first.actual !== undefined && bucket.every((f) => f.expected === first.expected && f.actual === first.actual)) groups.push({ entity, source, field, count, kind: 'value_mapping', expected: first.expected, actual: first.actual, summary: `${prefix} map ${label(first.expected)} -> ${label(first.actual)}.` });
+    if (first.expected !== undefined && first.actual !== undefined && bucket.every((f) => f.expected === first.expected && f.actual === first.actual)) groups.push({ entity, source, field, count, kind: 'value_mapping', expected: first.expected, actual: first.actual, summary: `${prefix} ${verb('map', 'maps')} ${label(first.expected)} -> ${label(first.actual)}.` });
   }
   const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
   return groups.sort((a, b) => compare(a.entity, b.entity) || compare(a.source, b.source) || compare(a.field, b.field));

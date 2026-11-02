@@ -48,7 +48,7 @@ npm run demo:export
 
 Expected: zero findings and exit 0. Open `logiparity-report/report.html`. The same directory contains JSON, Markdown and JUnit reports. If you change the port, use the same value in `DEMO_API_URL`.
 
-Stop the demo, run `DEMO_PORT=3010 npm run demo:bugs`, then repeat the export and check commands. The report identifies missing rows, payout differences and shifted datetimes. Expand the investigation through individual findings and summaries of constant offsets, money deltas and status mappings.
+Stop the demo, run `DEMO_PORT=3010 npm run demo:bugs`, then repeat the export and check commands. The report finds missing rows, payout differences and shifted datetimes. Repeated patterns get one summary line each, for example "1,833 delivered_at values in csv differ by exactly -6h (likely timezone)", and every individual finding stays listed below.
 
 ![Synthetic parity report](docs/images/report.png)
 
