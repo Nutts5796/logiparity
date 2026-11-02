@@ -64,3 +64,9 @@ it('reuses one raw token for target event headers and state-source authenticatio
     const result=await run(['scenario','run','scenario.yaml','--target','target.yaml','--report-dir','report'],d,{STAGING_API_TOKEN:token});expect(result.code,result.stdout+result.stderr).toBe(0);expect(seen).toEqual([`Bearer ${token}`,`Bearer ${token}`,`Bearer ${token}`]);expect(result.stdout+result.stderr).not.toContain(token);
   }finally{await server.close();}
 });
+it('redacts scenario secret interpolations during fixture preflight',async()=>{
+  const d=await dir();const secret='scenario-fixture-credential';
+  await writeFile(join(d,'scenario.yaml'),JSON.stringify({version:1,name:'fixture',target:'test',setup:{fixture:'./missing-${SCENARIO_PRIVATE_KEY}.json'},events:[{step:1,type:'http'}],invariants:['no_order_lost']}));
+  await writeFile(join(d,'target.yaml'),JSON.stringify({version:1,name:'test',environment:'test',allowMutations:true,baseUrl:'http://127.0.0.1:1',setup:{method:'POST',path:'/setup'},events:{http:{method:'POST',path:'/event'}},state:{orders:{type:'csv',file:'unused.csv',fields:{id:'ID'}}}}));
+  const result=await run(['scenario','run','scenario.yaml','--target','target.yaml'],d,{SCENARIO_PRIVATE_KEY:secret});expect(result.code).toBe(2);expect(result.stdout+result.stderr).not.toContain(secret);expect(result.stderr).toContain('REDACTED');
+});

@@ -134,3 +134,8 @@ it.each(['page','offset'] as const)('rejects an unverified short first %s page b
   const { url } = await server((_,res)=>res.end('{"data":[{"id":"a"}]}'));
   await expect(collect(readRest(config(url,{pagination:{type,size:200}}),context))).rejects.toThrow('totalPath, totalPagesPath or hasMorePath');
 });
+it.each(['full','prefix'] as const)('reads an environment header using the %s form',async mode=>{
+  const {url}=await server((req,res)=>{expect(req.headers.authorization).toBe('Bearer shared-header-token');res.end('{"data":[{"id":"L1"}]}');});
+  const authorization=mode==='prefix'?{env:'TOKEN',prefix:'Bearer '}:'TOKEN';
+  const rows=await collect(readRest(config(url,{headersEnv:{Authorization:authorization}}),{...context,env:{TOKEN:mode==='prefix'?'shared-header-token':'Bearer shared-header-token'}}));expect(rows).toEqual([{id:'L1'}]);
+});

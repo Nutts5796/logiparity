@@ -11,8 +11,8 @@ entities:
       settlement:
         type: csv
         file: ./carrier-settlement-lines.csv
-        fields: {load_id: "Load ID", carrier_pay: Amount, status: Status, delivered_at: "Delivered at"}
-        rollup: {by: load_id, sum: [carrier_pay], first: [status, delivered_at]}
+        fields: {load_id: "Load ID", carrier_pay: Amount, charge: Charge, status: Status, delivered_at: "Delivered at"}
+        rollup: {by: load_id, sum: [carrier_pay], first: [status, delivered_at], duplicates: {by: [load_id, charge]}}
     compare:
       carrier_pay: {type: money, currency: USD}
       status: {type: enum}
