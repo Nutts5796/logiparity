@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import ExcelJS from 'exceljs';
+import ExcelJS from '@logiparity/exceljs';
 import { afterEach, expect, it } from 'vitest';
 import { loadConfig, sourceSchema } from '@logiparity/core';
 import { readFileSource } from '@logiparity/adapters';

@@ -1,5 +1,5 @@
 import type { Readable } from 'node:stream';
-import ExcelJS from 'exceljs';
+import ExcelJS from '@logiparity/exceljs';
 import unzipper from 'unzipper';
 
 // Narrow bridge to ExcelJS 4.4.0 internals. Its stock ZIP iterator can lose

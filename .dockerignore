@@ -5,6 +5,7 @@
 !bin/**
 !api/**
 !packages/**
+!vendor/**
 !apps/**
 !scripts/**
 !docs/**

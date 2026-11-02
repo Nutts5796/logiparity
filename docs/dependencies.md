@@ -6,7 +6,7 @@ Direct external runtime dependencies are pinned exactly:
 | Package | Version | License | Purpose |
 | --- | --- | --- | --- |
 | csv-parse | 7.0.3 | MIT | Streaming CSV parsing |
-| exceljs | 4.4.0 | MIT | XLSX cells, metadata and streaming rows/exports |
+| @logiparity/exceljs | 4.4.0-logiparity.1 | MIT | Vendored ExcelJS 4.4.0 Node runtime; XLSX cells, metadata and streaming rows/exports |
 | jiti | 2.7.0 | MIT | Load explicitly configured TypeScript invariants on Node 20/22 |
 | luxon | 3.7.2 | MIT | Explicit IANA timezone conversion and DST validation |
 | pg | 8.23.1 | MIT | PostgreSQL client and read-only transaction lifecycle |
@@ -17,9 +17,9 @@ Direct external runtime dependencies are pinned exactly:
 | yaml | 2.9.1 | ISC | YAML parsing with duplicate-key checks |
 | zod | 4.6.7 | MIT | Strict configuration validation |
 
-Internal workspace packages use this repository's MIT license. Development tools are pinned in package.json and package-lock.json.
+First-party workspace packages use this repository's MIT license. Vendored ExcelJS retains Guyon Roche's MIT license and [upstream provenance](https://github.com/Nutts5796/logiparity/blob/main/vendor/exceljs/PROVENANCE.md). Development tools are pinned in package.json and package-lock.json.
 
-ExcelJS overrides pin unzipper 0.12.5 (removes an obsolete dependency chain with missing license metadata) and uuid 11.1.1 (compatible v4 API, fixes the older UUID advisory). XLSX regression tests exercise these overrides. Our XLSX reader uses a narrow typed bridge to ExcelJS 4.4.0 metadata and row parsers to avoid [upstream streaming race #3064](https://github.com/exceljs/exceljs/issues/3064). Recheck this bridge before updating ExcelJS.
+The private vendored ExcelJS manifest explicitly requires unzipper 0.12.5 and uuid 11.1.1. Its Node runtime is unchanged; consumers need no root overrides. The package regression installs the tarball and runs npm ci against its consumer lockfile, alongside XLSX regressions. Our XLSX reader uses a narrow typed bridge to ExcelJS 4.4.0 metadata and row parsers to avoid [upstream streaming race #3064](https://github.com/exceljs/exceljs/issues/3064). Recheck this bridge before updating ExcelJS.
 
 The full transitive runtime inventory follows. jszip is consumed under its MIT alternative. pako includes MIT and Zlib notices; preserve both when redistributing. The SQL parser transitively includes railroad-diagrams under CC0-1.0; its declared license is recorded below and the package retains its notice. No runtime dependency has unknown license metadata.
 
@@ -29,6 +29,7 @@ The full transitive runtime inventory follows. jszip is consumed under its MIT a
 | --- | --- | --- |
 | @fast-csv/format | 4.3.5 | MIT |
 | @fast-csv/parse | 4.3.6 | MIT |
+| @logiparity/exceljs | 4.4.0-logiparity.1 | MIT |
 | @types/node | 14.18.63 | MIT |
 | archiver | 5.3.2 | MIT |
 | archiver-utils | 2.1.0 | MIT |
@@ -53,7 +54,6 @@ The full transitive runtime inventory follows. jszip is consumed under its MIT a
 | discontinuous-range | 1.0.0 | MIT |
 | duplexer2 | 0.1.4 | BSD-3-Clause |
 | end-of-stream | 1.4.5 | MIT |
-| exceljs | 4.4.0 | MIT |
 | fast-csv | 4.3.6 | MIT |
 | fs-constants | 1.0.0 | MIT |
 | fs-extra | 11.3.1 | MIT |

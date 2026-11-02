@@ -31,6 +31,10 @@ try {
   const packed = JSON.parse((await npm(['pack', '--pack-destination', temporary, ...args])).stdout)[0];
   const install = join(temporary, 'consumer'); await mkdir(install);
   await npm(['install', join(temporary, packed.filename), ...args], install);
+  const consumerLock = await readFile(join(install, 'package-lock.json'), 'utf8');
+  await npm(['ci', ...args.filter((arg) => arg !== '--offline')], install);
+  assert.equal(await readFile(join(install, 'package-lock.json'), 'utf8'), consumerLock);
+  await npm(['ci', ...args], install);
   const publicProbe = `for (const [name,symbol] of [['core','compareEntities'],['adapters','adapters'],['scenarios','runScenario'],['ai','prepareDraft']]) { const m = await import('logiparity/'+name); if (!m[symbol]) throw new Error('Missing public API '+name); }`;
   await run(process.execPath, ['--input-type=module', '-e', publicProbe], { cwd: install });
   await writeFile(join(install, 'types.mts'), `import type {EntityConfig} from 'logiparity/core';
@@ -69,7 +73,7 @@ export {provider};
   let errorCode; try { await cli(['scenario', 'run', 'scenario.yaml', '--target', 'missing-target.yaml']); } catch (error) { errorCode = error.code; } assert.equal(errorCode, 2);
   if (process.env.LOGIPARITY_PACK_OUTPUT) {
     const output = resolve(process.env.LOGIPARITY_PACK_OUTPUT); await mkdir(dirname(output), { recursive: true });
-    await writeFile(output, JSON.stringify({ name: dry.name, version: dry.version, compressedBytes: packed.size, entries: dry.entryCount, bundledPackages: dry.bundled.length, offlineInstall: true, cliSmoke: true, files: [...files] }, null, 2) + '\n');
+    await writeFile(output, JSON.stringify({ name: dry.name, version: dry.version, compressedBytes: packed.size, entries: dry.entryCount, bundledPackages: dry.bundled.length, offlineInstall: true, consumerCi: true, cliSmoke: true, files: [...files] }, null, 2) + '\n');
   }
-  console.log(`Package verified: ${dry.name}@${dry.version}, ${dry.entryCount} entries, ${dry.bundled.length} bundled packages, ${packed.size} bytes; empty-cache offline install and CLI checks passed.`);
+  console.log(`Package verified: ${dry.name}@${dry.version}, ${dry.entryCount} entries, ${dry.bundled.length} bundled packages, ${packed.size} bytes; empty-cache offline install, consumer npm ci and CLI checks passed.`);
 } finally { await rm(temporary, { recursive: true, force: true }); }

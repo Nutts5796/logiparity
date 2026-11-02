@@ -2,7 +2,7 @@ import { createReadStream } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parse } from 'csv-parse';
-import ExcelJS from 'exceljs';
+import ExcelJS from '@logiparity/exceljs';
 import type { AdapterContext, DataRow, FileConfig } from '@logiparity/core';
 import { xlsxRows } from './xlsx.js';
 

@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 const root = new URL('../', import.meta.url);
 const lock = JSON.parse(await readFile(new URL('package-lock.json', root), 'utf8'));
 const entries = [];
+const vendored = JSON.parse(await readFile(new URL('vendor/exceljs/package.json', root), 'utf8'));
+entries.push({name: vendored.name, version: vendored.version, license: vendored.license});
 for (const [location, entry] of Object.entries(lock.packages)) {
   if (!location.includes('node_modules/') || entry.dev || entry.link) continue;
   const manifest = JSON.parse(await readFile(new URL(`${location}/package.json`, root), 'utf8'));
@@ -21,7 +23,7 @@ Direct external runtime dependencies are pinned exactly:
 | Package | Version | License | Purpose |
 | --- | --- | --- | --- |
 | csv-parse | 7.0.3 | MIT | Streaming CSV parsing |
-| exceljs | 4.4.0 | MIT | XLSX cells, metadata and streaming rows/exports |
+| @logiparity/exceljs | 4.4.0-logiparity.1 | MIT | Vendored ExcelJS 4.4.0 Node runtime; XLSX cells, metadata and streaming rows/exports |
 | jiti | 2.7.0 | MIT | Load explicitly configured TypeScript invariants on Node 20/22 |
 | luxon | 3.7.2 | MIT | Explicit IANA timezone conversion and DST validation |
 | pg | 8.23.1 | MIT | PostgreSQL client and read-only transaction lifecycle |
@@ -32,9 +34,9 @@ Direct external runtime dependencies are pinned exactly:
 | yaml | 2.9.1 | ISC | YAML parsing with duplicate-key checks |
 | zod | 4.6.7 | MIT | Strict configuration validation |
 
-Internal workspace packages use this repository's MIT license. Development tools are pinned in package.json and package-lock.json.
+First-party workspace packages use this repository's MIT license. Vendored ExcelJS retains Guyon Roche's MIT license and [upstream provenance](https://github.com/Nutts5796/logiparity/blob/main/vendor/exceljs/PROVENANCE.md). Development tools are pinned in package.json and package-lock.json.
 
-ExcelJS overrides pin unzipper 0.12.5 (removes an obsolete dependency chain with missing license metadata) and uuid 11.1.1 (compatible v4 API, fixes the older UUID advisory). XLSX regression tests exercise these overrides. Our XLSX reader uses a narrow typed bridge to ExcelJS 4.4.0 metadata and row parsers to avoid [upstream streaming race #3064](https://github.com/exceljs/exceljs/issues/3064). Recheck this bridge before updating ExcelJS.
+The private vendored ExcelJS manifest explicitly requires unzipper 0.12.5 and uuid 11.1.1. Its Node runtime is unchanged; consumers need no root overrides. The package regression installs the tarball and runs npm ci against its consumer lockfile, alongside XLSX regressions. Our XLSX reader uses a narrow typed bridge to ExcelJS 4.4.0 metadata and row parsers to avoid [upstream streaming race #3064](https://github.com/exceljs/exceljs/issues/3064). Recheck this bridge before updating ExcelJS.
 
 The full transitive runtime inventory follows. jszip is consumed under its MIT alternative. pako includes MIT and Zlib notices; preserve both when redistributing. The SQL parser transitively includes railroad-diagrams under CC0-1.0; its declared license is recorded below and the package retains its notice. No runtime dependency has unknown license metadata.
 
