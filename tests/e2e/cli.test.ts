@@ -1,0 +1,128 @@
+import { spawn, type ChildProcess } from 'node:child_process';
+import { once } from 'node:events';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { stringify } from 'yaml';
+
+const cli = resolve('node_modules/.bin/logiparity');
+const demo = resolve('apps/demo-delivery/dist/main.js');
+const temporary: string[] = [];
+const children: ChildProcess[] = [];
+afterEach(async () => {
+  await Promise.all(children.splice(0).map(async (child) => { if (child.exitCode === null) { child.kill('SIGTERM'); await once(child, 'exit'); } }));
+  await Promise.all(temporary.splice(0).map((d) => rm(d, { recursive: true, force: true })));
+});
+
+async function startDemo(flags: Record<string, string> = {}, args: string[] = []) {
+  const child = spawn(process.execPath, [demo, ...args], { env: { ...process.env, DEMO_PORT: '0', BUG_EXPORT_DROPS_LAST_ROW: '0', BUG_ROUNDING_PAYOUT: '0', ...flags }, stdio: ['ignore', 'pipe', 'pipe'] });
+  children.push(child);
+  return await new Promise<string>((resolveUrl, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Demo did not start within 10 seconds.')), 10000);
+    child.on('error', (error) => { clearTimeout(timeout); reject(error); });
+    child.on('exit', (code) => { clearTimeout(timeout); reject(new Error(`Demo exited before startup: ${code}`)); });
+    let output = '';
+    child.stdout?.on('data', (chunk: Buffer) => {
+      output += chunk.toString(); const match = output.match(/http:\/\/127\.0\.0\.1:\d+/);
+      if (match) { clearTimeout(timeout); resolveUrl(match[0]); }
+    });
+  });
+}
+
+async function runCli(args: string[], cwd: string, extraEnv: Record<string, string> = {}): Promise<{ code: number; stdout: string; stderr: string }> {
+  const child = spawn(process.execPath, [cli, ...args], { cwd, env: { ...process.env, ...extraEnv }, stdio: ['ignore', 'pipe', 'pipe'] });
+  children.push(child);
+  let stdout = ''; let stderr = '';
+  child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+  child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+  const [code] = await once(child, 'exit') as [number | null];
+  return { code: code ?? 2, stdout, stderr };
+}
+
+async function directory() { const d = await mkdtemp(join(tmpdir(), 'logiparity-e2e-')); temporary.push(d); return d; }
+async function saveExport(url: string, dir: string, extension: string) {
+  const response = await fetch(`${url}/exports/shipments.${extension}?date=2026-11-02`);
+  expect(response.status).toBe(200); await writeFile(join(dir, `shipments.${extension}`), new Uint8Array(await response.arrayBuffer()));
+}
+async function writeConfig(dir: string, url: string) {
+  const fields = { id: 'Shipment ID', payout: 'Driver payout', status: 'Status', delivered_at: 'Delivered at' };
+  await writeFile(join(dir, 'parity.yaml'), stringify({
+    version: 1,
+    entities: [{ name: 'shipment', key: 'id', sources: {
+      api: { type: 'rest', baseUrl: url, path: '/api/shipments', pagination: { type: 'page', size: 200 }, items: '$.data[*]', fields: { id: '$.id', payout: '$.driver_payout', status: '$.status', delivered_at: '$.delivered_at' } },
+      export: { type: 'xlsx', file: 'shipments.xlsx', sheet: 'Shipments', fields },
+      csv: { type: 'csv', file: 'shipments.csv', fields },
+    }, compare: { payout: { type: 'money', currency: 'USD' }, status: { type: 'enum' }, delivered_at: { type: 'datetime' } } }],
+    report: { outputs: ['console', 'json'], dir: './report' },
+  }));
+}
+interface JsonFinding { type: string; source: string; key: string; field: string; expected?: string; actual?: string }
+interface JsonReport { schemaVersion: number; findings: JsonFinding[]; entities: { counts: Record<string, number> }[] }
+const id = (i: number) => `S${String(i).padStart(6, '0')}`;
+// Frozen expected affected positions for the synthetic decimal bases, repeated every 300 records.
+const roundingPositions = [1, 2, 3, 4, 26, 27, 28, 114, 116, 118, 120, 139, 141, 143, 145];
+const roundingKeys = Array.from({ length: 10 }, (_, block) => roundingPositions.map((p) => block * 300 + p)).flat().filter((i) => i <= 2750).map(id).sort();
+const droppedKeys = [...Array.from({ length: 13 }, (_, i) => (i + 1) * 200), 2750].map(id);
+
+describe.sequential('CLI against the actual demo executable', () => {
+  it('enables both implemented bugs with the demo:bugs startup flag', async () => {
+    const url = await startDemo({}, ['--bugs']);
+    const health = await fetch(`${url}/health`).then((r) => r.json()) as { bugs: Record<string, boolean> };
+    expect(health.bugs).toEqual({ dropLastRow: true, roundingPayout: true });
+  });
+  it.each([
+    { name: 'bugs off', drop: false, rounding: false },
+    { name: 'BUG_EXPORT_DROPS_LAST_ROW only', drop: true, rounding: false },
+    { name: 'BUG_ROUNDING_PAYOUT only', drop: false, rounding: true },
+    { name: 'both M1 bugs', drop: true, rounding: true },
+  ])('$name: exact finding keys, values and exit code', async ({ drop, rounding }) => {
+    const dir = await directory();
+    const url = await startDemo({ BUG_EXPORT_DROPS_LAST_ROW: drop ? '1' : '0', BUG_ROUNDING_PAYOUT: rounding ? '1' : '0' });
+    await saveExport(url, dir, 'xlsx'); await saveExport(url, dir, 'csv'); await writeConfig(dir, url);
+    const result = await runCli(['check', '--config', join(dir, 'parity.yaml')], tmpdir());
+    expect(result.stderr).toBe(''); expect(result.code).toBe(drop || rounding ? 1 : 0);
+    const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
+    expect(report.schemaVersion).toBe(1);
+    expect(report.entities[0]?.counts).toEqual({ api: 2750, export: drop ? 2736 : 2750, csv: 2750 });
+    expect(report.findings.filter((f) => f.type === 'missing_in_source').map((f) => f.key)).toEqual(drop ? droppedKeys : []);
+    for (const source of ['csv', 'export']) {
+      const findings = report.findings.filter((f) => f.type === 'field_mismatch' && f.source === source);
+      expect(findings.map((f) => f.key)).toEqual(rounding ? roundingKeys.filter((key) => source === 'csv' || !drop || !droppedKeys.includes(key)) : []);
+      for (const f of findings) { expect(f.field).toBe('payout'); expect(BigInt(f.expected ?? '') - BigInt(f.actual ?? '')).toBe(1n); }
+      if (rounding) expect(findings.find((f) => f.key === 'S000001')).toMatchObject({ expected: '101', actual: '100' });
+    }
+    expect(report.findings.every((f) => ['missing_in_source', 'field_mismatch'].includes(f.type))).toBe(true);
+    const again = await runCli(['check', '--config', join(dir, 'parity.yaml')], dir);
+    expect(again.code).toBe(result.code); expect(again.stdout).toBe(result.stdout);
+  });
+  it('exposes synthetic domain lists, details, status filters and rejects unsupported requests', async () => {
+    const url = await startDemo();
+    const health = await fetch(`${url}/health`).then((r) => r.json()) as { synthetic: boolean; bugs: Record<string, boolean> };
+    expect(health.synthetic).toBe(true); expect(health.bugs).toEqual({ dropLastRow: false, roundingPayout: false });
+    const drivers = await fetch(`${url}/api/drivers?limit=100`).then((r) => r.json()) as { data: unknown[] }; expect(drivers.data).toHaveLength(55);
+    const shipment = await fetch(`${url}/api/shipments/S000001`).then((r) => r.json()) as { data: { id: string } }; expect(shipment.data.id).toBe('S000001');
+    const filtered = await fetch(`${url}/api/orders?status=delivered`).then((r) => r.json()) as { data: { status: string }[] }; expect(filtered.data.every((s) => s.status === 'delivered')).toBe(true);
+    for (const path of ['/api/vehicles', '/api/routes', '/api/payouts', '/api/notifications']) expect((await fetch(url + path)).status).toBe(200);
+    expect((await fetch(`${url}/api/shipments?date=1900-01-01`)).status).toBe(400);
+    expect((await fetch(`${url}/api/shipments?page=bad`)).status).toBe(400);
+    expect((await fetch(`${url}/api/shipments/missing`)).status).toBe(404);
+    expect((await fetch(`${url}/events`, { method: 'POST' })).status).toBe(405);
+  });
+  it('returns 2 for invalid YAML, missing files, source failures and unwritable reports; prints useful help', async () => {
+    const dir = await directory();
+    const help = await runCli(['--help'], dir); expect(help.code).toBe(0); expect(help.stdout).toContain('TEST AND STAGING');
+    expect((await runCli([], dir)).code).toBe(2);
+    expect((await runCli(['--unknown'], dir)).code).toBe(2);
+    const missing = await runCli(['check', '--config', 'missing.yaml'], dir); expect(missing.code).toBe(2); expect(missing.stderr).toContain('cannot read');
+    await writeFile(join(dir, 'bad.yaml'), 'version: [');
+    expect((await runCli(['check', '--config', 'bad.yaml'], dir)).code).toBe(2);
+    const url = await startDemo(); await writeConfig(dir, url);
+    const failedSource = await runCli(['check', '--config', 'parity.yaml'], dir);
+    expect(failedSource.code).toBe(2); expect(failedSource.stdout).toContain('source_error');
+    await saveExport(url, dir, 'xlsx'); await saveExport(url, dir, 'csv');
+    await rm(join(dir, 'report'), { recursive: true }); await writeFile(join(dir, 'report'), 'occupied');
+    const failedReport = await runCli(['check', '--config', 'parity.yaml'], dir);
+    expect(failedReport.code).toBe(2); expect(failedReport.stderr).toContain('report');
+  });
+});

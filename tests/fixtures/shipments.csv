@@ -1,0 +1,4 @@
+Shipment ID;Status;Driver payout;Note
+S000001;Delivered;1,01;"quoted; delimiter"
+S000002;In transit;2,05;"line one
+line two"
