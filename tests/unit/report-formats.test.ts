@@ -52,7 +52,7 @@ describe('report formats', () => {
     const allowed: Report = { ...report, findings: report.findings.map((f) => ({ ...f, blocking: false })) };
     expect(htmlReport(allowed)).toContain('Passed with observations'); expect(markdownReport(allowed)).toContain('0 blocking');
     const error: Report = { ...report, findings: [{ type: 'source_error', entity: 'shipment', source: 'api', key: '', field: '', message: 'cannot read', blocking: false }] };
-    expect(htmlReport(error)).toContain('Runtime error'); expect(consoleReport(error)).toContain('1 blocking');
+    expect(htmlReport(error)).toContain('Runtime error'); expect(consoleReport(error)).toContain('0 findings (0 blocking), 1 configuration/source error');
   });
   it('escapes Markdown injection and limits comment summaries to 50 findings', () => {
     const hostile = { ...report.findings[0]!, message: '![x](https://example.invalid/img) | <script>\n`code` & text', actual: null };

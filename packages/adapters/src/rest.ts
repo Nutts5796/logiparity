@@ -46,7 +46,7 @@ export async function* readRest(config: RestConfig, context: AdapterContext): As
   const base = new URL(config.baseUrl);
   let url = safeUrl(config.path, base);
   const headers = new Headers({ accept: 'application/json', ...config.headers });
-  for (const [header, name] of Object.entries(config.headersEnv)) headers.set(header, environment(name, context.env));
+  for (const [header, reference] of Object.entries(config.headersEnv)) headers.set(header, (typeof reference === 'string' ? '' : reference.prefix) + environment(typeof reference === 'string' ? reference : reference.env, context.env));
   if (config.auth?.type === 'bearer') headers.set('authorization', `Bearer ${environment(config.auth.tokenEnv, context.env)}`);
   if (config.auth?.type === 'basic') headers.set('authorization', `Basic ${Buffer.from(`${environment(config.auth.usernameEnv, context.env)}:${environment(config.auth.passwordEnv, context.env)}`).toString('base64')}`);
   const pagination = config.pagination;

@@ -1,4 +1,4 @@
-import { redactSecrets, secretValues } from './diagnostics.js';
+import { redactSecrets, secretValues, referencedEnvironment, rememberEnvironment } from './diagnostics.js';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { parseDocument } from 'yaml';
@@ -14,13 +14,14 @@ const httpUrl = z.url().refine((v) => {
 }, 'Use an HTTP(S) URL without embedded credentials');
 const pageSize = z.number().int().min(1).max(10000).default(200);
 const completionSignals = { totalPath: name.optional(), totalPagesPath: name.optional(), hasMorePath: name.optional() };
-const rollup = z.object({ by: name, sum: z.array(name).default([]), first: z.array(name).default([]) }).strict().refine((v) => new Set([v.by, ...v.sum, ...v.first]).size === 1 + v.sum.length + v.first.length, 'Rollup fields must be unique and disjoint');
+const rollup = z.object({ by: name, sum: z.array(name).default([]), first: z.array(name).default([]), duplicates: z.object({ by: z.array(name).min(1).refine((items) => new Set(items).size === items.length, 'Duplicate identity fields must be unique') }).strict().optional() }).strict().refine((v) => new Set([v.by, ...v.sum, ...v.first]).size === 1 + v.sum.length + v.first.length, 'Rollup fields must be unique and disjoint');
 const pagination = z.discriminatedUnion('type', [
   z.object({ type: z.literal('page'), ...completionSignals, allowShortFirstPage: z.boolean().default(false), pageParam: name.default('page'), sizeParam: name.default('limit'), size: pageSize, start: z.number().int().min(0).default(1) }).strict(),
   z.object({ type: z.literal('offset'), ...completionSignals, allowShortFirstPage: z.boolean().default(false), offsetParam: name.default('offset'), sizeParam: name.default('limit'), size: pageSize }).strict(),
   z.object({ type: z.literal('cursor'), cursorParam: name.default('cursor'), next: name, sizeParam: name.default('limit'), size: pageSize }).strict(),
   z.object({ type: z.literal('link') }).strict(),
 ]);
+export const headerEnvSchema = z.union([envName, z.object({ env: envName, prefix: z.literal('Bearer ').default('Bearer ') }).strict()]);
 const auth = z.discriminatedUnion('type', [
   z.object({ type: z.literal('bearer'), tokenEnv: envName }).strict(),
   z.object({ type: z.literal('basic'), usernameEnv: envName, passwordEnv: envName }).strict(),
@@ -30,7 +31,7 @@ export const sourceSchema = z.discriminatedUnion('type', [
     type: z.literal('rest'), rollup: rollup.optional(), baseUrl: httpUrl,
     path: name, fields, items: name.default('$.data[*]'),
     headers: z.record(name, z.string()).default({}).refine((v) => !Object.keys(v).some((k) => /^(authorization|proxy-authorization|cookie|x-api-key)$/i.test(k)), 'Use auth or headersEnv for secrets'),
-    headersEnv: z.record(name, envName).default({}), auth: auth.optional(), pagination: pagination.optional(),
+    headersEnv: z.record(name, headerEnvSchema).default({}), auth: auth.optional(), pagination: pagination.optional(),
     timeoutMs: z.number().int().min(1).max(300000).default(10000),
     retries: z.number().int().min(0).max(10).default(3),
     backoffMs: z.number().int().min(1).max(10000).default(100),
@@ -54,6 +55,7 @@ export const sourceSchema = z.discriminatedUnion('type', [
 ]);
 export const ruleSchema = z.object({
   type: z.enum(['string', 'number', 'money', 'datetime', 'enum']),
+  allowCurrencySymbol: z.boolean().default(false), negativeParentheses: z.boolean().default(false), format: name.optional(),
   allowNumber: z.boolean().default(false), caseFold: z.boolean().default(false), emptyAsNull: z.boolean().default(true),
   locale: name.default('en-US'), currency: z.string().regex(/^[A-Z]{3}$/).optional(),
   tolerance: z.number().finite().nonnegative().default(0),
@@ -85,9 +87,10 @@ export const entitySchema = z.object({
     if (!Object.hasOwn(config.fields, v.key)) ctx.addIssue({ code: 'custom', path: ['sources', source, 'fields'], message: `Map the entity key ${v.key}` });
   }
   for (const [source, config] of Object.entries(v.sources)) if (config.rollup) {
-    const r = config.rollup; const fields = new Set([r.by, ...r.sum, ...r.first]);
+    const r = config.rollup; const fields = new Set([r.by, ...r.sum, ...r.first, ...(r.duplicates?.by ?? [])]);
+    if (r.duplicates && !r.duplicates.by.includes(r.by)) ctx.addIssue({ code: 'custom', path: ['sources', source, 'rollup', 'duplicates', 'by'], message: 'Duplicate identity must include the rollup key' });
     if (r.by !== v.key) ctx.addIssue({ code: 'custom', path: ['sources', source, 'rollup', 'by'], message: 'Rollup by must match the entity key' });
-    if ([...fields].some((f) => !Object.hasOwn(config.fields, f)) || Object.keys(config.fields).some((f) => !fields.has(f))) ctx.addIssue({ code: 'custom', path: ['sources', source, 'rollup'], message: 'Every mapped field must appear in rollup by, sum or first' });
+    if ([...fields].some((f) => !Object.hasOwn(config.fields, f)) || Object.keys(config.fields).some((f) => !fields.has(f))) ctx.addIssue({ code: 'custom', path: ['sources', source, 'rollup'], message: 'Every mapped field must appear in rollup by, sum, first or duplicates.by' });
     for (const field of r.sum) if (!['money', 'number'].includes(v.compare[field]?.type ?? '')) ctx.addIssue({ code: 'custom', path: ['sources', source, 'rollup', 'sum'], message: `Rollup sum field ${field} requires a number or money rule` });
   }
   const reference = Object.values(v.sources)[0];
@@ -120,7 +123,8 @@ export type ComparisonRule = z.infer<typeof ruleSchema>;
 export type EntityConfig = z.infer<typeof entitySchema>;
 export type AggregateConfig = z.infer<typeof aggregateSchema>;
 export type Config = z.infer<typeof configSchema>;
-export interface LoadedConfig { config: Config; baseDir: string; file: string }
+export interface LoadedConfig { config: Config; baseDir: string; file: string; secrets: string[]; referencedEnv: string[]; missingEnv: string[] }
+export interface LoadOptions { allowMissingEnv?: boolean }
 
 export class ConfigError extends Error {}
 
@@ -128,7 +132,7 @@ export function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export async function loadYaml(file: string, env: NodeJS.ProcessEnv = process.env): Promise<unknown> {
+export async function loadYaml(file: string, env: NodeJS.ProcessEnv = process.env, options: LoadOptions = {}): Promise<unknown> {
   const absolute = resolve(file);
   let content: string;
   try { content = await readFile(absolute, 'utf8'); }
@@ -138,23 +142,29 @@ export async function loadYaml(file: string, env: NodeJS.ProcessEnv = process.en
   let raw: unknown;
   try { raw = doc.toJS({ maxAliasCount: 50 }); }
   catch { throw new ConfigError(`${absolute}: too many YAML aliases; use a plain configuration.`); }
-  const walk = (value: unknown, transform: (s: string) => string): unknown => {
-    if (typeof value === 'string') return transform(value);
-    if (Array.isArray(value)) return value.map((v) => walk(v, transform));
-    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, walk(v, transform)]));
+  const secrets = secretValues(raw, env); const references = referencedEnvironment(raw);
+  const walk = (value: unknown, field = ''): unknown => {
+    if (typeof value === 'string') return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, key: string) => {
+      const item = Object.hasOwn(env, key) ? env[key] : undefined;
+      if (!item) {
+        if (!options.allowMissingEnv) throw new ConfigError(redactSecrets(`${absolute}: environment variable ${key} is missing or empty; set it before running check.`, secrets));
+        return field === 'baseUrl' || field === 'url' || /URL$/i.test(key) ? 'https://missing-env.invalid' : 'LOGIPARITY_MISSING_ENV';
+      }
+      return item;
+    });
+    if (Array.isArray(value)) return value.map((item) => walk(item, field));
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, walk(item, key)]));
     return value;
   };
-  raw = walk(raw, (s) => s.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, key: string) => {
-    const value = Object.hasOwn(env, key) ? env[key] : undefined;
-    if (!value) throw new ConfigError(`${absolute}: environment variable ${key} is missing or empty; set it before running check.`);
-    return value;
-  }));
+  raw = walk(raw);
+  rememberEnvironment(raw, { secrets, references });
   return raw;
 }
 
-export async function loadConfig(file: string, env: NodeJS.ProcessEnv = process.env): Promise<LoadedConfig> {
+export async function loadConfig(file: string, env: NodeJS.ProcessEnv = process.env, options: LoadOptions = {}): Promise<LoadedConfig> {
   const absolute = resolve(file);
-  let raw = await loadYaml(absolute, env);
+  let raw = await loadYaml(absolute, env, options);
+  const references = referencedEnvironment(raw);
   const secrets = secretValues(raw, env);
   const location = redactSecrets(absolute, secrets);
   const walk = (value: unknown, transform: (s: string) => string): unknown => {
@@ -172,7 +182,15 @@ export async function loadConfig(file: string, env: NodeJS.ProcessEnv = process.
   }));
   const result = configSchema.safeParse(raw);
   if (!result.success) throw new ConfigError(redactSecrets(`${absolute}: invalid configuration:\n${formatConfigIssues(configSchema, raw, result.error)}\nFix the listed configuration paths.`, secrets));
-  return { config: result.data, baseDir: dirname(absolute), file: absolute };
+  rememberEnvironment(result.data, { secrets, references });
+  const missingEnv = validateEnvironment(result.data, env, options, absolute);
+  return { config: result.data, baseDir: dirname(absolute), file: absolute, secrets: secretValues(result.data, env), referencedEnv: referencedEnvironment(result.data), missingEnv };
+}
+
+export function validateEnvironment(value: unknown, env: NodeJS.ProcessEnv, options: LoadOptions = {}, location = 'Configuration'): string[] {
+  const names = referencedEnvironment(value); const missing = names.filter((name) => !Object.hasOwn(env, name) || !env[name]);
+  if (missing.length && !options.allowMissingEnv) throw new ConfigError(redactSecrets(`${location}: environment variable${missing.length === 1 ? '' : 's'} ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} missing or empty; set every referenced variable or use validate --allow-missing-env.`, secretValues(value, env)));
+  return missing;
 }
 
 /** Report unknown properties using the public Zod schema shape, including selected unions. */

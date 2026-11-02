@@ -37,3 +37,30 @@ it('redacts a configured arbitrary-name credential in console errors and every r
   await writeFile(join(d,token,'invalid.yaml'),JSON.stringify({...config,typo:true}));const invalid=await run(['validate','--config',`${token}/invalid.yaml`],d,{CREDENTIAL_VALUE:token});expect(invalid.code).toBe(2);expect(invalid.stderr).not.toContain(token);
 });
 it('runs the documented freight example',async()=>{const result=await run(['check','--config',resolve('examples/freight/parity.yaml')],await dir());expect(result.code,result.stdout+result.stderr).toBe(0);expect(result.stdout).toContain('0 findings');});
+
+it('retains secret interpolation metadata through engine and all reports',async()=>{
+  const d=await dir(); const secret='interpolated-secret-fixture';
+  await writeFile(join(d,'config.yaml'),JSON.stringify({version:1,entities:[{name:'load',key:'id',sources:{file:{type:'csv',file:'./missing-${STAGING_API_SECRET}.csv',fields:{id:'ID'}},other:{type:'csv',file:'unused.csv',fields:{id:'ID'}}}}],report:{dir:'report',outputs:['console','json','html','markdown','junit']}}));
+  const result=await run(['check','--config','config.yaml'],d,{STAGING_API_SECRET:secret});expect(result.code).toBe(2);expect(result.stdout+result.stderr).not.toContain(secret);expect(result.stdout).toContain('REDACTED');
+  for(const file of ['report.json','report.html','report.md','junit.xml']){const text=await readFile(join(d,'report',file),'utf8');expect(text).not.toContain(secret);expect(text).toContain('REDACTED');}
+});
+it('check and validate reject identical semantic errors before contacting sources',async()=>{
+  const d=await dir(); let hits=0;const server=await startServer((_,res)=>{hits++;res.end('{}');});
+  try {const config={version:1,entities:[{name:'load',key:'id',sources:{api:{type:'rest',baseUrl:server.url,path:'/',fields:{id:'$.id'}},file:{type:'csv',file:'missing.csv',fields:{id:'ID',status:'Status'}}},compare:{status:{type:'string'}}}]};await writeFile(join(d,'config.yaml'),JSON.stringify(config));
+    const check=await run(['check','--config','config.yaml'],d);const validate=await run(['validate','--config','config.yaml'],d);expect(check.code).toBe(2);expect(check.stderr).toBe(validate.stderr);expect(check.stderr).toContain('not mapped');expect(hits).toBe(0);
+  } finally {await server.close();}
+});
+it('validates token and substitution env references consistently and supports secret-free linting',async()=>{
+  const d=await dir();await writeFile(join(d,'config.yaml'),JSON.stringify({version:1,entities:[{name:'load',key:'id',sources:{api:{type:'rest',baseUrl:'${STAGING_API_URL}',path:'/',auth:{type:'bearer',tokenEnv:'STAGING_API_TOKEN'},headersEnv:{Authorization:{env:'STAGING_API_TOKEN',prefix:'Bearer '},'X-Trace':'TRACE_VALUE'},fields:{id:'$.id'}},file:{type:'csv',file:'missing.csv',fields:{id:'ID'}}}}]}));
+  const env={STAGING_API_URL:'',STAGING_API_TOKEN:'',TRACE_VALUE:''};
+  expect((await run(['validate','--config','config.yaml'],d,env)).stderr).toContain('STAGING_API_URL');
+  expect((await run(['validate','--config','config.yaml'],d,{...env,STAGING_API_URL:'http://127.0.0.1:1'})).stderr).toContain('STAGING_API_TOKEN');
+  const lint=await run(['validate','--allow-missing-env','--config','config.yaml'],d,env);expect(lint.code,lint.stderr).toBe(0);for(const name of Object.keys(env))expect(lint.stdout).toContain(name);
+  expect((await run(['check','--allow-missing-env','--config','config.yaml'],d,env)).code).toBe(2);
+});
+it('reuses one raw token for target event headers and state-source authentication',async()=>{
+  const d=await dir();const seen:string[]=[];const token='shared-staging-token';const server=await startServer((req,res)=>{seen.push(req.headers.authorization??'');if(req.headers.authorization!==`Bearer ${token}`)res.statusCode=401;res.end(JSON.stringify({data:[{id:'L1'}]}));});
+  try{await writeFile(join(d,'target.yaml'),JSON.stringify({version:1,name:'test',environment:'test',allowMutations:true,baseUrl:server.url,headersEnv:{Authorization:{env:'STAGING_API_TOKEN',prefix:'Bearer '}},events:{http:{method:'POST',path:'/event'}},state:{orders:{type:'rest',baseUrl:server.url,path:'/',auth:{type:'bearer',tokenEnv:'STAGING_API_TOKEN'},fields:{id:'$.id'}}}}));await writeFile(join(d,'scenario.yaml'),JSON.stringify({version:1,name:'shared token',target:'test',events:[{step:1,type:'http'}],invariants:['no_order_lost']}));
+    const result=await run(['scenario','run','scenario.yaml','--target','target.yaml','--report-dir','report'],d,{STAGING_API_TOKEN:token});expect(result.code,result.stdout+result.stderr).toBe(0);expect(seen).toEqual([`Bearer ${token}`,`Bearer ${token}`,`Bearer ${token}`]);expect(result.stdout+result.stderr).not.toContain(token);
+  }finally{await server.close();}
+});

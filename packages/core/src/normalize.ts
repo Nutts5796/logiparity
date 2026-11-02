@@ -4,6 +4,7 @@ import type { NormalizedValue } from './types.js';
 
 const localeFormats = new Map<string, { group: string | undefined; decimal: string; primary: number; secondary: number }>();
 const currencyDigits = new Map<string, number>();
+const currencySymbols = new Map<string, string[]>();
 
 function decimalText(input: string, locale: string): string {
   let format = localeFormats.get(locale);
@@ -28,14 +29,44 @@ function decimalText(input: string, locale: string): string {
   return text;
 }
 
-export function moneyMinor(input: string, currency: string, locale = 'en-US'): bigint {
+export interface MoneyInputOptions { allowCurrencySymbol?: boolean; negativeParentheses?: boolean }
+function moneyText(input: string, currency: string, locale: string, options: MoneyInputOptions): string {
+  let text = input.trim(); let parentheses = false;
+  if (/[()]/.test(text)) {
+    if (!options.negativeParentheses) throw new Error('Money uses negative parentheses; set negativeParentheses: true or provide a signed plain decimal.');
+    if (!/^\([^()]+\)$/.test(text)) throw new Error('Money has invalid negative parentheses.');
+    parentheses = true; text = text.slice(1, -1).trim();
+  }
+  const signed = text.match(/^[+-]/)?.[0] ?? ''; if (signed) text = text.slice(1).trim();
+  if (!/[\p{Sc}\p{L}]/u.test(text)) {
+    if (parentheses && signed) throw new Error('Money has conflicting signs; use one sign or negative parentheses.');
+    return (parentheses ? '-' : signed) + text;
+  }
+  const cacheKey = `${locale}|${currency}`;
+  let tokens = currencySymbols.get(cacheKey);
+  if (!tokens) {
+    tokens = [...new Set(['symbol', 'narrowSymbol', 'code'].flatMap((display) => new Intl.NumberFormat(locale, {style:'currency', currency, currencyDisplay: display as 'symbol' | 'narrowSymbol' | 'code'}).formatToParts(1).filter((part) => part.type === 'currency').map((part) => part.value)))].sort((a,b) => b.length-a.length);
+    currencySymbols.set(cacheKey, tokens);
+  }
+  const token = tokens.find((item) => text.startsWith(item) || text.endsWith(item));
+  if (/\p{Sc}/u.test(text) || token) {
+    if (!options.allowCurrencySymbol) throw new Error('Money contains a currency symbol; set allowCurrencySymbol: true or provide a plain decimal.');
+    if (!token) throw new Error(`Currency symbol does not match configured ${currency}.`);
+    text = (text.startsWith(token) ? text.slice(token.length) : text.slice(0, -token.length)).trim();
+    if (/\p{Sc}/u.test(text) || tokens.some((item) => text.includes(item))) throw new Error(`Use one currency symbol matching configured ${currency}.`);
+  }
+  if (signed && /^[+-]/.test(text) || parentheses && (signed || /^[+-]/.test(text))) throw new Error('Money has conflicting signs; use one sign or negative parentheses.');
+  return (parentheses ? '-' : signed) + text;
+}
+
+export function moneyMinor(input: string, currency: string, locale = 'en-US', options: MoneyInputOptions = {}): bigint {
   let digits = currencyDigits.get(currency);
   if (digits === undefined) {
     digits = new Intl.NumberFormat('en-US', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits;
     if (digits !== undefined) currencyDigits.set(currency, digits);
   }
   if (digits === undefined) throw new Error(`Cannot determine minor units for ${currency}.`);
-  const text = decimalText(input.trim(), locale);
+  const text = decimalText(moneyText(input, currency, locale, options), locale);
   const negative = text.startsWith('-');
   const [whole = '', fraction = ''] = text.replace(/^[+-]/, '').split('.');
   if (fraction.length > digits && /[1-9]/.test(fraction.slice(digits))) throw new Error(`Money has more than ${digits} decimal places for ${currency}; provide rounded major-unit decimals as strings.`);
@@ -74,7 +105,7 @@ export function normalize(value: unknown, rule: ComparisonRule | undefined, sour
         if (!Number.isFinite(value)) throw new Error('Money number must be finite.');
         return moneyMinor(expandNumber(String(value)), rule.currency ?? 'USD', 'en-US');
       }
-      return moneyMinor(text, rule.currency ?? 'USD', rule.locale);
+      return moneyMinor(text, rule.currency ?? 'USD', rule.locale, rule);
     }
     case 'number': {
       const number = Number(decimalText(text, rule.locale));
@@ -82,13 +113,18 @@ export function normalize(value: unknown, rule: ComparisonRule | undefined, sour
       return number;
     }
     case 'datetime': {
-      const explicitZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
       const zone = rule.sourceTimezones[source];
-      if (!explicitZone && !zone) throw new Error(`Datetime has no offset; set sourceTimezones.${source} or supply an ISO 8601 offset.`);
-      const date = DateTime.fromISO(text.replace(' ', 'T'), { zone: zone ?? 'UTC', setZone: true });
-      if (!date.isValid) throw new Error(`Invalid ISO datetime or timezone for source ${source}; check the date and sourceTimezones.`);
+      const iso = text.replace(' ', 'T');
+      const explanation = rule.format ? DateTime.fromFormatExplain(text, rule.format, {locale: rule.locale}) : undefined;
+      if (rule.format ? !explanation!.tokens.some((token) => !token.literal && /^[HhmsSatTfF]/.test(token.val)) : !/[T:]/.test(iso) && DateTime.fromISO(iso, {zone:'UTC'}).isValid) throw new Error('Datetime date has no time; supply a date and time, or a format that includes time.');
+      const explicitZone = rule.format ? typeof explanation!.matches?.Z === 'number' : /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+      if (!explicitZone && !zone && !explanation?.zone) throw new Error(`Datetime has no offset; set sourceTimezones.${source} or supply an ISO 8601 offset.`);
+      const date = rule.format ? DateTime.fromFormat(text, rule.format, {zone:zone ?? 'UTC', setZone:true, locale:rule.locale}) : DateTime.fromISO(iso, {zone:zone ?? 'UTC', setZone:true});
+      if (!date.isValid) throw new Error(`Invalid ${rule.format ? 'formatted' : 'ISO'} datetime or timezone for source ${source}; check the date, format and sourceTimezones.`);
       if (!explicitZone && date.getPossibleOffsets().length > 1) throw new Error('Datetime is ambiguous during a daylight-saving transition; include an explicit UTC offset.');
-      if (!explicitZone && date.toFormat("yyyy-MM-dd'T'HH:mm") !== text.replace(' ', 'T').slice(0, 16)) throw new Error('Datetime falls in a daylight-saving gap; include a valid UTC offset.');
+      const parsed: Record<string, unknown> = explanation?.result ?? {};
+      const changed = rule.format ? (['year','month','day','hour','minute','second','millisecond'] as const).some((part) => typeof parsed[part] === 'number' && parsed[part] !== date[part]) : date.toFormat("yyyy-MM-dd'T'HH:mm") !== iso.slice(0,16);
+      if (!explicitZone && changed) throw new Error('Datetime falls in a daylight-saving gap; include a valid UTC offset.');
       return date.toUTC().toMillis();
     }
   }

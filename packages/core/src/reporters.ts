@@ -5,7 +5,7 @@ import { errorText, type Config } from './config.js';
 import type { Report } from './types.js';
 import { reportGroups } from './groups.js';
 import { displayValue } from './report-utils.js';
-import { formatDatetimeUtc } from './money-display.js';
+import { formatDatetimeUtc, formatMoneyMajor, moneyUnits } from './money-display.js';
 import { isBlocking } from './policy.js';
 import { htmlReport } from './html.js';
 import { junitReport } from './junit.js';
@@ -23,15 +23,18 @@ export function jsonReport(report: Report): string {
 export function consoleReport(report: Report, presentation: ReportPresentation = {}): string {
   const counts = new Map<string, number>();
   for (const f of report.findings) counts.set(f.type, (counts.get(f.type) ?? 0) + 1);
-  const lines = [`LogiParity: ${report.entities.length} entities, ${report.findings.length} findings (${report.findings.filter(isBlocking).length} blocking)`];
+  const findings = report.findings.filter((f) => f.type !== 'source_error');
+  const errors = report.findings.length - findings.length;
+  const lines = [`LogiParity: ${report.entities.length} ${report.entities.length === 1 ? 'entity' : 'entities'}, ${findings.length} ${findings.length === 1 ? 'finding' : 'findings'} (${findings.filter(isBlocking).length} blocking)${errors ? `, ${errors} configuration/source ${errors === 1 ? 'error' : 'errors'}` : ''}`];
   for (const [type, count] of [...counts].sort(([a], [b]) => a < b ? -1 : 1)) lines.push(`  ${type}: ${count}`);
-  for (const group of reportGroups(report, presentation)) lines.push(`  [pattern] ${group.entity}/${group.source}/${group.field}: ${group.summary}`);
+  for (const group of reportGroups(report, presentation)) lines.push(`  [pattern] ${[group.entity, group.source, group.field].filter(Boolean).join('/') }: ${group.summary}`);
   const value = (input: import('./types.js').NormalizedValue | undefined, entity: string, field: string): string => {
     const rule = presentation.entities?.find((e) => e.name === entity)?.compare[field];
     const iso = rule?.type === 'datetime' && typeof input === 'number' ? formatDatetimeUtc(input) : undefined;
+    if (rule?.type === 'money' && rule.currency && (typeof input === 'bigint' || typeof input === 'string' && /^-?\d+$/.test(input))) return `${formatMoneyMajor(BigInt(input), rule.currency, rule.locale)} (${moneyUnits(BigInt(input), rule.currency)})`;
     return iso ? `${displayValue(input)} (${iso})` : displayValue(input);
   };
-  for (const f of report.findings.slice(0, 10)) lines.push(`  [${f.type}${isBlocking(f) ? '' : '; allowed'}] ${f.entity}/${f.source} key=${f.key || '-'} field=${f.field || '-'}: ${f.message}${f.expected !== undefined ? ` Expected=${value(f.expected, f.entity, f.field)} Actual=${value(f.actual, f.entity, f.field)}` : ''}`);
+  for (const f of report.findings.slice(0, 10)) lines.push(`  [${f.type}${isBlocking(f) ? '' : '; allowed'}] ${[ [f.entity, f.source].filter(Boolean).join('/'), f.key ? `key=${f.key}` : '', f.field ? `field=${f.field}` : '' ].filter(Boolean).join(' ')}: ${f.message}${f.expected !== undefined ? ` Expected=${value(f.expected, f.entity, f.field)} Actual=${value(f.actual, f.entity, f.field)}` : ''}`);
   if (report.findings.length > 10) lines.push(`  ... ${report.findings.length - 10} more findings.`);
   return safeConsole(lines.join('\n') + '\n');
 }

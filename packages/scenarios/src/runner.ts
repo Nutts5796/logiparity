@@ -3,7 +3,7 @@ import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { join, resolve } from 'node:path';
-import { adapters } from '@logiparity/adapters';
+import { adapters, validateConfig } from '@logiparity/adapters';
 import { compareEntities, loadConfig, reportExitCode, writeReports, errorText, safeConsole, redactSecrets, secretValues } from '@logiparity/core';
 import { loadScenario, loadTarget } from './config.js';
 import { affectedBy, prepareInvariant, type Snapshot } from './invariants.js';
@@ -40,6 +40,7 @@ export async function runScenario(scenarioFile: string, targetFile: string, repo
     const artifactDir = resolve(reportDir, 'artifacts');
     const parityEnv = { ...env, LOGIPARITY_SCENARIO_ARTIFACT_DIR: artifactDir };
     const parity = scenario.afterwards ? await loadConfig(resolve(baseDir, scenario.afterwards.parity), parityEnv) : undefined;
+    if (parity) validateConfig(parity.config);
     const report: ScenarioReport = { schemaVersion: 1, kind: 'scenario', name: scenario.name, target: target.name, environment: target.environment, events: events.map(({ event }) => ({ step: event.step, type: event.type, completed: false })), invariants: [], exitCode: 2 };
     const read = async (names = stateNames): Promise<Snapshot> => {
       const state: Snapshot = {};

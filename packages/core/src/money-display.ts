@@ -44,3 +44,9 @@ export function presentationValue(value: NormalizedValue | undefined, entityName
   if (rule?.type !== 'money' || !rule.currency || (typeof value !== 'bigint' && !(typeof value === 'string' && /^-?\d+$/.test(value)))) return plain;
   return `${plain} (${formatMoneyMajor(BigInt(value), rule.currency, rule.locale)})`;
 }
+
+export function moneyUnits(minor: bigint, currency: string): string {
+  const absolute = minor < 0n ? -minor : minor;
+  const cents = ['USD', 'EUR', 'CAD', 'AUD', 'NZD', 'SGD', 'HKD'].includes(currency);
+  return `${absolute} ${cents ? (absolute === 1n ? 'cent' : 'cents') : `${currency} minor ${absolute === 1n ? 'unit' : 'units'}`}`;
+}

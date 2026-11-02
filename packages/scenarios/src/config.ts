@@ -1,5 +1,5 @@
 import { dirname, resolve } from 'node:path';
-import { loadYaml, sourceSchema, ConfigError, formatConfigIssues, redactSecrets, secretValues } from '@logiparity/core';
+import { loadYaml, sourceSchema, ConfigError, formatConfigIssues, redactSecrets, secretValues, referencedEnvironment, rememberEnvironment, validateEnvironment, headerEnvSchema } from '@logiparity/core';
 import { z } from 'zod';
 
 const text = z.string().min(1);
@@ -28,7 +28,7 @@ export const targetSchema = z.object({
   baseUrl: z.url().refine((v) => ['http:', 'https:'].includes(new URL(v).protocol) && !new URL(v).username && !new URL(v).password, 'Use HTTP(S) without embedded credentials'),
   timeoutMs: z.number().int().positive().max(300000).default(10000),
   headers: z.record(text, z.string()).default({}).refine((v) => !Object.keys(v).some((k) => /^(authorization|proxy-authorization|cookie|x-api-key)$/i.test(k)), 'Use headersEnv for credentials'),
-  headersEnv: z.record(text, z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/)).default({}),
+  headersEnv: z.record(text, headerEnvSchema).default({}),
   setup: request.optional(), events: z.partialRecord(z.enum(eventTypes), request), replan: request.optional(),
   clock: z.object({ advance: request }).strict().optional(),
   state: z.record(text, sourceSchema).refine((v) => Object.keys(v).length > 0, 'Configure state sources'),
@@ -48,5 +48,7 @@ export async function loadTarget(file: string, env: NodeJS.ProcessEnv) {
 function parse<T>(schema: z.ZodType<T>, value: unknown, file: string, env: NodeJS.ProcessEnv): T {
   const result = schema.safeParse(value);
   if (!result.success) throw new ConfigError(redactSecrets(`${file}: ${formatConfigIssues(schema, value, result.error)}`, secretValues(value, env)));
+  rememberEnvironment(result.data, { secrets: secretValues(value, env), references: referencedEnvironment(value) });
+  validateEnvironment(result.data, env, {}, file);
   return result.data;
 }

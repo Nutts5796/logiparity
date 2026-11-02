@@ -1,6 +1,6 @@
 import type { EntityConfig } from './config.js';
 import type { Finding, FindingGroup, NormalizedValue, Report } from './types.js';
-import type { ReportPresentation } from './money-display.js';
+import { formatMoneyMajor, moneyUnits, type ReportPresentation } from './money-display.js';
 
 function integer(value: NormalizedValue | undefined): bigint | undefined {
   if (typeof value === 'bigint' || typeof value === 'string' && /^-?\d+$/.test(value)) return BigInt(value);
@@ -13,7 +13,7 @@ function duration(value: bigint): string {
 const label = (value: NormalizedValue) => typeof value === 'string' ? JSON.stringify(value) : String(value);
 export function groupFindings(findings: readonly Finding[], entities: readonly EntityConfig[] = []): FindingGroup[] {
   const buckets = new Map<string, Finding[]>();
-  for (const finding of findings) if (['field_mismatch', 'missing_in_source', 'extra_in_source'].includes(finding.type)) {
+  for (const finding of findings) if (!finding.reason && ['field_mismatch', 'missing_in_source', 'extra_in_source'].includes(finding.type)) {
     const key = JSON.stringify([finding.entity, finding.source, finding.field, finding.type]);
     const bucket = buckets.get(key) ?? []; bucket.push(finding); buckets.set(key, bucket);
   }
@@ -50,7 +50,7 @@ export function groupFindings(findings: readonly Finding[], entities: readonly E
       const delta = deltas[0];
       if (delta !== undefined && delta !== 0n && deltas.every((value) => value === delta)) {
         const kind = rule.type === 'money' ? 'money_delta' : 'datetime_offset';
-        const difference = kind === 'money_delta' ? `${delta > 0n ? '+' : ''}${delta} ${rule.currency} minor ${delta === 1n || delta === -1n ? 'unit' : 'units'}` : duration(delta);
+        const difference = kind === 'money_delta' ? `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, rule.currency!, rule.locale)} (${moneyUnits(delta, rule.currency!)})` : duration(delta);
         const hint = kind === 'money_delta' ? 'likely rounding or a fixed adjustment' : delta % 900000n === 0n ? 'likely timezone' : 'consistent datetime offset';
         groups.push({ entity, source, field, count, kind, delta: delta.toString(), summary: `${prefix} ${verb('differ', 'differs')} by exactly ${difference} (${hint}).` }); continue;
       }

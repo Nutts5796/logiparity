@@ -10,6 +10,7 @@ export type NormalizedValue = string | number | bigint | boolean | null;
 export interface Finding {
   type: FindingType; entity: string; source: string; key: string; field: string;
   message: string; expected?: NormalizedValue; actual?: NormalizedValue;
+  reason?: 'rollup_conflict' | 'rollup_missing_value' | 'rollup_duplicate';
   blocking?: boolean;
   screenshot?: string;
 }

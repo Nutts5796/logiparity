@@ -24,9 +24,14 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
     if (entity.aggregates.length) summary.aggregates = entity.aggregates.map((a) => ({ name: a.name, type: a.type, values: Object.create(null) as Record<string, number | bigint>, skippedSources: [] }));
     report.entities.push(summary);
     let baseline: Map<string, Row> | undefined;
+    let baselineUncertain = new Map<string, Set<string>>();
     for (const [source, config] of sources) {
       const rows = new Map<string, Row>();
-      const duplicates: Finding[] = [];
+      const issues: Finding[] = [];
+      const uncertain = new Map<string, Set<string>>();
+      const mark = (key: string, fields: readonly string[]) => { const names = uncertain.get(key) ?? new Set<string>(); for (const field of fields) names.add(field); uncertain.set(key, names); };
+      const lineIdentities = new Set<string>();
+      const projection = config.rollup ? new Set([config.rollup.by, ...config.rollup.sum, ...config.rollup.first]) : undefined;
       const sums = new Map<string, Map<string, DecimalSum>>();
       let rowNumber = 0;
       let context = '';
@@ -40,7 +45,7 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
           const key = String(rawKey).trim();
           context += `, key ${key}`;
           if (rows.has(key) && !config.rollup) {
-            duplicates.push({ type: 'duplicate_key', entity: entity.name, source, key, field: entity.key, message: `${source}: duplicate key ${key} at row ${rowNumber}; make source keys unique. The first record is used.` });
+            issues.push({ type: 'duplicate_key', entity: entity.name, source, key, field: entity.key, message: `${source}: duplicate key ${key} at row ${rowNumber}; make source keys unique. The first record is used.` });
             continue;
           }
           const row: Row = Object.create(null) as Row;
@@ -50,6 +55,24 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
           }
           if (config.rollup) {
             const previous = rows.get(key);
+            for (const field of config.rollup.first) if (previous && previous[field] !== row[field]) {
+              issues.push({type:'field_mismatch', reason:'rollup_conflict', entity:entity.name, source, key, field, expected:previous[field] ?? null, actual:row[field] ?? null, message:`${source}: rollup first field ${field} conflicts at row ${rowNumber}, key ${key}; the first normalized value is retained. Resolve the line disagreement.`});
+              mark(key,[field]);
+            }
+            for (const field of config.rollup.sum) if (entity.compare[field]?.type === 'money' && row[field] === null) {
+              issues.push({type:'field_mismatch', reason:'rollup_missing_value', entity:entity.name, source, key, field, actual:null, message:`${source}: blank money in rollup sum field ${field} at row ${rowNumber}, key ${key}; this key's monetary comparison and affected totals are skipped.`});
+              mark(key,[field]);
+            }
+            if (config.rollup.duplicates) {
+              const fields = config.rollup.duplicates.by;
+              if (fields.some((field) => row[field] === null || row[field] === undefined)) throw new Error('Rollup duplicate identity fields cannot be blank');
+              const identity = JSON.stringify(fields.map((field) => [typeof row[field], String(row[field])]));
+              if (lineIdentities.has(identity)) {
+                issues.push({type:'duplicate_key',reason:'rollup_duplicate',entity:entity.name,source,key,field:entity.key,message:`${source}: duplicate rollup line identity (${fields.map((field) => `${field}=${String(row[field])}`).join(', ')}) at row ${rowNumber}; the repeated line is excluded before summing. Resolve duplicates before comparing monetary totals.`});
+                mark(key,config.rollup.sum); continue;
+              }
+              lineIdentities.add(identity);
+            }
             for (const field of config.rollup.sum) {
               const value = row[field];
               if (value !== null && typeof value !== 'number' && typeof value !== 'bigint') throw new Error(`Rollup sum field ${field} is not numeric`);
@@ -61,12 +84,16 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
               }
             }
             if (previous) for (const field of config.rollup.first) row[field] = previous[field] ?? null;
+            for (const field of Object.keys(row)) if (!projection!.has(field)) delete row[field];
           }
           rows.set(key, row);
         }
         for (const aggregate of entity.aggregates) {
           context = `aggregate ${aggregate.name}`;
-          measurements.set(aggregate.name, measureAggregate(aggregate, entity, source, config, rows));
+          const required = [...Object.keys(aggregate.where), ...(aggregate.type === 'sum' ? [aggregate.field] : [])];
+          const uncertainInput = [...uncertain.values()].some((fields) => required.some((field) => fields.has(field)));
+          const measuredConfig = projection ? {...config,fields:Object.fromEntries(Object.entries(config.fields).filter(([field]) => projection.has(field)))} : config;
+          measurements.set(aggregate.name, uncertainInput ? undefined : measureAggregate(aggregate, entity, source, measuredConfig, rows));
         }
         summary.counts[source] = rowNumber;
       } catch (error) {
@@ -74,7 +101,7 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
         if (source === reference) break;
         continue;
       }
-      report.findings.push(...duplicates);
+      report.findings.push(...issues);
       for (const [index, aggregate] of entity.aggregates.entries()) {
         const result = summary.aggregates?.[index];
         if (!result) continue;
@@ -84,7 +111,7 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
         const expected = result.values[reference];
         if (source !== reference && expected !== undefined && !aggregateEqual(expected, actual, aggregate)) report.findings.push({ type: 'aggregate_mismatch', entity: entity.name, source, key: '', field: aggregate.name, expected, actual, message: `${source}: aggregate ${aggregate.name} differs from reference ${reference}; check row filtering, missing records and summed values.` });
       }
-      if (source === reference) { baseline = rows; continue; }
+      if (source === reference) { baseline = rows; baselineUncertain = uncertain; continue; }
       if (!baseline) continue;
       for (const [key, expected] of baseline) {
         const actual = rows.get(key);
@@ -94,7 +121,7 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
         }
         for (const [field, expectedValue] of Object.entries(expected)) {
           // Partial sources (e.g. a dispatcher table) compare only explicitly mapped fields.
-          if (field === entity.key || !Object.hasOwn(config.fields, field)) continue;
+          if (field === entity.key || !Object.hasOwn(config.fields, field) || projection && !projection.has(field) || uncertain.get(key)?.has(field) || baselineUncertain.get(key)?.has(field)) continue;
           const actualValue = actual[field] ?? null;
           if (!equalValues(expectedValue, actualValue, entity.compare[field])) report.findings.push({ type: 'field_mismatch', entity: entity.name, source, key, field, expected: expectedValue, actual: actualValue, message: `${source}: key ${key}, field ${field} differs from reference ${reference}; check formatting, rounding and business rules.` });
         }

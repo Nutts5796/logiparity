@@ -3,7 +3,7 @@ import { compareEntities, entitySchema, groupFindings, htmlReport, markdownRepor
 const source={type:'csv',file:'unused.csv',fields:{load_id:'ID',carrier_pay:'Pay',status:'Status',units:'Units'}};
 const entity=entitySchema.parse({name:'load',key:'load_id',sources:{tms:source,settlement:{...source,rollup:{by:'load_id',sum:['carrier_pay','units'],first:['status']}}},compare:{carrier_pay:{type:'money',currency:'USD'},units:{type:'number'},status:{type:'enum'}}});
 it('rolls up normalized money and exact numeric sums while keeping the first mapped value',async()=>{
-  const report=await compareEntities([entity],async function*(name){if(name==='tms')yield {load_id:'L1',carrier_pay:'1150.25',units:0.3,status:'delivered'};else{yield {load_id:'L1',carrier_pay:'1000.00',units:0.1,status:'delivered'};yield {load_id:'L1',carrier_pay:'100.00',units:0.2,status:'other'};yield {load_id:'L1',carrier_pay:'50.25',units:null,status:'other'};}});
+  const report=await compareEntities([entity],async function*(name){if(name==='tms')yield {load_id:'L1',carrier_pay:'1150.25',units:0.3,status:'delivered'};else{yield {load_id:'L1',carrier_pay:'1000.00',units:0.1,status:'delivered'};yield {load_id:'L1',carrier_pay:'100.00',units:0.2,status:'delivered'};yield {load_id:'L1',carrier_pay:'50.25',units:null,status:'delivered'};}});
   expect(report.findings).toEqual([]);expect(report.entities[0]?.counts).toEqual({tms:1,settlement:3});
 });
 it('retains duplicate detection on sources without an explicit rollup',async()=>{

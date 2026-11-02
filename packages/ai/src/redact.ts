@@ -1,4 +1,4 @@
-import { isSecretName } from '@logiparity/core';
+import { isSecretName, normalizedSecretName } from '@logiparity/core';
 export const redacted = '[REDACTED]';
 export const defaultRedactFields = ['authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'password', 'secret', 'token', 'apiKey', 'api_key', 'access_token', 'refresh_token', 'client_secret'];
 type Token = string | '*';
@@ -14,16 +14,28 @@ function pathTokens(path: string): Token[] {
   if (!tokens.length) throw new Error('redactFields cannot mask the entire $ payload; select a field or subtree.');
   return tokens;
 }
+function redactCredentials(text: string, collect: (...values: string[]) => void): string {
+  const decoded = (value: string) => { try { return decodeURIComponent(value.replaceAll('+', ' ')); } catch { return value; } };
+  text = text.replace(/\b([a-z][a-z0-9+.-]*:\/\/)([^/\s:@]+):([^/@\s]*)@/gi, (_, scheme: string, user: string, password: string) => {
+    collect(password, decoded(password)); return `${scheme}${user}:${redacted}@`;
+  });
+  text = text.replace(/([?&#])([^=&#\s?]+)=([^&#\s?]*)/g, (match, separator: string, key: string, value: string) => {
+    const name = normalizedSecretName(decoded(key));
+    if (!isSecretName(name) && name !== 'key' && name !== 'sig') return match;
+    collect(value, decoded(value)); return `${separator}${key}=${redacted}`;
+  });
+  return text.replace(/\bBearer[ \t]+([^\s"'<>`,;]+)/gi, (_, token: string) => { collect(token); return `Bearer ${redacted}`; });
+}
 export interface Redaction { data: unknown; count: number; scrub: (text: string) => string }
 export function redactInput(input: unknown, fields: readonly string[] = [], secrets: readonly string[] = []): Redaction {
-  const normalized = (value: string) => value.toLowerCase().replace(/[-_]/g, '');
+  const normalized = normalizedSecretName;
   const names = new Set([...defaultRedactFields, ...fields.filter((f) => !f.startsWith('$'))].map(normalized));
   const sensitive = (name: string) => isSecretName(name) || names.has(normalized(name));
   const paths = fields.filter((f) => f.startsWith('$')).map(pathTokens);
-  const values = new Set(secrets.filter(Boolean)); let count = 0;
+  const values = new Set(secrets.filter((value) => value.length >= 8)); let count = 0;
+  const literal = (...items: string[]) => { for (const item of items) if (item.length >= 8 && item !== redacted) values.add(item); };
   const collect = (value: unknown): void => {
-    if (typeof value === 'string' && value && value !== redacted) values.add(value);
-    else if (typeof value === 'number' || typeof value === 'boolean') values.add(String(value));
+    if (typeof value === 'string') { literal(value); redactCredentials(value, literal); }
     else if (Array.isArray(value)) for (const child of value) collect(child);
     else if (value && typeof value === 'object') for (const child of Object.values(value)) collect(child);
   };
@@ -36,22 +48,14 @@ export function redactInput(input: unknown, fields: readonly string[] = [], secr
       const finding = Object.hasOwn(value, 'field') && typeof Reflect.get(value, 'field') === 'string' && sensitive(String(Reflect.get(value, 'field')));
       return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, sensitive(key) || finding && ['expected', 'actual', 'values'].includes(key) ? mask(child) : walk(child, [...path, key])]));
     }
-    if (typeof value === 'string') {
-      // URL fragments, relative URLs and URLs embedded in descriptions use the same query-key rule.
-      return value.replace(/([?&])([^=&#\s?]+)=([^&#\s?]*)/g, (match, separator: string, key: string, item: string) => {
-        let decoded: string; let queryKey: string;
-        try { decoded = decodeURIComponent(item.replaceAll('+', ' ')); queryKey = decodeURIComponent(key.replaceAll('+', ' ')); } catch { return match; }
-        if (!sensitive(queryKey)) return match;
-        count++; collect(decoded); collect(item); return `${separator}${key}=${redacted}`;
-      });
-    }
+    if (typeof value === 'string') return redactCredentials(value, (...items) => { count++; literal(...items); });
     return value;
   };
   const masked = walk(input, []);
   if (values.size > 5000 || [...values].reduce((n, v) => n + v.length, 0) > 1024 * 1024) throw new Error('Too many sensitive values for AI redaction; reduce the input or maxFindings before previewing again. Nothing was sent.');
   const literals = [...values].sort((a, b) => b.length - a.length).map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const pattern = literals.length ? new RegExp(literals.join('|'), 'g') : undefined;
-  const scrub = (text: string): string => pattern ? text.replace(pattern, redacted) : text;
+  const scrub = (text: string): string => redactCredentials(pattern ? text.replace(pattern, redacted) : text, () => {});
   const scrubTree = (value: unknown): unknown => {
     if (typeof value === 'string') return value === redacted ? value : scrub(value);
     if (Array.isArray(value)) return value.map(scrubTree);

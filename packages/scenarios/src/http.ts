@@ -45,9 +45,10 @@ export function requestPlan(target: Target, template: RequestTemplate, context: 
 export type RequestPlan = ReturnType<typeof requestPlan>;
 export function targetHeaders(target: Target, env: NodeJS.ProcessEnv): Headers {
   const headers = new Headers({ ...target.headers, 'content-type': 'application/json' });
-  for (const [header, key] of Object.entries(target.headersEnv)) {
+  for (const [header, reference] of Object.entries(target.headersEnv)) {
+    const key = typeof reference === 'string' ? reference : reference.env;
     if (!env[key]) throw new ConfigError(`Missing target header environment variable ${key}`);
-    headers.set(header, env[key]);
+    headers.set(header, (typeof reference === 'string' ? '' : reference.prefix) + env[key]);
   }
   return headers;
 }

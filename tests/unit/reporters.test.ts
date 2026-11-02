@@ -21,5 +21,5 @@ it('returns 0 for no findings and prints source errors without values', () => {
   const report: Report = { schemaVersion: 1, entities: [], findings: [] };
   expect(reportExitCode(report)).toBe(0); expect(consoleReport(report)).toContain('0 findings');
   report.findings.push({ type: 'source_error', entity: 'x', source: 'api', key: '', field: '', message: 'cannot read' });
-  expect(reportExitCode(report)).toBe(2); expect(consoleReport(report)).toContain('key=- field=-');
+  expect(reportExitCode(report)).toBe(2); expect(consoleReport(report)).not.toContain('key=- field=-');
 });

@@ -1,4 +1,4 @@
-import type { Adapter, AdapterContext, DataRow, SourceConfig } from '@logiparity/core';
+import type { Adapter, AdapterContext, DataRow, SourceConfig, Config } from '@logiparity/core';
 import { selectJson } from './jsonpath.js';
 import { validateReadOnlySql } from './sql-guard.js';
 import { readRest } from './rest.js';
@@ -26,4 +26,16 @@ export function validateSource(config: SourceConfig): void {
   const p = config.pagination;
   const paths = [config.items, ...Object.values(config.fields), ...(p?.type === 'cursor' ? [p.next] : p?.type === 'page' || p?.type === 'offset' ? [p.totalPath, p.totalPagesPath, p.hasMorePath].filter((v): v is string => !!v) : [])];
   for (const path of paths) try { selectJson({}, path); } catch (error) { if (!(error instanceof Error) || !/property .* is missing|requires an array/.test(error.message)) throw error; }
+}
+
+/** Shared semantic checks for validate and check, with no source I/O. */
+export function validateConfig(config: Config): void {
+  for (const entity of config.entities) {
+    const reference = Object.values(entity.sources)[0]!;
+    for (const [field, rule] of Object.entries(entity.compare)) {
+      if (!Object.hasOwn(reference.fields, field)) throw new Error(`Comparison field ${field} is not mapped in the reference source`);
+      for (const name of Object.keys(rule.sourceTimezones)) if (!Object.hasOwn(entity.sources, name)) throw new Error(`Unknown sourceTimezones source ${name}`);
+    }
+    for (const source of Object.values(entity.sources)) validateSource(source);
+  }
 }
