@@ -1,7 +1,7 @@
 import type { SourceConfig } from './config.js';
 
 export type DataRow = Record<string, unknown>;
-export interface AdapterContext { baseDir: string; env: NodeJS.ProcessEnv }
+export interface AdapterContext { baseDir: string; env: NodeJS.ProcessEnv; reportDir?: string }
 export interface Adapter {
   read(config: SourceConfig, context: AdapterContext): AsyncIterable<DataRow>;
 }

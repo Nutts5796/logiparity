@@ -3,6 +3,7 @@ import { equalValues, normalize } from './normalize.js';
 import type { EntitySummary, Finding, NormalizedValue, Report, SourceReader } from './types.js';
 import { aggregateEqual, measureAggregate } from './aggregates.js';
 import { applyFailurePolicies } from './policy.js';
+import { SourceError } from './source-error.js';
 
 type Row = Record<string, NormalizedValue>;
 const order = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
@@ -51,7 +52,7 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
         }
         summary.counts[source] = rowNumber;
       } catch (error) {
-        report.findings.push({ type: 'source_error', entity: entity.name, source, key: '', field: '', message: `${entity.name}/${source}${context ? ` (${context})` : ''}: ${errorText(error)} Check this source's configuration and data.` });
+        report.findings.push({ type: 'source_error', entity: entity.name, source, key: '', field: '', message: `${entity.name}/${source}${context ? ` (${context})` : ''}: ${errorText(error)} Check this source's configuration and data.`, ...(error instanceof SourceError && error.screenshot ? { screenshot: error.screenshot } : {}) });
         if (source === reference) break;
         continue;
       }

@@ -6,6 +6,7 @@ import { isBlocking } from './policy.js';
 import { htmlReport } from './html.js';
 import { junitReport } from './junit.js';
 import { markdownReport } from './markdown.js';
+import type { ReportPresentation } from './money-display.js';
 
 export function reportExitCode(report: Report): 0 | 1 | 2 {
   return report.findings.some((f) => f.type === 'source_error') ? 2 : report.findings.some(isBlocking) ? 1 : 0;
@@ -29,8 +30,8 @@ export async function writeJsonReport(report: Report, directory: string): Promis
   await writeReports(report, directory, ['json']);
 }
 
-export async function writeReports(report: Report, directory: string, outputs: Config['report']['outputs']): Promise<void> {
-  const formats = { json: ['report.json', jsonReport], html: ['report.html', htmlReport], junit: ['junit.xml', junitReport], markdown: ['report.md', markdownReport] } as const;
+export async function writeReports(report: Report, directory: string, outputs: Config['report']['outputs'], presentation: ReportPresentation = {}): Promise<void> {
+  const formats = { json: ['report.json', jsonReport], html: ['report.html', (r: Report) => htmlReport(r, presentation)], junit: ['junit.xml', junitReport], markdown: ['report.md', (r: Report) => markdownReport(r, presentation)] } as const;
   for (const output of new Set(outputs)) {
     if (output === 'console') continue;
     const [file, render] = formats[output];

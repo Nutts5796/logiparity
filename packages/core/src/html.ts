@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { isBlocking } from './policy.js';
-import { displayValue, entityNames, escapeMarkup as escape, findingTypes, verdict } from './report-utils.js';
+import { entityNames, escapeMarkup as escape, findingTypes, verdict } from './report-utils.js';
+import { presentationValue, type ReportPresentation } from './money-display.js';
 import type { Finding, Report } from './types.js';
 
 const filterScript = `(() => {
@@ -31,16 +32,16 @@ function screenshotLink(path: string | undefined): string {
   return `<a href="${escape(path.split('/').map(encodeURIComponent).join('/'))}" target="_blank" rel="noopener noreferrer">View screenshot</a>`;
 }
 
-function findingRow(f: Finding): string {
-  return `<tr data-entity="${escape(f.entity)}" data-type="${f.type}"><td><strong>${escape(f.entity)}</strong><small>${escape(f.source)}</small></td><td class="mono">${escape(f.key || '—')}</td><td>${escape(f.field || '—')}</td><td><span class="tag">${f.type.replaceAll('_', ' ')}</span><small>${isBlocking(f) ? 'Blocking' : 'Allowed by failOn'}</small></td><td class="mono">${escape(displayValue(f.expected))}</td><td class="mono">${escape(displayValue(f.actual))}</td><td class="explanation">${escape(f.message)}${screenshotLink(f.screenshot) ? `<small>${screenshotLink(f.screenshot)}</small>` : ''}</td></tr>`;
+function findingRow(f: Finding, presentation: ReportPresentation): string {
+  return `<tr data-entity="${escape(f.entity)}" data-type="${f.type}"><td><strong>${escape(f.entity)}</strong><small>${escape(f.source)}</small></td><td class="mono">${escape(f.key || '—')}</td><td>${escape(f.field || '—')}</td><td><span class="tag">${f.type.replaceAll('_', ' ')}</span><small>${isBlocking(f) ? 'Blocking' : 'Allowed by failOn'}</small></td><td class="mono">${escape(presentationValue(f.expected, f.entity, f.field, f.type === 'aggregate_mismatch', presentation))}</td><td class="mono">${escape(presentationValue(f.actual, f.entity, f.field, f.type === 'aggregate_mismatch', presentation))}</td><td class="explanation">${escape(f.message)}${screenshotLink(f.screenshot) ? `<small>${screenshotLink(f.screenshot)}</small>` : ''}</td></tr>`;
 }
 
-export function htmlReport(report: Report): string {
+export function htmlReport(report: Report, presentation: ReportPresentation = {}): string {
   const status = verdict(report);
   const blocking = report.findings.filter(isBlocking).length;
   const hash = createHash('sha256').update(filterScript).digest('base64');
   const options = (values: readonly string[]) => values.map((value) => `<option value="${escape(value)}">${escape(value.replaceAll('_', ' '))}</option>`).join('');
-  const aggregateRows = report.entities.flatMap((e) => (e.aggregates ?? []).map((a) => `<tr><td><strong>${escape(e.entity)}</strong></td><td>${escape(a.name)}<small>${a.type}</small></td><td class="mono">${Object.entries(a.values).map(([source, value]) => `${escape(source)}: ${escape(String(value))}`).join(' · ')}</td><td>${escape(a.skippedSources.join(', ') || '—')}</td></tr>`));
+  const aggregateRows = report.entities.flatMap((e) => (e.aggregates ?? []).map((a) => `<tr><td><strong>${escape(e.entity)}</strong></td><td>${escape(a.name)}<small>${a.type}</small></td><td class="mono">${Object.entries(a.values).map(([source, value]) => `${escape(source)}: ${escape(presentationValue(value, e.entity, a.name, true, presentation))}`).join(' · ')}</td><td>${escape(a.skippedSources.join(', ') || '—')}</td></tr>`));
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; img-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'">
@@ -53,9 +54,9 @@ export function htmlReport(report: Report): string {
 <div class="cards"><div class="card status"><span class="label">Check result</span><strong class="number">${status}</strong></div><div class="card"><span class="label">Findings</span><strong class="number">${report.findings.length}</strong></div><div class="card"><span class="label">Blocking</span><strong class="number">${blocking}</strong></div><div class="card"><span class="label">Entities</span><strong class="number">${report.entities.length}</strong></div></div>
 <section class="section" aria-labelledby="findings-title"><div class="section-head"><h2 id="findings-title">Findings</h2><span class="muted" id="visible-count" aria-live="polite">Showing ${report.findings.length} of ${report.findings.length} findings</span></div>
 <div class="filters"><div class="filter-field"><label for="entity-filter">Entity</label><select id="entity-filter"><option value="">All entities</option>${options(entityNames(report))}</select></div><div class="filter-field"><label for="type-filter">Finding type</label><select id="type-filter"><option value="">All finding types</option>${options(findingTypes)}</select></div><div class="filter-field"><label for="search">Search records</label><input id="search" type="search" placeholder="Key, source or explanation"></div></div>
-<noscript>All findings are shown. Enable JavaScript to use filters.</noscript><div class="scroll"><table id="findings"><thead><tr><th>Entity / source</th><th>Record key</th><th>Field</th><th>Finding</th><th>Expected</th><th>Actual</th><th>Explanation</th></tr></thead><tbody>${report.findings.map(findingRow).join('\n')}</tbody></table></div>
+<noscript>All findings are shown. Enable JavaScript to use filters.</noscript><div class="scroll"><table id="findings"><thead><tr><th>Entity / source</th><th>Record key</th><th>Field</th><th>Finding</th><th>Expected</th><th>Actual</th><th>Explanation</th></tr></thead><tbody>${report.findings.map((f) => findingRow(f, presentation)).join('\n')}</tbody></table></div>
 ${report.findings.length ? '' : '<p class="empty">No findings. All configured comparisons passed.</p>'}<p class="empty" id="no-matches" hidden>No findings match these filters.</p></section>
 ${aggregateRows.length ? `<section class="section" aria-labelledby="aggregate-title"><div class="section-head"><h2 id="aggregate-title">Aggregates</h2><span class="muted">Normalized values by source</span></div><div class="scroll"><table><thead><tr><th>Entity</th><th>Aggregate</th><th>Values by source</th><th>Skipped sources</th></tr></thead><tbody>${aggregateRows.join('\n')}</tbody></table></div></section>` : ''}
-<footer><span>Money: integer minor units · Dates: UTC epoch milliseconds</span><span>Generated locally by LogiParity · Report schema v${report.schemaVersion}</span></footer>
+<footer><span>Money: minor units + configured currency equivalent · Dates: UTC epoch milliseconds</span><span>Generated locally by LogiParity · Report schema v${report.schemaVersion}</span></footer>
 </main><script>${filterScript}</script></body></html>\n`;
 }

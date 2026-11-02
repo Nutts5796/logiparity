@@ -5,13 +5,13 @@ import { adapters } from '@logiparity/adapters';
 import { compareEntities, consoleReport, errorText, loadConfig, reportExitCode, writeReports } from '@logiparity/core';
 import { initConfig } from './init.js';
 
-const help = `LogiParity 0.1.0 (M2) — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
+const help = `LogiParity 0.1.0 (M3) — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
 
 Usage: logiparity check --config <parity.yaml>
        logiparity init [--config <parity.yaml>]
        logiparity --help
 
-Reads configured REST sources with GET and local CSV/XLSX files. No telemetry.
+Reads REST, CSV/XLSX, Playwright tables and read-only PostgreSQL sources. No telemetry.
 The first source is the reference. Paths are relative to the configuration file.
 Exit codes: 0 = parity, 1 = findings, 2 = configuration or runtime error.
 Money must be decimal strings; tolerance is in integer minor units.
@@ -30,9 +30,9 @@ async function main(): Promise<number> {
   }
   if (positionals.length !== 1 || positionals[0] !== 'check' || !values.config) throw new Error('Use logiparity check --config <parity.yaml> or logiparity init; see --help for usage.');
   const { config, baseDir } = await loadConfig(values.config);
-  const report = await compareEntities(config.entities, (_, source) => adapters.read(source, { baseDir, env: process.env }));
+  const report = await compareEntities(config.entities, (_, source) => adapters.read(source, { baseDir, env: process.env, reportDir: resolve(baseDir, config.report.dir) }));
   if (config.report.outputs.includes('console')) process.stdout.write(consoleReport(report));
-  await writeReports(report, resolve(baseDir, config.report.dir), config.report.outputs);
+  await writeReports(report, resolve(baseDir, config.report.dir), config.report.outputs, { entities: config.entities });
   return reportExitCode(report);
 }
 
