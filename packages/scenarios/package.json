@@ -1,6 +1,6 @@
 {
   "name": "@logiparity/scenarios",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -13,9 +13,14 @@
     }
   },
   "dependencies": {
-    "@logiparity/core": "0.1.0",
-    "@logiparity/adapters": "0.1.0",
+    "@logiparity/core": "1.0.0",
+    "@logiparity/adapters": "1.0.0",
     "zod": "4.6.7",
     "jiti": "2.7.0"
-  }
+  },
+  "files": [
+    "dist/",
+    "bin/",
+    "LICENSE"
+  ]
 }

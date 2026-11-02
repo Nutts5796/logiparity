@@ -1,7 +1,6 @@
 {
-  "name": "logiparity-workspace",
-  "version": "0.1.0",
-  "private": true,
+  "name": "logiparity",
+  "version": "1.0.0",
   "type": "module",
   "license": "MIT",
   "author": "Sergei Orekhovskii",
@@ -26,7 +25,12 @@
     "demo:bugs": "npm run build && node apps/demo-delivery/dist/main.js --bugs",
     "demo:export": "node scripts/export-demo.mjs",
     "demo:login": "node scripts/login-demo.mjs",
-    "check:demo": "npm run build && node packages/cli/dist/main.js check --config examples/demo/parity.yaml"
+    "check:demo": "npm run build && node packages/cli/dist/main.js check --config examples/demo/parity.yaml",
+    "prepack": "npm run build",
+    "test:package": "npm run build && node scripts/check-package.mjs",
+    "test:quickstart": "node scripts/check-quickstart.mjs",
+    "test:docker": "node scripts/check-docker.mjs",
+    "check:docs": "node scripts/check-docs.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
@@ -44,5 +48,63 @@
     "vite": "6.4.5",
     "vitest": "4.1.12",
     "yaml": "2.9.1"
+  },
+  "description": "Test/staging logistics data parity and disruption scenario checks, with optional AI drafts.",
+  "bin": {
+    "logiparity": "bin/logiparity.js"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "MILESTONE_REPORT.md",
+    "docs/",
+    "templates/",
+    "examples/ai/",
+    "examples/postgres/",
+    "examples/demo/*.yaml",
+    "examples/demo/fixtures/",
+    "examples/demo/scenarios/",
+    "api/"
+  ],
+  "dependencies": {
+    "@logiparity/cli": "1.0.0",
+    "@logiparity/core": "1.0.0",
+    "@logiparity/adapters": "1.0.0",
+    "@logiparity/scenarios": "1.0.0",
+    "@logiparity/ai": "1.0.0"
+  },
+  "bundleDependencies": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "logistics",
+    "testing",
+    "data-parity",
+    "qa",
+    "scenarios"
+  ],
+  "exports": {
+    "./core": {
+      "types": "./api/core.d.ts",
+      "import": "./api/core.js"
+    },
+    "./adapters": {
+      "types": "./api/adapters.d.ts",
+      "import": "./api/adapters.js"
+    },
+    "./scenarios": {
+      "types": "./api/scenarios.d.ts",
+      "import": "./api/scenarios.js"
+    },
+    "./ai": {
+      "types": "./api/ai.d.ts",
+      "import": "./api/ai.js"
+    }
   }
 }

@@ -8,7 +8,7 @@ import { basename } from 'node:path';
 import { aiCommand } from './ai.js';
 import { initConfig } from './init.js';
 
-const help = `LogiParity 0.1.0 (M5) — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
+const help = `LogiParity 1.0.0 — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
 
 Usage: logiparity check --config <parity.yaml>
        logiparity scenario run <scenario.yaml> --target <target.yaml> [--report-dir <dir>]
