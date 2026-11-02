@@ -1,4 +1,4 @@
-# JSON report schema, version 1 (M2)
+# JSON report schema, version 1 (M3)
 
 The root contains `schemaVersion: 1`, `entities` and `findings`. No timestamps, absolute local filenames on successful comparisons, or random run IDs are added, allowing byte-stable output for the same normalized data/configuration. Source errors describe the observed input location and may naturally vary with row order or environment. Object properties follow configuration order; findings are sorted with binary string ordering by entity, key, field, source, type. Entity summaries sort by entity name.
 
@@ -22,9 +22,11 @@ The root contains `schemaVersion: 1`, `entities` and `findings`. No timestamps, 
 }
 ```
 
-Each finding has string fields `type`, `entity`, `source`, `key`, `field`, and `message`. `expected` and `actual` are optional normalized scalar values. M2 engine findings include `blocking: boolean` after entity failure policies are applied. Older findings or direct reporter inputs without this property default to blocking. Source errors always block. Optional `screenshot` paths support relative screenshot links in HTML; the UI adapter remains planned for M3.
+Each finding has string fields type, entity, source, key, field and message. expected/actual are optional normalized scalars. Since M2, engine findings include blocking after applying failure policies; older inputs default to blocking. Source errors always block. The M3 UI adapter uses the existing optional screenshot property for relative failure evidence paths; launch/state failures without a page have none.
 
 Money serializes as decimal **integer minor-unit strings**, avoiding JSON number precision loss. Datetimes serialize as UTC epoch milliseconds. Consumers should read the config to interpret currency/types; a numeric-looking string alone does not identify currency.
+
+M3's HTML/Markdown currency equivalents use separate configuration context. They do not change JSON values, units, structure or schemaVersion, and add no display fields to the report.
 
 | Finding type | Key/field | Meaning |
 | --- | --- | --- |

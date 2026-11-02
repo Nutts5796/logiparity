@@ -8,4 +8,4 @@ Add a discriminated source variant to the strict Zod source schema, wire it in `
 
 For streaming sources, memory should track a page or parser buffer rather than the complete source. The comparison engine currently indexes the reference and one candidate source in memory. Do not add network calls outside the configured target or telemetry. Pin and document each runtime dependency and review the transitive license inventory.
 
-The UI and PostgreSQL variants are planned for M3. Playwright integration tests will accompany the UI adapter; no browser tests are claimed in M1.
+M3 implements UI and PostgreSQL adapters. UI errors can throw SourceError(message, relativeScreenshotPath); the engine retains evidence in the existing finding field. AdapterContext supplies an optional reportDir for artifacts. UI tests use actual Chromium and the demo login; SQL tests use a disposable real PostgreSQL cluster, including a write-through view rejected by READ ONLY. Keep schema changes in isolated test fixtures, never in the read adapter.

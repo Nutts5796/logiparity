@@ -1,8 +1,12 @@
 # Security and operational scope
 
-LogiParity is intended only for test and staging environments. The environment config declaration is not a production-host detector. Supply only test/staging URLs and credentials. M1 performs GET requests and reads local files; later scenario mutation features must remain test/staging only.
+LogiParity is intended only for test/staging environments. The environment declaration is not a production-host detector. Supply only test/staging URLs and credentials. M3 adds browser reads and read-only PostgreSQL; later scenario mutation features must remain test/staging only.
 
-There is no telemetry, analytics, automatic update check or AI provider integration. Install/development tooling may access npm; normal checks access only configured REST targets. REST redirects, embedded URL credentials and cross-origin pagination links are rejected. Authentication is read from environment variables, never written into the report. Reports intentionally contain compared field values and may include local file paths in errors: treat artifacts according to the sensitivity of your test data.
+There is no telemetry, analytics, automatic update check or AI provider integration. Install/development tooling may access npm; normal checks access only configured source targets. REST redirects, embedded URL credentials and cross-origin pagination links are rejected. Authentication is read from environment variables, never written into the report. Reports intentionally contain compared field values and may include local file paths in errors: treat artifacts according to the sensitivity of your test data.
+
+UI browser requests are restricted to configured origins; service workers and WebSockets are blocked. storageState files contain session material and must remain private/ignored. UI error screenshots can contain visible test data. The local demo login uses public synthetic credentials and is not production authentication; its login helper refuses non-loopback targets.
+
+SQL is parsed before connecting and executed with READ ONLY on a dedicated client. Use a SELECT-only staging role: transaction restrictions are not a general sandbox for privileged side effects hidden inside database objects. The adapter never seeds/migrates databases. Development tests create disposable loopback clusters or random schemas only in an explicitly named logiparity_test database, and remove their fixtures.
 
 Do not submit secrets, real customer records or exploit details in a public issue. Agree a private reporting channel with the owner, Sergei Orekhovskii, before transmitting sensitive details. No security mailbox or private advisory process is currently configured. This project is unreleased and does not claim an independent security audit.
 

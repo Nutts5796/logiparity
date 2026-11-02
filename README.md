@@ -4,7 +4,7 @@ Logistics software often shows the same shipments in an API, dispatcher screen a
 
 **Use only in test and staging environments.** LogiParity performs GET requests to explicitly configured HTTP targets and reads local files. It has no telemetry or AI integration. It does not identify whether a configured hostname is production: you are responsible for choosing a test or staging target. Never put production credentials in this project.
 
-Current status: **M2 / 0.1.0, unreleased**. Implemented: REST, CSV and XLSX sources; normalized record and aggregate comparisons; `logiparity check` and `init`; failure thresholds; console, HTML, JUnit, JSON and Markdown reports; a synthetic delivery demo. The Scenarios and AI workspaces are placeholders for later milestones. No npm package, Docker image or hosted service has been published.
+Current status: **M3 / 0.1.0, unreleased**. Implemented: REST, CSV, XLSX, Playwright UI and read-only PostgreSQL sources; normalized record/aggregate comparisons; `logiparity check` and `init`; failure thresholds; five report formats; a synthetic delivery demo with dispatcher UI/login and four switchable bugs. Scenarios and AI remain future milestones. No npm package, Docker image or hosted service has been published.
 
 ## Quickstart from this checkout
 
@@ -32,19 +32,44 @@ Stop the first demo with Ctrl+C and run:
 npm run demo:bugs
 ```
 
-Then repeat `npm run demo:export` and the check command. Expected: exit code `1`, **14 missing XLSX records, 284 one-cent field mismatches and 3 aggregate mismatches** (301 findings). For example, `S000200` is missing from XLSX and `S000001` has payout `101` versus `100` integer USD cents. The delivered count differs in XLSX; payout totals differ in both exports. [Bug flags](apps/demo-delivery/BUGS.md) can be enabled individually.
+Then repeat `npm run demo:export` and the check command. With all four implemented bugs enabled, this API/file config produces exit `1` and **3,957 findings**: 14 missing XLSX records, 284 one-cent payout mismatches, 3,656 datetime mismatches and 3 aggregate mismatches. It does not include the UI source. For example, `S000200` is missing from XLSX and `S000001` has payout `101` versus `100` USD cents. [Bug flags](apps/demo-delivery/BUGS.md) can be enabled individually.
 
 ![HTML parity report from the synthetic demo with both implemented bugs enabled](docs/images/report.png)
 
 The HTML report is self-contained: entity/type filters, record search and styles need no CDN or service. All findings remain visible without JavaScript. [Report formats and CI interpretation](docs/report-formats.md) describe the output files.
 
-The demo binds only to `127.0.0.1`. Set `DEMO_PORT` to change its port; set `DEMO_DATE` when starting and exporting to change the synthetic day, and update `variables.date` in the parity config to match. No credentials are needed for the M1 demo API. UI and demo login are planned for M3.
+The demo binds only to `127.0.0.1`. Set `DEMO_PORT` to change its port; set `DEMO_DATE` when starting/exporting to change the synthetic day, and update `variables.date` to match. API/exports need no credentials. The dispatcher at `/dispatcher` uses the public synthetic account **dispatcher / demo-password**, with a one-hour session. This demonstration login is not production authentication.
+
+## Include the dispatcher UI
+
+Keep the demo running, then from another terminal:
+
+```sh
+npx playwright install chromium
+export DEMO_API_URL=http://127.0.0.1:3010
+export DEMO_UI_URL=$DEMO_API_URL
+npm run demo:export
+npm run demo:login
+./node_modules/.bin/logiparity check --config examples/demo/parity-ui.yaml
+```
+
+`demo:login` uses only a loopback demo origin and writes ignored login state to `examples/demo/auth/state.json`. Restarting the demo invalidates sessions: run login/export again. The UI adapter reads the paginated orders table using that storageState. With bugs off this config exits 0; with all four bugs on it reports **4,273 findings**, including 315 stale UI statuses and their delivered-count mismatch. Failures to read the UI produce screenshots under the report directory with links in HTML.
+
+![Authenticated synthetic delivery dispatcher](docs/images/dispatcher.png)
+
+## PostgreSQL source
+
+Configure `type: sql`, `connectionEnv`, one SELECT query, optional bound `params` and field-to-column mappings. Use a dedicated read-only role on a test/staging database. LogiParity parses the query before connecting, rejects writes (including modifying CTEs), multiple statements, row locks and non-allowlisted functions, and uses a read-only transaction with rollback/connection cleanup. Rows stream in bounded batches; numeric monetary columns retain exact decimal strings. The SQL grammar/function surface is deliberately restricted; see [configuration](docs/configuration.md).
+
+[examples/postgres/parity.yaml](examples/postgres/parity.yaml) is a two-record synthetic smoke example with SQL constants and a CSV reference. It requires `STAGING_DATABASE_URL` but creates no database objects. Replace the query with your own staging SELECT and mappings.
 
 ## How checks work
 
 The first source in an entity is the reference. LogiParity joins every other source to it by the configured key. It reports missing/extra records, field differences and duplicate keys. Duplicate keys keep the first record and always produce a finding. Source failures return a runtime error and suppress incomplete missing/extra comparisons for that source.
 
 Fields can be trimmed, case folded, mapped through an enum, parsed as locale-aware decimals, or normalized to UTC with explicit source timezones. Money is represented with arbitrary-precision integer minor units. Monetary source values must be decimal strings, including XLSX text cells; configure money tolerance in integer minor units. Unrounded decimals are rejected, so a broken upstream rounding rule cannot be silently normalized away.
+
+HTML and Markdown show configured currency equivalents beside minor units, for example **682625 ($6,826.25)**, for both field differences and money sums. Formatting uses bigint arithmetic, including values beyond Number.MAX_SAFE_INTEGER. JSON remains unchanged: money is an integer minor-unit string, with no formatted/display properties. Direct library renderer calls should pass `{entities: config.entities}` as presentation context; without currency metadata they show minor units only.
 
 Reports sort findings by entity, key, field, source and finding type. Reordering source records does not change comparison content. Exit codes: `0` no blocking findings, `1` blocking findings, `2` invalid configuration or runtime/source/report error. JUnit adds its actual UTC generation timestamp; timings are explicitly unmeasured.
 
@@ -87,12 +112,14 @@ npm run test:e2e
 npm run build
 ```
 
-Unit/adapter tests use Vitest and local fixtures/HTTP servers. Core line coverage is enforced at 85%. Install `xmllint` for offline JUnit XSD validation (available on this macOS setup; on Debian/Ubuntu: `sudo apt-get install libxml2-utils`). E2E tests verify exact bug keys, monetary values, aggregates, failure thresholds and init. [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the checks on Node 20 and 22 and installs the XML validator; this workflow has not yet run on GitHub for this repository. Browser QA covers the HTML report; the UI source adapter and its Playwright integration tests begin in M3.
+Unit/adapter tests use Vitest, Playwright, local HTTP fixtures and real PostgreSQL. Core line coverage is enforced at 85%. Install Chromium (`npx playwright install chromium`) and `xmllint` (on Debian/Ubuntu: libxml2-utils). PostgreSQL tests auto-create and remove an isolated temporary cluster when initdb/pg_ctl are on PATH; `LOGIPARITY_PG_BIN` can point to their directory. Alternatively set `LOGIPARITY_TEST_DATABASE_URL` to a disposable **loopback database named logiparity_test**; fixtures refuse other hosts/database names and isolate data in random schemas. Never point fixture setup at business data.
+
+E2E checks verify each implemented bug on/off, exact affected keys, read-only SQL, screenshots, failure policies, init and monetary presentation. CI runs Node 20/22, installs Chromium/XML tooling and uses an ephemeral PostgreSQL 16 service. Local validation uses PostgreSQL 14.16. The committed workflow has not yet run on GitHub for this repository.
 
 Run `node scripts/dependencies.mjs` after changing runtime dependencies and review [SECURITY.md](SECURITY.md) for dependency limitations. Contribution guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Roadmap
 
-M1 was approved by the owner; M2 is implemented and awaiting review. M3: dispatcher UI, Playwright and read-only PostgreSQL. M4: disruption scenarios, event mapping and operational invariants. M5: optional AI drafts with preview/redaction and mock-provider tests. M6: complete documentation, CI templates, Docker and release packaging. See [docs/roadmap.md](docs/roadmap.md). Each milestone requires owner review before the next begins.
+M1 and M2 were approved by the owner; M3 awaits review. M4: disruption scenarios, event mapping and operational invariants. M5: optional AI drafts with preview/redaction and mock-provider tests. M6: complete documentation, CI templates, Docker and release packaging. See [docs/roadmap.md](docs/roadmap.md). Each milestone requires owner review before the next begins.
 
 MIT © Sergei Orekhovskii.

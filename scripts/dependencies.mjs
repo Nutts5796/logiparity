@@ -23,6 +23,10 @@ Direct external runtime dependencies are pinned exactly:
 | csv-parse | 7.0.3 | MIT | Streaming CSV parsing |
 | exceljs | 4.4.0 | MIT | XLSX cells, metadata and streaming rows/exports |
 | luxon | 3.7.2 | MIT | Explicit IANA timezone conversion and DST validation |
+| pg | 8.23.1 | MIT | PostgreSQL client and read-only transaction lifecycle |
+| pg-query-stream | 4.17.1 | MIT | Bounded PostgreSQL row batches |
+| pgsql-ast-parser | 12.0.2 | MIT | Reject non-read-only SQL before connecting |
+| playwright | 1.64.1 | Apache-2.0 | Isolated Chromium table extraction and failure screenshots |
 | unzipper | 0.12.5 | MIT | Lazy central-directory XLSX entry streams |
 | yaml | 2.9.1 | ISC | YAML parsing with duplicate-key checks |
 | zod | 4.6.7 | MIT | Strict configuration validation |
@@ -31,7 +35,7 @@ Internal workspace packages use this repository's MIT license. Development tools
 
 ExcelJS overrides pin unzipper 0.12.5 (removes an obsolete dependency chain with missing license metadata) and uuid 11.1.1 (compatible v4 API, fixes the older UUID advisory). XLSX regression tests exercise these overrides. Our XLSX reader uses a narrow typed bridge to ExcelJS 4.4.0 metadata and row parsers to avoid [upstream streaming race #3064](https://github.com/exceljs/exceljs/issues/3064). Recheck this bridge before updating ExcelJS.
 
-The full transitive runtime inventory follows. jszip is consumed under its MIT alternative. pako includes MIT and Zlib notices; preserve both when redistributing. No runtime dependency has unknown license metadata.
+The full transitive runtime inventory follows. jszip is consumed under its MIT alternative. pako includes MIT and Zlib notices; preserve both when redistributing. The SQL parser transitively includes railroad-diagrams under CC0-1.0; its declared license is recorded below and the package retains its notice. No runtime dependency has unknown license metadata.
 
 ## Locked transitive runtime inventory
 

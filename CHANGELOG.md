@@ -6,6 +6,11 @@ This file follows Keep a Changelog. Versions are unreleased until explicitly pub
 
 ### Added
 
+- M3 Playwright table extraction with saved auth, bounded pagination, configured-origin routing and linked failure screenshots.
+- A server-rendered dispatcher with demo login, date/status filters, pagination and reproducible stale-status/timezone export bugs.
+- Streaming PostgreSQL reads, AST rejection before connecting, a read-only transaction and isolated real-database safety tests.
+- Exact major-unit currency equivalents beside minor units in HTML/Markdown; JSON remains unchanged.
+
 - M2 filtered count/sum aggregates, inclusive per-entity failure thresholds and blocking metadata without suppressing findings.
 - Self-contained HTML reports with entity/type/search filters, schema-validated JUnit, and Markdown merge request summaries.
 - `logiparity init` generates a commented REST/CSV starter and refuses to overwrite existing paths.

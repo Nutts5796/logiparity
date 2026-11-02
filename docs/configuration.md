@@ -1,10 +1,10 @@
-# Configuration reference (M2)
+# Configuration reference (M3)
 
-The strict Zod schema is [packages/core/src/config.ts](../packages/core/src/config.ts). Unknown options fail with the file and configuration path; UI and SQL sources remain future M3 features. YAML syntax errors include line/column. A missing environment variable is reported by name, without echoing its value. `logiparity init [--config path]` writes a commented starter without loading sources or overwriting existing files.
+The strict Zod schema is [packages/core/src/config.ts](../packages/core/src/config.ts). Supported sources are REST, CSV, XLSX, UI and PostgreSQL. Unknown options fail with the file/configuration path. YAML errors include line/column; missing environment variables are reported by name without their value. `logiparity init [--config path]` writes a commented REST/CSV starter without loading sources or overwriting files.
 
 Required root fields: `version: 1` and a nonempty `entities` array. Optional `environment` is `test` (default) or `staging`; `production` is rejected. This declaration cannot verify a target's actual deployment environment. Entity names must be unique. `variables` maps names to quoted strings. Every scalar string supports `${ENV_VAR}` substitution followed by `{{variable}}`; interpolation occurs after YAML parsing so values cannot inject additional YAML structure.
 
-An entity requires `name`, `key` and at least two named `sources`. The first source is the reference; missing/extra findings describe subsequent sources relative to it. Each source must map the key in `fields`. Only mapped fields shared with the reference are compared, allowing later partial UI sources. Empty sources with valid headers are valid; missing/malformed headers are source errors.
+An entity requires `name`, `key` and at least two named `sources`. The first is the reference; missing/extra findings describe subsequent sources relative to it. Every source must map the key in `fields`. Shared mapped fields are compared, allowing partial UI tables. Empty sources with valid structure are valid; malformed input is a source error.
 
 ## REST source
 
@@ -54,6 +54,50 @@ fields: { id: "Shipment ID", payout: "Driver payout" }
 CSV defaults to comma, double quote, UTF-8 and header row 1. Other encodings: `utf16le`, `latin1`. Empty physical lines are skipped; `headerRow` counts nonempty parsed CSV records, so multiline quoted records count once. Duplicate headers, absent mapped columns and inconsistent column counts fail. Whitespace around headers is trimmed; cell values are normalized later. File locations resolve from the YAML file's directory.
 
 XLSX requires `type: xlsx`, `file`, `sheet` (exact worksheet name), `fields` and optional `headerRow: 1` (physical worksheet row). String, boolean, numeric, date, rich text, hyperlink text and cached formula scalar results are supported. Formula execution, encrypted workbooks and Excel error cells are unsupported. Monetary columns must contain decimal text. The reader opens ZIP entries lazily, parses metadata first, then streams the selected sheet through ExcelJS; shared strings and metadata are cached. Standard `xl/worksheets/sheetN.xml` worksheet paths are currently required.
+
+## UI source (Playwright Chromium)
+
+```yaml
+type: ui
+url: ${STAGING_UI_URL}/dispatcher?date={{date}}
+storageState: ./auth/state.json
+table: "table#shipments"
+rows: "tbody tr"
+nextPage: "button[aria-label='Next page']"
+fields: { id: "td[data-col=id]", status: "td[data-col=status]" }
+timeoutMs: 10000
+maxPages: 1000
+```
+
+Install the pinned browser with `npx playwright install chromium`. URL must be HTTP(S) without embedded credentials. `storageState` is optional and relative to the YAML file. Create it with Playwright on your test/staging login; it can contain credentials and must not be committed. The local demo helper `npm run demo:login` creates ignored state for the public synthetic account only.
+
+Use CSS selectors: table must identify one visible table; rows defaults to tbody tr; field selectors are relative to each row and must match exactly one cell. Text is extracted in one browser batch per page. Money cells must contain decimal text without currency symbols. Optional `readySelector` waits for a visible readiness marker before extraction, useful for asynchronously populated tables. Empty tables are supported; supplying an appropriate readiness marker avoids confusing a loading state with empty data.
+
+Omit nextPage for one page. When configured, the next control must exist on page 1; a disabled, aria-disabled or hidden control ends pagination, and an absent control is accepted after page 1. After clicking, mapped table rows must change. Repeated page fingerprints or exhausting maxPages produce source errors rather than silently truncating. Defaults: timeoutMs 10,000; maxPages 1,000. Chromium startup has a minimum 10-second budget; failure screenshots have a minimum 5-second budget. Navigation/selector/pagination waits use timeoutMs.
+
+Every read uses an isolated browser context with blocked service workers and WebSockets. HTTP(S) requests are permitted only to the URL's origin and explicitly listed `allowedOrigins` (exact origin strings without paths, trailing slash, query or fragment). Add your configured staging asset/SSO origins if required; other requests are blocked. The adapter performs configured UI navigation/pagination, not an automatic login or arbitrary action script.
+
+On read failure the adapter attempts a PNG under report.dir/screenshots, preserving a relative screenshot path in the existing source_error finding. The browser/context always close, including cancelled reads. Failure screenshots may include visible test data: treat them with the same access controls as reports. A launch/storageState failure before a page exists cannot produce a screenshot.
+
+## SQL source (PostgreSQL)
+
+```yaml
+type: sql
+connectionEnv: STAGING_DATABASE_URL
+query: SELECT id, status, payout FROM shipments WHERE shipment_date = $1 ORDER BY id
+params: ["2026-11-02"]
+fields: { id: id, status: status, payout: payout }
+timeoutMs: 10000
+batchSize: 1000
+```
+
+connectionEnv names an environment variable containing an explicit postgres:// or postgresql:// host/database URL. No connection string or secret is stored literally in YAML. Use a dedicated SELECT-only test/staging role. Bound params accept strings, finite numbers, booleans and null; put monetary parameters in decimal strings.
+
+Before reading credentials or connecting, a PostgreSQL AST parser requires exactly one SELECT, SELECT UNION, or WITH/RECURSIVE ... SELECT. It rejects modifying CTEs, INSERT/UPDATE/DELETE/DDL, SELECT INTO, row locks, multiple statements and unsupported grammar. Supported function calls are a closed read-only builtin allowlist (aggregates, common text/numeric/date functions, current_setting and generate_series); see packages/adapters/src/sql-guard.ts. Custom functions and operational calls such as set_config, nextval, dblink and pg_terminate_backend are rejected in query text. Queries are not rewritten. Valid PostgreSQL syntax outside the parser's supported subset is rejected too.
+
+Execution uses one dedicated pg client and BEGIN READ ONLY, local statement/lock timeouts, and a fixed pg_catalog/public search path. Rows stream with pg-query-stream; batchSize defaults to 1,000, maximum 10,000. timeoutMs defaults to 10,000 and applies to connection and PostgreSQL statements; it is not a wall-clock bound for the whole comparison. The adapter rolls back and closes its stream/client on success, error or cancellation. Transaction restrictions also reject writes reached through a view, as tested. READ ONLY is not a sandbox for privileged functions hidden inside database objects; the restricted staging role remains necessary.
+
+Column mappings use result aliases exactly. pg numeric/int8 remain exact decimal strings; timestamptz is an absolute Date; timestamp without time zone retains its wall-clock string for sourceTimezones normalization. No global pg type parsers are changed. Error messages include the connection variable name, operation and available PostgreSQL code; connection credentials and raw server error text are not printed.
 
 ## Normalization
 

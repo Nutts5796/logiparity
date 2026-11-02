@@ -8,6 +8,10 @@ Direct external runtime dependencies are pinned exactly:
 | csv-parse | 7.0.3 | MIT | Streaming CSV parsing |
 | exceljs | 4.4.0 | MIT | XLSX cells, metadata and streaming rows/exports |
 | luxon | 3.7.2 | MIT | Explicit IANA timezone conversion and DST validation |
+| pg | 8.23.1 | MIT | PostgreSQL client and read-only transaction lifecycle |
+| pg-query-stream | 4.17.1 | MIT | Bounded PostgreSQL row batches |
+| pgsql-ast-parser | 12.0.2 | MIT | Reject non-read-only SQL before connecting |
+| playwright | 1.64.1 | Apache-2.0 | Isolated Chromium table extraction and failure screenshots |
 | unzipper | 0.12.5 | MIT | Lazy central-directory XLSX entry streams |
 | yaml | 2.9.1 | ISC | YAML parsing with duplicate-key checks |
 | zod | 4.6.7 | MIT | Strict configuration validation |
@@ -16,7 +20,7 @@ Internal workspace packages use this repository's MIT license. Development tools
 
 ExcelJS overrides pin unzipper 0.12.5 (removes an obsolete dependency chain with missing license metadata) and uuid 11.1.1 (compatible v4 API, fixes the older UUID advisory). XLSX regression tests exercise these overrides. Our XLSX reader uses a narrow typed bridge to ExcelJS 4.4.0 metadata and row parsers to avoid [upstream streaming race #3064](https://github.com/exceljs/exceljs/issues/3064). Recheck this bridge before updating ExcelJS.
 
-The full transitive runtime inventory follows. jszip is consumed under its MIT alternative. pako includes MIT and Zlib notices; preserve both when redistributing. No runtime dependency has unknown license metadata.
+The full transitive runtime inventory follows. jszip is consumed under its MIT alternative. pako includes MIT and Zlib notices; preserve both when redistributing. The SQL parser transitively includes railroad-diagrams under CC0-1.0; its declared license is recorded below and the package retains its notice. No runtime dependency has unknown license metadata.
 
 ## Locked transitive runtime inventory
 
@@ -37,6 +41,7 @@ The full transitive runtime inventory follows. jszip is consumed under its MIT a
 | brace-expansion | 2.1.7 | MIT |
 | buffer | 5.7.1 | MIT |
 | buffer-crc32 | 0.2.13 | MIT |
+| commander | 2.20.3 | MIT |
 | compress-commons | 4.1.2 | MIT |
 | concat-map | 0.0.1 | MIT |
 | core-util-is | 1.0.3 | MIT |
@@ -44,6 +49,7 @@ The full transitive runtime inventory follows. jszip is consumed under its MIT a
 | crc32-stream | 4.0.3 | MIT |
 | csv-parse | 7.0.3 | MIT |
 | dayjs | 1.11.23 | MIT |
+| discontinuous-range | 1.0.0 | MIT |
 | duplexer2 | 0.1.4 | BSD-3-Clause |
 | end-of-stream | 1.4.5 | MIT |
 | exceljs | 4.4.0 | MIT |
@@ -78,19 +84,42 @@ The full transitive runtime inventory follows. jszip is consumed under its MIT a
 | luxon | 3.7.2 | MIT |
 | minimatch | 3.1.5 | ISC |
 | minimatch | 5.1.9 | ISC |
+| moo | 0.5.3 | BSD-3-Clause |
+| nearley | 2.20.1 | MIT |
 | node-int64 | 0.4.0 | MIT |
 | normalize-path | 3.0.0 | MIT |
 | once | 1.4.0 | ISC |
 | pako | 1.0.11 | (MIT AND Zlib) |
 | path-is-absolute | 1.0.1 | MIT |
+| pg | 8.23.1 | MIT |
+| pg-cloudflare | 1.4.1 | MIT |
+| pg-connection-string | 2.14.1 | MIT |
+| pg-cursor | 2.22.1 | MIT |
+| pg-int8 | 1.0.1 | ISC |
+| pg-pool | 3.14.0 | MIT |
+| pg-protocol | 1.16.1 | MIT |
+| pg-query-stream | 4.17.1 | MIT |
+| pg-types | 2.2.0 | MIT |
+| pgpass | 1.0.5 | MIT |
+| pgsql-ast-parser | 12.0.2 | MIT |
+| playwright | 1.64.1 | Apache-2.0 |
+| playwright-core | 1.64.1 | Apache-2.0 |
+| postgres-array | 2.0.0 | MIT |
+| postgres-bytea | 1.0.1 | MIT |
+| postgres-date | 1.0.7 | MIT |
+| postgres-interval | 1.2.0 | MIT |
 | process-nextick-args | 2.0.1 | MIT |
+| railroad-diagrams | 1.0.0 | CC0-1.0 |
+| randexp | 0.4.6 | MIT |
 | readable-stream | 2.3.8 | MIT |
 | readable-stream | 3.6.2 | MIT |
 | readdir-glob | 1.1.3 | Apache-2.0 |
+| ret | 0.1.15 | MIT |
 | safe-buffer | 5.1.2 | MIT |
 | safe-buffer | 5.2.1 | MIT |
 | saxes | 5.0.1 | ISC |
 | setimmediate | 1.0.5 | MIT |
+| split2 | 4.2.0 | ISC |
 | string_decoder | 1.1.1 | MIT |
 | string_decoder | 1.3.0 | MIT |
 | tar-stream | 2.2.0 | MIT |
@@ -101,6 +130,7 @@ The full transitive runtime inventory follows. jszip is consumed under its MIT a
 | uuid | 11.1.1 | MIT |
 | wrappy | 1.0.2 | ISC |
 | xmlchars | 2.2.0 | MIT |
+| xtend | 4.0.2 | MIT |
 | yaml | 2.9.1 | ISC |
 | zip-stream | 4.1.1 | MIT |
 | zod | 4.6.7 | MIT |
