@@ -1,5 +1,5 @@
 import { dirname, resolve } from 'node:path';
-import { loadYaml, sourceSchema, ConfigError } from '@logiparity/core';
+import { loadYaml, sourceSchema, ConfigError, formatConfigIssues } from '@logiparity/core';
 import { z } from 'zod';
 
 const text = z.string().min(1);
@@ -47,6 +47,6 @@ export async function loadTarget(file: string, env: NodeJS.ProcessEnv) {
 }
 function parse<T>(schema: z.ZodType<T>, value: unknown, file: string): T {
   const result = schema.safeParse(value);
-  if (!result.success) throw new ConfigError(`${file}: ${result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
+  if (!result.success) throw new ConfigError(`${file}: ${formatConfigIssues(schema, value, result.error)}`);
   return result.data;
 }

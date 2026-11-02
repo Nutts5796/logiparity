@@ -1,7 +1,7 @@
 import type { SourceConfig } from './config.js';
 
 export type DataRow = Record<string, unknown>;
-export interface AdapterContext { baseDir: string; env: NodeJS.ProcessEnv; reportDir?: string }
+export interface AdapterContext { baseDir: string; env: NodeJS.ProcessEnv; reportDir?: string; warn?: (message: string) => void }
 export interface Adapter {
   read(config: SourceConfig, context: AdapterContext): AsyncIterable<DataRow>;
 }
@@ -15,5 +15,6 @@ export interface Finding {
 }
 export interface AggregateResult { name: string; type: 'count' | 'sum'; values: Record<string, number | bigint>; skippedSources: string[] }
 export interface EntitySummary { entity: string; reference: string; counts: Record<string, number>; aggregates?: AggregateResult[] }
-export interface Report { schemaVersion: 1; findings: Finding[]; entities: EntitySummary[] }
+export interface FindingGroup { entity: string; source: string; field: string; count: number; kind: 'datetime_offset' | 'money_delta' | 'value_mapping'; delta?: string; expected?: NormalizedValue; actual?: NormalizedValue; summary: string }
+export interface Report { schemaVersion: 1; findings: Finding[]; entities: EntitySummary[]; groups?: FindingGroup[] }
 export type SourceReader = (source: string, config: SourceConfig) => AsyncIterable<DataRow>;

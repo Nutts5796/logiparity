@@ -2,6 +2,9 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { errorText, type Config } from './config.js';
 import type { Report } from './types.js';
+import { reportGroups } from './groups.js';
+import { displayValue } from './report-utils.js';
+import { formatDatetimeUtc } from './money-display.js';
 import { isBlocking } from './policy.js';
 import { htmlReport } from './html.js';
 import { junitReport } from './junit.js';
@@ -13,15 +16,21 @@ export function reportExitCode(report: Report): 0 | 1 | 2 {
 }
 
 export function jsonReport(report: Report): string {
-  return JSON.stringify(report, (_, value: unknown) => typeof value === 'bigint' ? value.toString() : value, 2) + '\n';
+  return JSON.stringify({ ...report, groups: report.groups ?? [] }, (_, value: unknown) => typeof value === 'bigint' ? value.toString() : value, 2) + '\n';
 }
 
-export function consoleReport(report: Report): string {
+export function consoleReport(report: Report, presentation: ReportPresentation = {}): string {
   const counts = new Map<string, number>();
   for (const f of report.findings) counts.set(f.type, (counts.get(f.type) ?? 0) + 1);
   const lines = [`LogiParity: ${report.entities.length} entities, ${report.findings.length} findings (${report.findings.filter(isBlocking).length} blocking)`];
   for (const [type, count] of [...counts].sort(([a], [b]) => a < b ? -1 : 1)) lines.push(`  ${type}: ${count}`);
-  for (const f of report.findings.slice(0, 10)) lines.push(`  [${f.type}${isBlocking(f) ? '' : '; allowed'}] ${f.entity}/${f.source} key=${f.key || '-'} field=${f.field || '-'}: ${f.message}${f.expected !== undefined ? ` Expected=${String(f.expected)} Actual=${String(f.actual)}` : ''}`);
+  for (const group of reportGroups(report, presentation)) lines.push(`  [pattern] ${group.entity}/${group.source}/${group.field}: ${group.summary}`);
+  const value = (input: import('./types.js').NormalizedValue | undefined, entity: string, field: string): string => {
+    const rule = presentation.entities?.find((e) => e.name === entity)?.compare[field];
+    const iso = rule?.type === 'datetime' && typeof input === 'number' ? formatDatetimeUtc(input) : undefined;
+    return iso ? `${displayValue(input)} (${iso})` : displayValue(input);
+  };
+  for (const f of report.findings.slice(0, 10)) lines.push(`  [${f.type}${isBlocking(f) ? '' : '; allowed'}] ${f.entity}/${f.source} key=${f.key || '-'} field=${f.field || '-'}: ${f.message}${f.expected !== undefined ? ` Expected=${value(f.expected, f.entity, f.field)} Actual=${value(f.actual, f.entity, f.field)}` : ''}`);
   if (report.findings.length > 10) lines.push(`  ... ${report.findings.length - 10} more findings.`);
   return lines.join('\n') + '\n';
 }

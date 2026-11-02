@@ -26,7 +26,8 @@ entities:
         fields: { shipment_id: "Shipment ID", status: Status, payout: "Driver payout" }
     compare:
       status: { type: enum, map: { Delivered: delivered, "In transit": in_transit } }
-      # Money inputs must be decimal strings; tolerance is in minor units.
+      # Money defaults to decimal strings; numeric input requires allowNumber: true.
+      # Tolerance is in minor units.
       payout: { type: money, currency: USD, tolerance: 0 }
     aggregates:
       - { name: delivered_count, type: count, where: { status: delivered } }

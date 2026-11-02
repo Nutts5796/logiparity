@@ -6,7 +6,8 @@ import { join, resolve } from 'node:path';
 import { adapters } from '@logiparity/adapters';
 import { compareEntities, loadConfig, reportExitCode, writeReports, errorText } from '@logiparity/core';
 import { loadScenario, loadTarget } from './config.js';
-import { affectedBy, canonical, prepareInvariant, type Snapshot } from './invariants.js';
+import { affectedBy, prepareInvariant, type Snapshot } from './invariants.js';
+import { canonicalFor, cancelledBy, needsAffected, requiredStateSources, validateState } from './state.js';
 import { requestPlan, sendRequest, targetHeaders } from './http.js';
 import { writeScenarioReport, type ScenarioReport } from './report.js';
 
@@ -14,6 +15,12 @@ export async function runScenario(scenarioFile: string, targetFile: string, repo
   const { scenario, baseDir } = await loadScenario(scenarioFile, env);
   const { target, baseDir: targetDir } = await loadTarget(targetFile, env);
   if (scenario.target !== target.name) throw new Error('Scenario target name does not match the selected target file');
+  const required = requiredStateSources(scenario.invariants, scenario.events);
+  for (const source of required) if (!target.state[source]) throw new Error(`Selected invariants require state.${source}; configure that source or select fewer invariants.`);
+  const custom = scenario.invariants.some((i) => typeof i === 'object' && !('sla_window_violations' in i));
+  const stateNames = [...new Set([...(custom ? Object.keys(target.state) : required), scenario.wait.source])];
+  const warnings = new Set<string>();
+  const warn = (message: string) => { if (!warnings.has(message)) { warnings.add(message); console.warn(message); } };
   if (!target.state[scenario.wait.source]) throw new Error(`Missing wait state source ${scenario.wait.source}`);
   const fixture: unknown = scenario.setup ? JSON.parse(await readFile(resolve(baseDir, scenario.setup.fixture), 'utf8')) : undefined;
   if (scenario.setup && !target.setup) throw new Error('Scenario fixture requires target.setup');
@@ -31,12 +38,12 @@ export async function runScenario(scenarioFile: string, targetFile: string, repo
   const parityEnv = { ...env, LOGIPARITY_SCENARIO_ARTIFACT_DIR: artifactDir };
   const parity = scenario.afterwards ? await loadConfig(resolve(baseDir, scenario.afterwards.parity), parityEnv) : undefined;
   const report: ScenarioReport = { schemaVersion: 1, kind: 'scenario', name: scenario.name, target: target.name, environment: target.environment, events: events.map(({ event }) => ({ step: event.step, type: event.type, completed: false })), invariants: [], exitCode: 2 };
-  const read = async (names = Object.keys(target.state)): Promise<Snapshot> => {
+  const read = async (names = stateNames): Promise<Snapshot> => {
     const state: Snapshot = {};
     for (const name of names) {
       const source = target.state[name]; if (!source) throw new Error(`Missing state source ${name}`);
       state[name] = [];
-      for await (const row of adapters.read(source, { baseDir: targetDir, env, reportDir })) state[name].push(row);
+      for await (const row of adapters.read(source, { baseDir: targetDir, env, reportDir, warn })) state[name].push(row);
     }
     return state;
   };
@@ -44,8 +51,8 @@ export async function runScenario(scenarioFile: string, targetFile: string, repo
   try {
     if (setup) await send(setup);
     const before = await read();
-    const usesBuiltins = scenario.invariants.some((i) => typeof i === 'string' || 'sla_window_violations' in i);
-    const affected = usesBuiltins ? affectedBy(canonical(before), scenario.events) : { affectedKeys: [], cancelledKeys: [] };
+    validateState(before, scenario.invariants, scenario.events);
+    const affected = needsAffected(scenario.invariants) ? affectedBy(canonicalFor(before, scenario.invariants, scenario.events), scenario.events) : { affectedKeys: [], cancelledKeys: scenario.invariants.includes('single_assignment') ? cancelledBy(canonicalFor(before, ['single_assignment']).orders, scenario.events) : [] };
     for (const [index, { plan }] of events.entries()) { await send(plan); report.events[index]!.completed = true; }
     if (replan) await send(replan);
     const deadline = Date.now() + scenario.wait.timeoutSeconds * 1000;
@@ -68,7 +75,7 @@ export async function runScenario(scenarioFile: string, targetFile: string, repo
         await pipeline(Readable.fromWeb(response.body as import('node:stream/web').ReadableStream), createWriteStream(join(artifactDir, artifact.file)));
       }
       const directory = resolve(reportDir, 'parity');
-      report.parity = await compareEntities(parity.config.entities, (_, source) => adapters.read(source, { baseDir: parity.baseDir, env: parityEnv, reportDir: directory }));
+      report.parity = await compareEntities(parity.config.entities, (_, source) => adapters.read(source, { baseDir: parity.baseDir, env: parityEnv, reportDir: directory, warn }));
       await writeReports(report.parity, directory, ['html', 'json', 'markdown', 'junit'], { entities: parity.config.entities });
     }
     report.exitCode = report.parity && reportExitCode(report.parity) === 2 ? 2 : report.invariants.some((i) => !i.passed) || report.parity && reportExitCode(report.parity) === 1 ? 1 : 0;

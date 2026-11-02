@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { expect, it } from 'vitest';
-import { affectedBy, canonical, checkBuiltin, prepareInvariant, scenarioSchema, targetSchema, scenarioHtml, scenarioJunit, type InvariantState, type ScenarioReport } from '@logiparity/scenarios';
+import { affectedBy, canonical, checkBuiltin, requiredStateSources, validateState, prepareInvariant, scenarioSchema, targetSchema, scenarioHtml, scenarioJunit, type InvariantState, type ScenarioReport } from '@logiparity/scenarios';
 import { renderTemplate, requestPlan, targetHeaders } from '../../packages/scenarios/src/http.js';
 const at = '2026-11-02T08:00:00Z';
 function state(): InvariantState {
@@ -77,4 +77,19 @@ it('accepts exact CSV scalar encodings without treating false as truthy', () => 
   const s = state(); s.before.drivers![0]!.available = 'false'; s.before.vehicles![0]!.capacity = '25'; s.before.orders![0]!.units = '1';
   expect(canonical(s.before).drivers[0]?.available).toBe(false); expect(canonical(s.before).vehicles[0]?.capacity).toBe(25);
   s.before.drivers![0]!.available = 'yes'; expect(() => canonical(s.before)).toThrow();
+});
+
+it('validates only the state and fields needed by selected invariants', () => {
+  const minimal = { orders: [{id:'S1',status:'in_transit'}], assignments: [{id:'A1',order_id:'S1',driver_id:'D1'}] };
+  const selected = ['no_order_lost','single_assignment'] as const;
+  expect(requiredStateSources(selected)).toEqual(['assignments','orders']); expect(() => validateState(minimal, selected)).not.toThrow();
+  const context = {before:minimal,after:structuredClone(minimal),events:[],affectedKeys:[],cancelledKeys:[]};
+  expect(checkBuiltin('single_assignment',context).passed).toBe(true); expect(checkBuiltin('no_order_lost',context).passed).toBe(true);
+  expect(() => validateState(minimal,['capacity_respected'])).toThrow();
+  expect(requiredStateSources(['eta_updated_for_affected'],[{step:1,type:'capacity_change',params:{vehicle:'V1',capacity:25}}])).toContain('drivers');
+  const lost = {...context,after:{orders:[],assignments:[]}}; expect(checkBuiltin('no_order_lost',lost).affectedKeys).toEqual(['S1']);
+});
+it('permits an ID-only lost-order check and an order-only SLA check', () => {
+  expect(() => validateState({orders:[{id:'S1'}]},['no_order_lost'])).not.toThrow();
+  expect(() => validateState({orders:[{id:'S1',status:'in_transit',eta:'2026-11-02T10:00:00Z',delivery_end:'2026-11-02T20:00:00Z'}]},[{sla_window_violations:{max:0}}])).not.toThrow();
 });

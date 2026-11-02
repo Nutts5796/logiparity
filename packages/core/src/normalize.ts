@@ -43,6 +43,15 @@ export function moneyMinor(input: string, currency: string, locale = 'en-US'): b
   return negative ? -minor : minor;
 }
 
+// String(number) uses a dot regardless of configured locale and may use exponent notation.
+function expandNumber(text: string): string {
+  const match = text.match(/^(-?)(\d+)(?:\.(\d+))?e([+-]?\d+)$/i);
+  if (!match) return text;
+  const [, sign = '', whole = '', fraction = '', exponent = '0'] = match;
+  const digits = whole + fraction; const point = whole.length + Number(exponent);
+  return sign + (point <= 0 ? `0.${'0'.repeat(-point)}${digits}` : point >= digits.length ? digits + '0'.repeat(point - digits.length) : `${digits.slice(0, point)}.${digits.slice(point)}`);
+}
+
 export function normalize(value: unknown, rule: ComparisonRule | undefined, source: string): NormalizedValue {
   if (value === undefined || value === null) return null;
   if (value instanceof Date) value = value.toISOString();
@@ -60,7 +69,11 @@ export function normalize(value: unknown, rule: ComparisonRule | undefined, sour
       return rule.caseFold ? mapped.toLocaleLowerCase(rule.locale) : mapped;
     }
     case 'money': {
-      if (typeof value === 'number') throw new Error('Money must be a decimal string; return strings from the API or export text cells to avoid floating-point precision loss.');
+      if (typeof value === 'number') {
+        if (!rule.allowNumber) throw new Error('Money must be a decimal string; return strings from the API or set allowNumber: true after reviewing numeric precision.');
+        if (!Number.isFinite(value)) throw new Error('Money number must be finite.');
+        return moneyMinor(expandNumber(String(value)), rule.currency ?? 'USD', 'en-US');
+      }
       return moneyMinor(text, rule.currency ?? 'USD', rule.locale);
     }
     case 'number': {

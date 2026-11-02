@@ -38,6 +38,14 @@ it('summarizes complete report totals, explicitly samples findings, and redacts 
   expect(input.report.findings).toHaveLength(1); expect(input.sampling).toEqual({ totalFindings: 2, sentFindings: 1, omittedFindings: 1, blockingFindings: 2, countsByType: { field_mismatch: 1, source_error: 1 } });
   expect(prepared.messages[1]?.content).not.toContain('@example.test'); expect(await readFile(file, 'utf8')).toContain('alice@example.test');
 });
+it('accepts additive report groups and redacts their values and summaries before AI preview', async () => {
+  const dir = await directory(); const file = join(dir, 'grouped.json');
+  await writeFile(file, JSON.stringify({ ...report, groups: [{ entity: 'shipment', source: 'csv', field: 'customer_email', count: 1, kind: 'value_mapping', expected: 'alice@example.test', actual: 'bob@example.test', summary: 'alice@example.test -> bob@example.test' }] }));
+  const prepared = await prepareDraft({ kind: 'explain', report: file }, { ...settings, redactFields: ['customer_email'] });
+  const input = JSON.parse(prepared.messages[1]!.content) as { report: { groups: { expected: string; actual: string; summary: string }[] } };
+  expect(input.report.groups).toHaveLength(1); expect(input.report.groups[0]).toMatchObject({ expected: '[REDACTED]', actual: '[REDACTED]', summary: '[REDACTED] -> [REDACTED]' });
+  expect(prepared.messages[1]?.content).not.toContain('@example.test');
+});
 it('validates settings, YAML syntax, finite JSON-compatible input and input size without echoing content', async () => {
   const dir = await directory(); const file = join(dir, 'bad.yaml'); await writeFile(file, 'version: 1\nredactFields: [email]\ntimeoutMs: 100\n');
   expect((await loadAiSettings(file)).redactFields).toEqual(['email']);

@@ -3,6 +3,7 @@ import { createJiti } from 'jiti';
 import { selectJson } from '@logiparity/adapters';
 import { z } from 'zod';
 import { resolve } from 'node:path';
+import { canonical, canonicalFor } from './state.js';
 import type { DataRow } from '@logiparity/core';
 import type { Invariant, ScenarioEvent } from './config.js';
 
@@ -10,20 +11,6 @@ export type Snapshot = Record<string, DataRow[]>;
 export interface InvariantState { before: Snapshot; after: Snapshot; events: ScenarioEvent[]; affectedKeys: string[]; cancelledKeys: string[] }
 export interface InvariantResult { name: string; passed: boolean; affectedKeys: string[]; explanation: string }
 const id = z.string().min(1);
-const instant = z.string().refine((v) => /(?:Z|[+-]\d{2}:\d{2})$/.test(v) && Number.isFinite(Date.parse(v)), 'Use an ISO instant with an offset');
-const quantity = z.preprocess((v) => typeof v === 'string' && /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(v) ? Number(v) : v, z.number().finite().nonnegative());
-const boolean = z.preprocess((v) => v === 'true' ? true : v === 'false' ? false : v, z.boolean());
-const order = z.object({ id, status: id, units: quantity, zone: id, eta: instant, delivery_end: instant });
-const driver = z.object({ id, vehicle_id: id, available: boolean });
-const vehicle = z.object({ id, capacity: quantity, operational: boolean });
-const assignment = z.object({ id, order_id: id, driver_id: id });
-const notification = z.object({ id, order_id: id, type: id, created_at: instant });
-const meta = z.object({ id, replan_status: id, clock: instant });
-export function canonical(snapshot: Snapshot) {
-  const result = { orders: z.array(order).parse(snapshot.orders), drivers: z.array(driver).parse(snapshot.drivers), vehicles: z.array(vehicle).parse(snapshot.vehicles), assignments: z.array(assignment).parse(snapshot.assignments), notifications: z.array(notification).parse(snapshot.notifications), meta: z.array(meta).length(1).parse(snapshot.meta) };
-  for (const [name, records] of Object.entries(result)) if (new Set(records.map((r) => r.id)).size !== records.length) throw new Error(`Duplicate IDs in scenario state.${name}`);
-  return result;
-}
 const active = (status: string) => status !== 'delivered' && status !== 'cancelled';
 export function affectedBy(before: ReturnType<typeof canonical>, events: ScenarioEvent[]): { affectedKeys: string[]; cancelledKeys: string[] } {
   const keys = new Set<string>(); const cancelled = new Set<string>();
@@ -37,21 +24,21 @@ export function affectedBy(before: ReturnType<typeof canonical>, events: Scenari
       for (const key of (p.affectedKeys ?? []) as string[]) keys.add(key);
     } else {
       const drivers = event.type === 'capacity_change' && p.vehicle ? before.drivers.filter((d) => d.vehicle_id === p.vehicle).map((d) => d.id) : [p.driver];
-      if (event.type === 'traffic_delay' ? !before.orders.some((o) => o.zone === p.zone) : !before.drivers.some((d) => drivers.includes(d.id))) throw new Error(`Unknown driver, vehicle or zone in ${event.type}`);
+      if (event.type === 'traffic_delay' ? !before.orders.some((o) => o.zone === p.zone) : !before.drivers.some((d) => drivers.includes(d.id)) && !before.assignments.some((a) => drivers.includes(a.driver_id))) throw new Error(`Unknown driver, vehicle or zone in ${event.type}`);
       for (const o of before.orders.filter((o) => active(o.status))) if (event.type === 'traffic_delay' ? o.zone === p.zone : before.assignments.some((a) => a.order_id === o.id && drivers.includes(a.driver_id))) keys.add(o.id);
     }
   }
   return { affectedKeys: [...keys].sort(), cancelledKeys: [...cancelled].sort() };
 }
 export function checkBuiltin(definition: Invariant, state: InvariantState): InvariantResult {
-  const before = canonical(state.before); const after = canonical(state.after);
+  const before = canonicalFor(state.before, [definition], state.events); const after = canonicalFor(state.after, [definition], state.events);
   const name = typeof definition === 'string' ? definition : 'sla_window_violations';
   const failed = new Set<string>(); const byId = new Map(after.orders.map((o) => [o.id, o]));
   switch (name) {
     case 'no_order_lost': for (const o of before.orders) if (!byId.has(o.id)) failed.add(o.id); break;
     case 'single_assignment': {
       for (const o of after.orders) if (after.assignments.filter((a) => a.order_id === o.id).length !== (o.status === 'cancelled' ? 0 : 1)) failed.add(o.id);
-      for (const a of after.assignments) if (!byId.has(a.order_id) || !after.drivers.some((d) => d.id === a.driver_id)) failed.add(a.order_id);
+      for (const a of after.assignments) if (!byId.has(a.order_id)) failed.add(a.order_id);
       for (const key of state.cancelledKeys) if (byId.get(key)?.status !== 'cancelled') failed.add(key);
       break;
     }

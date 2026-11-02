@@ -60,13 +60,29 @@ export async function* readRest(config: RestConfig, context: AdapterContext): As
     const { body, link } = await getPage(url, config, headers);
     const selected = selectJson(body, config.items);
     const items: unknown[] = selected.length === 1 && Array.isArray(selected[0]) ? selected[0] as unknown[] : selected;
+    let more: boolean | undefined;
+    if (pagination && 'size' in pagination && items.length > pagination.size) throw new Error(`REST page ${page + 1}: requested size ${pagination.size}, received ${items.length}; server returned more items than requested. Check pagination size and endpoint behavior.`);
+    if (pagination?.type === 'page' || pagination?.type === 'offset') {
+      const signals: boolean[] = [];
+      const location = `REST page ${page + 1} (${pagination.type}=${position}): requested size ${pagination.size}, received ${items.length}`;
+      const count = (path: string) => { const value = selectOne(body, path); if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) throw new Error(`${location}; ${path} must select a nonnegative safe integer completion count.`); return value; };
+      const completedPage = pagination.type === 'page' ? position + (pagination.start === 0 ? 1 : 0) : page + 1;
+      const consumed = (pagination.type === 'offset' ? position : (completedPage - 1) * pagination.size) + items.length;
+      if (pagination.totalPath) { const total = count(pagination.totalPath); if (consumed > total) throw new Error(`${location}; items exceed advertised totalPath count ${total}.`); signals.push(consumed < total); }
+      if (pagination.totalPagesPath) signals.push(completedPage < count(pagination.totalPagesPath));
+      if (pagination.hasMorePath) { const value = selectOne(body, pagination.hasMorePath); if (typeof value !== 'boolean') throw new Error(`${location}; hasMorePath must select a boolean.`); signals.push(value); }
+      if (signals.some(Boolean) && items.length < pagination.size) throw new Error(`${location}; a completion signal says more pages exist. Match the server's page-size cap before comparing.`);
+      if (signals.some((value) => value !== signals[0])) throw new Error(`${location}; completion signals disagree. Correct the response metadata or pagination paths.`);
+      more = signals[0];
+      if (more === undefined && page === 0 && items.length < pagination.size) (context.warn ?? console.warn)(`${location}; no completion signal is configured. Set totalPath or hasMorePath to detect server page-size caps.`);
+    }
     for (let index = 0; index < items.length; index++) {
       try { yield Object.fromEntries(Object.entries(config.fields).map(([field, path]) => [field, selectOne(items[index], path)])); }
       catch (error) { throw new Error(`REST page ${page + 1}, record ${index + 1}: ${error instanceof Error ? error.message : String(error)}`); }
     }
     if (!pagination) return;
     if (pagination.type === 'page' || pagination.type === 'offset') {
-      if (items.length < pagination.size) return;
+      if (more === false || more === undefined && items.length < pagination.size) return;
       position += pagination.type === 'page' ? 1 : pagination.size;
     } else if (pagination.type === 'cursor') {
       const cursor = selectOne(body, pagination.next);

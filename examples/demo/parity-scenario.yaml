@@ -9,7 +9,7 @@ entities:
         type: rest
         baseUrl: ${DEMO_API_URL}
         path: /api/shipments?date={{date}}
-        pagination: { type: page, pageParam: page, sizeParam: limit, size: 200 }
+        pagination: { type: page, totalPath: $.pagination.total, pageParam: page, sizeParam: limit, size: 200 }
         items: $.data[*]
         fields:
           shipment_id: $.id

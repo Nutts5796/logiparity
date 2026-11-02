@@ -12,9 +12,10 @@ const httpUrl = z.url().refine((v) => {
   return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password;
 }, 'Use an HTTP(S) URL without embedded credentials');
 const pageSize = z.number().int().min(1).max(10000).default(200);
+const completionSignals = { totalPath: name.optional(), totalPagesPath: name.optional(), hasMorePath: name.optional() };
 const pagination = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('page'), pageParam: name.default('page'), sizeParam: name.default('limit'), size: pageSize, start: z.number().int().min(0).default(1) }).strict(),
-  z.object({ type: z.literal('offset'), offsetParam: name.default('offset'), sizeParam: name.default('limit'), size: pageSize }).strict(),
+  z.object({ type: z.literal('page'), ...completionSignals, pageParam: name.default('page'), sizeParam: name.default('limit'), size: pageSize, start: z.number().int().min(0).default(1) }).strict(),
+  z.object({ type: z.literal('offset'), ...completionSignals, offsetParam: name.default('offset'), sizeParam: name.default('limit'), size: pageSize }).strict(),
   z.object({ type: z.literal('cursor'), cursorParam: name.default('cursor'), next: name, sizeParam: name.default('limit'), size: pageSize }).strict(),
   z.object({ type: z.literal('link') }).strict(),
 ]);
@@ -51,7 +52,7 @@ export const sourceSchema = z.discriminatedUnion('type', [
 ]);
 export const ruleSchema = z.object({
   type: z.enum(['string', 'number', 'money', 'datetime', 'enum']),
-  caseFold: z.boolean().default(false), emptyAsNull: z.boolean().default(true),
+  allowNumber: z.boolean().default(false), caseFold: z.boolean().default(false), emptyAsNull: z.boolean().default(true),
   locale: name.default('en-US'), currency: z.string().regex(/^[A-Z]{3}$/).optional(),
   tolerance: z.number().finite().nonnegative().default(0),
   toleranceSeconds: z.number().finite().nonnegative().default(0),
@@ -160,6 +161,33 @@ export async function loadConfig(file: string, env: NodeJS.ProcessEnv = process.
     return value;
   }));
   const result = configSchema.safeParse(raw);
-  if (!result.success) throw new ConfigError(`${absolute}: invalid configuration:\n${result.error.issues.map((i) => `  ${i.path.join('.') || '<root>'}: ${i.message}`).join('\n')}\nFix the listed configuration paths.`);
+  if (!result.success) throw new ConfigError(`${absolute}: invalid configuration:\n${formatConfigIssues(configSchema, raw, result.error)}\nFix the listed configuration paths.`);
   return { config: result.data, baseDir: dirname(absolute), file: absolute };
+}
+
+/** Report unknown properties using the public Zod schema shape, including selected unions. */
+export function formatConfigIssues(schema: z.ZodType, raw: unknown, error: z.ZodError): string {
+  const unwrap = (input: z.ZodType, value: unknown, key?: PropertyKey): z.ZodType => {
+    if (input instanceof z.ZodDefault || input instanceof z.ZodOptional || input instanceof z.ZodNullable) { const inner = input.unwrap(); return inner instanceof z.ZodType ? unwrap(inner, value, key) : input; }
+    if (input instanceof z.ZodUnion) {
+      const options = input.options.filter((option): option is z.ZodType => option instanceof z.ZodType);
+      const chosen = options.find((option) => option instanceof z.ZodObject && value && typeof value === 'object' && option.shape.type instanceof z.ZodType && option.shape.type.safeParse(Reflect.get(value, 'type')).success)
+        ?? options.find((option) => option instanceof z.ZodObject && key !== undefined && Object.hasOwn(option.shape, key))
+        ?? options.find((option) => option instanceof z.ZodObject && option.loose().safeParse(value).success);
+      return chosen ? unwrap(chosen, value, key) : input;
+    }
+    return input;
+  };
+  return error.issues.map((issue) => {
+    let current = schema; let value = raw;
+    for (const key of issue.path) {
+      current = unwrap(current, value, key);
+      const next = current instanceof z.ZodObject ? current.shape[String(key)] as unknown : current instanceof z.ZodArray ? current.element : current instanceof z.ZodRecord ? current.valueType : undefined;
+      if (!(next instanceof z.ZodType)) break;
+      current = next; value = value && typeof value === 'object' ? Reflect.get(value, key) : undefined;
+    }
+    current = unwrap(current, value);
+    const keys = current instanceof z.ZodObject ? Object.keys(current.shape).sort() : [];
+    return `  ${issue.path.join('.') || '<root>'}: ${issue.message}${issue.code === 'unrecognized_keys' && keys.length ? `. Valid keys: ${keys.join(', ')}` : ''}`;
+  }).join('\n');
 }

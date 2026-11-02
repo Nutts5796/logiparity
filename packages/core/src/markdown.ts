@@ -1,3 +1,4 @@
+import { reportGroups } from './groups.js';
 import { isBlocking } from './policy.js';
 import { escapeMarkup, findingTypes, verdict } from './report-utils.js';
 import { presentationValue, type ReportPresentation } from './money-display.js';
@@ -13,6 +14,8 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
     const findings = report.findings.filter((f) => f.type === type);
     lines.push(`| ${type} | ${findings.length} | ${findings.filter(isBlocking).length} |`);
   }
+  const groups = reportGroups(report, presentation);
+  if (groups.length) { lines.push('', '## Patterns to investigate', ''); for (const group of groups) lines.push(`- ${cell(group.entity)}: ${cell(group.summary)}`); }
   const aggregates = report.entities.flatMap((e) => (e.aggregates ?? []).map((a) => ({ entity: e.entity, ...a })));
   if (aggregates.length) {
     lines.push('', '## Aggregates', '', '| Entity | Aggregate | Values by source | Skipped sources |', '| --- | --- | --- | --- |');

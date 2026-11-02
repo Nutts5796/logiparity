@@ -93,3 +93,39 @@ describe('REST adapter with local servers', () => {
     expect(count).toBe(100000);
   });
 });
+
+describe('pagination completion signals', () => {
+  it.each(['page', 'offset'] as const)('rejects a capped %s page with every supported completion signal', async (type) => {
+    const { url } = await server((_, res) => res.end(JSON.stringify({ data: [{ id: 'a' }], total: 3, pages: 3, more: true })));
+    for (const signal of [{ totalPath: '$.total' }, { totalPagesPath: '$.pages' }, { hasMorePath: '$.more' }]) {
+      await expect(collect(readRest(config(url, { pagination: { type, size: 2, ...signal } }), context))).rejects.toThrow(/page 1.*requested size 2, received 1.*more pages/);
+    }
+  });
+  it.each(['page', 'offset'] as const)('stops a full final %s page without probing an extra page', async (type) => {
+    let calls = 0;
+    const { url } = await server((_, res) => { calls++; res.end(JSON.stringify({ data: [{ id: 'a' }, { id: 'b' }], total: 2, pages: 1, more: false })); });
+    expect(await collect(readRest(config(url, { pagination: { type, size: 2, totalPath: '$.total', totalPagesPath: '$.pages', hasMorePath: '$.more' } }), context))).toHaveLength(2); expect(calls).toBe(1);
+  });
+  it.each(['page', 'offset'] as const)('allows a short final %s page when metadata confirms completion', async (type) => {
+    let calls = 0;
+    const { url } = await server((_, res) => { calls++; res.end(JSON.stringify({ data: calls === 1 ? [{ id: 'a' }, { id: 'b' }] : [{ id: 'c' }], total: 3 })); });
+    expect(await collect(readRest(config(url, { pagination: { type, size: 2, totalPath: '$.total' } }), context))).toEqual([{ id: 'a' }, { id: 'b' }, { id: 'c' }]); expect(calls).toBe(2);
+  });
+  it('supports zero-based pages and flags a later short page that still advertises more', async () => {
+    const seen: string[] = [];
+    const { url } = await server((req, res) => { const page = new URL(req.url!, 'http://localhost').searchParams.get('page')!; seen.push(page); res.end(JSON.stringify({ data: page === '0' ? [{ id: 'a' }, { id: 'b' }] : [{ id: 'c' }], total: 5 })); });
+    await expect(collect(readRest(config(url, { pagination: { type: 'page', start: 0, size: 2, totalPath: '$.total' } }), context))).rejects.toThrow(/page 2.*requested size 2, received 1/); expect(seen).toEqual(['0', '1']);
+  });
+  it('rejects oversized pages, invalid counts, missing paths and inconsistent signals', async () => {
+    const { url } = await server((_, res) => res.end(JSON.stringify({ data: [{ id: 'a' }, { id: 'b' }], total: 3, pages: 1, text: '3', more: 'true' })));
+    await expect(collect(readRest(config(url, { pagination: { type: 'page', size: 1 } }), context))).rejects.toThrow(/requested size 1, received 2/);
+    for (const signal of [{ totalPath: '$.text' }, { hasMorePath: '$.more' }, { totalPagesPath: '$.missing' }, { totalPath: '$.total', totalPagesPath: '$.pages' }]) await expect(collect(readRest(config(url, { pagination: { type: 'offset', size: 2, ...signal } }), context))).rejects.toThrow();
+    await expect(collect(readRest(config(url, { pagination: { type: 'page', size: 2, totalPath: '$.pages' } }), context))).rejects.toThrow('exceed advertised');
+  });
+  it('keeps an unverified short first page and emits exactly one actionable warning', async () => {
+    const messages: string[] = [];
+    const { url } = await server((_, res) => res.end('{"data":[{"id":"a"}]}'));
+    expect(await collect(readRest(config(url, { pagination: { type: 'page', size: 200 } }), { ...context, warn: (message) => messages.push(message) }))).toEqual([{ id: 'a' }]);
+    expect(messages).toHaveLength(1); expect(messages[0]).toContain('totalPath or hasMorePath');
+  });
+});

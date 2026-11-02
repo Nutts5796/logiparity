@@ -1,3 +1,4 @@
+import { formatConfigIssues } from '@logiparity/core';
 import { z } from 'zod';
 import { readStructured } from './input.js';
 
@@ -9,8 +10,9 @@ export const aiSettingsSchema = z.object({
 }).strict();
 export type AiSettings = z.infer<typeof aiSettingsSchema>;
 export async function loadAiSettings(file?: string): Promise<AiSettings> {
-  const result = aiSettingsSchema.safeParse(file ? await readStructured(file) : { version: 1 });
-  if (!result.success) throw new Error(`${file ?? 'AI settings'}: invalid settings at ${result.error.issues.map((i) => i.path.join('.') || '<root>').join(', ')}. Use version: 1, redactFields, timeoutMs and maxFindings; see docs/ai.md.`);
+  const raw = file ? await readStructured(file) : { version: 1 };
+  const result = aiSettingsSchema.safeParse(raw);
+  if (!result.success) throw new Error(`${file ?? 'AI settings'}: invalid settings at ${formatConfigIssues(aiSettingsSchema, raw, result.error)}. Use version: 1, redactFields, timeoutMs and maxFindings; see docs/ai.md.`);
   return result.data;
 }
 export interface ProviderConfig { endpoint: string; model: string; apiKey: string; timeoutMs: number }

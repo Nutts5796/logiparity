@@ -3,6 +3,7 @@ import { equalValues, normalize } from './normalize.js';
 import type { EntitySummary, Finding, NormalizedValue, Report, SourceReader } from './types.js';
 import { aggregateEqual, measureAggregate } from './aggregates.js';
 import { applyFailurePolicies } from './policy.js';
+import { groupFindings } from './groups.js';
 import { SourceError } from './source-error.js';
 
 type Row = Record<string, NormalizedValue>;
@@ -52,7 +53,7 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
         }
         summary.counts[source] = rowNumber;
       } catch (error) {
-        report.findings.push({ type: 'source_error', entity: entity.name, source, key: '', field: '', message: `${entity.name}/${source}${context ? ` (${context})` : ''}: ${errorText(error)} Check this source's configuration and data.`, ...(error instanceof SourceError && error.screenshot ? { screenshot: error.screenshot } : {}) });
+        report.findings.push({ type: 'source_error', entity: entity.name, source, key: '', field: '', message: `${entity.name}/${source}${context ? ` (${context})` : ''}: ${errorText(error)}`, ...(error instanceof SourceError && error.screenshot ? { screenshot: error.screenshot } : {}) });
         if (source === reference) break;
         continue;
       }
@@ -87,5 +88,6 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
   sortFindings(report.findings);
   report.entities.sort((a, b) => order(a.entity, b.entity));
   applyFailurePolicies(report, entities);
+  report.groups = groupFindings(report.findings, entities);
   return report;
 }

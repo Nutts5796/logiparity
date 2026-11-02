@@ -12,7 +12,7 @@ function headerIndexes(headers: unknown[], fields: Record<string, string>): [str
   if (new Set(nonempty).size !== nonempty.length) throw new Error('Duplicate column headers; give each column a unique name.');
   return Object.entries(fields).map(([field, column]) => {
     const index = names.indexOf(column);
-    if (index < 0) throw new Error(`Column "${column}" for field ${field} is missing; correct fields or headerRow.`);
+    if (index < 0) throw new Error(`Column "${column}" for field ${field} is missing. Available headers: ${names.map((name) => JSON.stringify(name)).join(', ') || '(none)'}. Correct fields or headerRow.`);
     return [field, index];
   });
 }
@@ -59,6 +59,6 @@ export async function* readFileSource(config: FileConfig, context: AdapterContex
     }
     if (!indexes) throw new Error(`Header was not found${config.type === 'xlsx' ? ` in sheet "${config.sheet}"` : ''}; check sheet, headerRow and file contents.`);
   } catch (error) {
-    throw new Error(`${file} (${location}): ${error instanceof Error ? error.message : String(error)} Check file permissions and the source mapping.`);
+    throw new Error(`${file} (${location}): ${error instanceof Error ? error.message : String(error)}`);
   }
 }
