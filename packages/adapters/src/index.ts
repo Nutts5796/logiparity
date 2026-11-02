@@ -15,3 +15,4 @@ export const adapters: Adapter = {
   },
 };
 export { readRest, readFileSource, readUi, readSql };
+export { selectJson } from './jsonpath.js';

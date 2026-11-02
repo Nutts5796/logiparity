@@ -22,6 +22,7 @@ Direct external runtime dependencies are pinned exactly:
 | --- | --- | --- | --- |
 | csv-parse | 7.0.3 | MIT | Streaming CSV parsing |
 | exceljs | 4.4.0 | MIT | XLSX cells, metadata and streaming rows/exports |
+| jiti | 2.7.0 | MIT | Load explicitly configured TypeScript invariants on Node 20/22 |
 | luxon | 3.7.2 | MIT | Explicit IANA timezone conversion and DST validation |
 | pg | 8.23.1 | MIT | PostgreSQL client and read-only transaction lifecycle |
 | pg-query-stream | 4.17.1 | MIT | Bounded PostgreSQL row batches |

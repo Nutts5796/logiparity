@@ -1,1 +1,21 @@
-{ "name": "@logiparity/scenarios", "version": "0.1.0", "private": true, "type": "module", "license": "MIT" }
+{
+  "name": "@logiparity/scenarios",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@logiparity/core": "0.1.0",
+    "@logiparity/adapters": "0.1.0",
+    "zod": "4.6.7",
+    "jiti": "2.7.0"
+  }
+}

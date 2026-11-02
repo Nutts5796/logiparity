@@ -119,7 +119,7 @@ export function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export async function loadConfig(file: string, env: NodeJS.ProcessEnv = process.env): Promise<LoadedConfig> {
+export async function loadYaml(file: string, env: NodeJS.ProcessEnv = process.env): Promise<unknown> {
   const absolute = resolve(file);
   let content: string;
   try { content = await readFile(absolute, 'utf8'); }
@@ -140,6 +140,18 @@ export async function loadConfig(file: string, env: NodeJS.ProcessEnv = process.
     if (!value) throw new ConfigError(`${absolute}: environment variable ${key} is missing or empty; set it before running check.`);
     return value;
   }));
+  return raw;
+}
+
+export async function loadConfig(file: string, env: NodeJS.ProcessEnv = process.env): Promise<LoadedConfig> {
+  const absolute = resolve(file);
+  let raw = await loadYaml(absolute, env);
+  const walk = (value: unknown, transform: (s: string) => string): unknown => {
+    if (typeof value === 'string') return transform(value);
+    if (Array.isArray(value)) return value.map((v) => walk(v, transform));
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, walk(v, transform)]));
+    return value;
+  };
   const vars = raw && typeof raw === 'object' && 'variables' in raw ? raw.variables : {};
   raw = walk(raw, (s) => s.replace(/\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}/g, (_, key: string) => {
     if (!vars || typeof vars !== 'object' || !Object.hasOwn(vars, key)) throw new ConfigError(`${absolute}: variables.${key} is missing; define the template variable.`);

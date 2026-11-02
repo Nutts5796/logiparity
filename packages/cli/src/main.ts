@@ -3,11 +3,14 @@ import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
 import { adapters } from '@logiparity/adapters';
 import { compareEntities, consoleReport, errorText, loadConfig, reportExitCode, writeReports } from '@logiparity/core';
+import { runScenario, scenarioConsole } from '@logiparity/scenarios';
+import { basename } from 'node:path';
 import { initConfig } from './init.js';
 
-const help = `LogiParity 0.1.0 (M3) — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
+const help = `LogiParity 0.1.0 (M4) — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
 
 Usage: logiparity check --config <parity.yaml>
+       logiparity scenario run <scenario.yaml> --target <target.yaml> [--report-dir <dir>]
        logiparity init [--config <parity.yaml>]
        logiparity --help
 
@@ -21,8 +24,14 @@ init writes a commented starter config without overwriting an existing file.
 `;
 
 async function main(): Promise<number> {
-  const { values, positionals } = parseArgs({ options: { config: { type: 'string', short: 'c' }, help: { type: 'boolean', short: 'h' } }, allowPositionals: true, strict: true });
+  const { values, positionals } = parseArgs({ options: { config: { type: 'string', short: 'c' }, target: { type: 'string' }, 'report-dir': { type: 'string' }, help: { type: 'boolean', short: 'h' } }, allowPositionals: true, strict: true });
   if (values.help) { process.stdout.write(help); return 0; }
+  if (positionals.length === 3 && positionals[0] === 'scenario' && positionals[1] === 'run' && positionals[2] && values.target && !values.config) {
+    const report = await runScenario(positionals[2], values.target, resolve(values['report-dir'] ?? `logiparity-scenario-report/${basename(positionals[2], '.yaml')}`));
+    process.stdout.write(scenarioConsole(report));
+    return report.exitCode;
+  }
+  if (values.target || values['report-dir']) throw new Error('Use scenario run <scenario.yaml> --target <target.yaml> [--report-dir <dir>].');
   if (positionals.length === 1 && positionals[0] === 'init') {
     const destination = await initConfig(values.config ?? 'parity.yaml');
     process.stdout.write(`Created ${destination}. Set STAGING_API_URL, edit the source mappings and run logiparity check --config "${destination}". Test and staging only.\n`);

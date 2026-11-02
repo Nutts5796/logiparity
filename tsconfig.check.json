@@ -3,9 +3,21 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@logiparity/core": ["packages/core/src/index.ts"],
-      "@logiparity/adapters": ["packages/adapters/src/index.ts"]
+      "@logiparity/core": [
+        "packages/core/src/index.ts"
+      ],
+      "@logiparity/adapters": [
+        "packages/adapters/src/index.ts"
+      ],
+      "@logiparity/scenarios": [
+        "packages/scenarios/src/index.ts"
+      ]
     }
   },
-  "include": ["packages/*/src/**/*.ts", "apps/*/src/**/*.ts", "tests/**/*.ts", "vitest*.ts"]
+  "include": [
+    "packages/*/src/**/*.ts",
+    "apps/*/src/**/*.ts",
+    "tests/**/*.ts",
+    "vitest*.ts"
+  ]
 }

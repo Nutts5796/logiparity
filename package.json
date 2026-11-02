@@ -5,14 +5,19 @@
   "type": "module",
   "license": "MIT",
   "author": "Sergei Orekhovskii",
-  "engines": { "node": ">=20" },
-  "workspaces": ["packages/*", "apps/*"],
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "overrides": {
     "unzipper": "0.12.5",
     "uuid": "11.1.1"
   },
   "scripts": {
-    "build": "tsc -b packages/core packages/adapters packages/cli apps/demo-delivery",
+    "build": "tsc -b packages/core packages/adapters packages/scenarios packages/cli apps/demo-delivery",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc -p tsconfig.check.json --noEmit",
     "test": "vitest run --coverage",
