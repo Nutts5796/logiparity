@@ -3,6 +3,7 @@ dist/
 coverage/
 *.tsbuildinfo
 logiparity-report/
+logiparity-report-postgres/
 examples/demo/out/
 .env
 .env.*
@@ -10,3 +11,4 @@ examples/demo/out/
 .DS_Store
 output/
 .playwright-cli/
+examples/demo/auth/

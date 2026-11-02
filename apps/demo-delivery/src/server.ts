@@ -2,16 +2,19 @@ import { createServer, type Server, type ServerResponse } from 'node:http';
 import { once } from 'node:events';
 import ExcelJS from 'exceljs';
 import { DEMO_DATE, seedData, type DemoData, type Shipment } from './seed.js';
+import { createDispatcher } from './dispatcher.js';
 
-export interface DemoBugs { dropLastRow: boolean; roundingPayout: boolean }
-export const noBugs: DemoBugs = { dropLastRow: false, roundingPayout: false };
+export interface DemoBugs { dropLastRow: boolean; roundingPayout: boolean; staleUi: boolean; timezoneShift: boolean }
+export const noBugs: DemoBugs = { dropLastRow: false, roundingPayout: false, staleUi: false, timezoneShift: false };
 const exportPageSize = 200;
 const headers = ['Shipment ID', 'Status', 'Driver payout', 'Delivered at'];
+const chicagoClock = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
 
 export function exportValues(shipment: Shipment, bugs: DemoBugs): string[] {
   // Intentionally incorrect floating-point arithmetic exists only behind the seeded bug.
   const payout = bugs.roundingPayout ? (Math.round(Number(shipment.payout_basis) * 100) / 100).toFixed(2) : shipment.driver_payout;
-  return [shipment.id, shipment.status, payout, shipment.delivered_at ?? ''];
+  const delivered = shipment.delivered_at && bugs.timezoneShift ? chicagoClock.format(new Date(shipment.delivered_at)).replace(' ', 'T') : shipment.delivered_at ?? '';
+  return [shipment.id, shipment.status, payout, delivered];
 }
 
 function json(response: ServerResponse, status: number, data: unknown): void {
@@ -32,6 +35,7 @@ function csvCell(value: string): string {
 export function createDemoServer(options: { bugs?: Partial<DemoBugs>; date?: string } = {}): { server: Server; data: DemoData } {
   const bugs = { ...noBugs, ...options.bugs };
   const data = seedData(options.date ?? DEMO_DATE);
+  const dispatcher = createDispatcher(data, bugs);
   const collections: Record<string, unknown[]> = {
     shipments: data.shipments, orders: data.shipments, drivers: data.drivers, vehicles: data.vehicles,
     routes: data.routes, notifications: data.notifications,
@@ -40,7 +44,8 @@ export function createDemoServer(options: { bugs?: Partial<DemoBugs>; date?: str
   const server = createServer((request, response) => {
     void (async () => {
       const url = new URL(request.url ?? '/', 'http://127.0.0.1');
-      if (request.method !== 'GET') { json(response, 405, { error: 'M1 demo supports GET only; scenario events are planned for M4.' }); return; }
+      if (await dispatcher(request, response, url)) return;
+      if (request.method !== 'GET') { json(response, 405, { error: 'Use GET for API/exports; POST is available only for demo login/logout. Scenario events are planned for M4.' }); return; }
       if (url.pathname === '/health') { json(response, 200, { status: 'ok', synthetic: true, date: data.date, bugs }); return; }
       if (url.searchParams.has('date') && url.searchParams.get('date') !== data.date) { json(response, 400, { error: `Synthetic data exists only for ${data.date}; set variables.date or DEMO_DATE accordingly.` }); return; }
       if (url.pathname === '/exports/shipments.csv') {
@@ -76,7 +81,7 @@ export function createDemoServer(options: { bugs?: Partial<DemoBugs>; date?: str
         }
         return;
       }
-      json(response, 404, { error: 'Use /health, /api/shipments, /api/drivers, /api/vehicles, /api/routes, /api/payouts, /api/notifications or /exports/shipments.csv|xlsx. All data is synthetic. Dispatcher UI is planned for M3.' });
+      json(response, 404, { error: 'Use /dispatcher, /health, /api/shipments, /api/drivers, /api/vehicles, /api/routes, /api/payouts, /api/notifications or /exports/shipments.csv|xlsx. All data is synthetic.' });
     })().catch((error: unknown) => {
       if (response.headersSent) response.destroy(error instanceof Error ? error : undefined);
       else json(response, 400, { error: error instanceof Error ? error.message : 'Request failed; check the query parameters.' });

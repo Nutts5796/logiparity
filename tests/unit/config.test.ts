@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { configSchema, errorText, loadConfig, ruleSchema } from '@logiparity/core';
+import { configSchema, errorText, loadConfig, ruleSchema, sourceSchema } from '@logiparity/core';
 
 const temporary: string[] = [];
 async function configFile(content: string): Promise<string> {
@@ -37,7 +37,7 @@ describe('configuration', () => {
     expect(config.report.outputs).toEqual(['console', 'json']);
   });
   it('reports file and precise schema path without dumping supplied values', async () => {
-    const file = await configFile(valid.replace('type: csv', 'type: sql'));
+    const file = await configFile(valid.replace('type: csv', 'type: unsupported'));
     await expect(loadConfig(file, { API_URL: 'http://localhost' })).rejects.toThrow('entities.0.sources.export.type');
   });
   it('preserves injected YAML punctuation inside scalar strings', async () => {
@@ -80,4 +80,14 @@ describe('configuration', () => {
     await expect(loadConfig(await configFile(valid.replace('path: /api/shipments?date={{date}}', 'path: /api\n        auth: {type: bearer, token: SECRET}')), { API_URL: 'http://localhost' })).rejects.toThrow('tokenEnv');
   });
   it('formats unknown errors safely', () => { expect(errorText('failure')).toBe('failure'); expect(errorText(new Error('failure'))).toBe('failure'); });
+  it('validates configured browser origins and env-based SQL connections', () => {
+    const ui = { type: 'ui', url: 'http://localhost:3010/dispatcher', table: '#shipments', fields: { id: 'td' } };
+    expect(sourceSchema.safeParse({ ...ui, allowedOrigins: ['https://assets.example.test'] }).success).toBe(true);
+    expect(sourceSchema.safeParse({ ...ui, allowedOrigins: ['https://assets.example.test/path'] }).success).toBe(false);
+    expect(sourceSchema.safeParse({ ...ui, url: 'http://user:password@localhost' }).success).toBe(false);
+    const sql = { type: 'sql', connectionEnv: 'STAGING_DATABASE_URL', query: 'SELECT id FROM shipments', fields: { id: 'id' } };
+    expect(sourceSchema.safeParse(sql).success).toBe(true);
+    expect(sourceSchema.safeParse({ ...sql, connectionString: 'secret' }).success).toBe(false);
+    expect(sourceSchema.safeParse({ ...sql, params: [{}] }).success).toBe(false);
+  });
 });

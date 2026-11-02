@@ -29,7 +29,7 @@ entities:
     compare:
       status: { type: enum, map: { "In transit": in_transit, Delivered: delivered } }
       payout: { type: money, currency: USD, tolerance: 0 }
-      delivered_at: { type: datetime, toleranceSeconds: 60 }
+      delivered_at: { type: datetime, sourceTimezones: { export: UTC, csv: UTC }, toleranceSeconds: 60 }
     aggregates:
       - { name: delivered_count, type: count, where: { status: delivered } }
       - { name: payout_total, type: sum, field: payout }

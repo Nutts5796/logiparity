@@ -7,6 +7,10 @@ import { findingCategories } from './policy.js';
 const name = z.string().min(1);
 const envName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
 const fields = z.record(name, name).refine((v) => Object.keys(v).length > 0, 'Map at least one field');
+const httpUrl = z.url().refine((v) => {
+  const u = new URL(v);
+  return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password;
+}, 'Use an HTTP(S) URL without embedded credentials');
 const pageSize = z.number().int().min(1).max(10000).default(200);
 const pagination = z.discriminatedUnion('type', [
   z.object({ type: z.literal('page'), pageParam: name.default('page'), sizeParam: name.default('limit'), size: pageSize, start: z.number().int().min(0).default(1) }).strict(),
@@ -20,10 +24,7 @@ const auth = z.discriminatedUnion('type', [
 ]);
 export const sourceSchema = z.discriminatedUnion('type', [
   z.object({
-    type: z.literal('rest'), baseUrl: z.url().refine((v) => {
-      const u = new URL(v);
-      return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password;
-    }, 'Use an HTTP(S) URL without embedded credentials'),
+    type: z.literal('rest'), baseUrl: httpUrl,
     path: name, fields, items: name.default('$.data[*]'),
     headers: z.record(name, z.string()).default({}).refine((v) => !Object.keys(v).some((k) => /^(authorization|proxy-authorization|cookie|x-api-key)$/i.test(k)), 'Use auth or headersEnv for secrets'),
     headersEnv: z.record(name, envName).default({}), auth: auth.optional(), pagination: pagination.optional(),
@@ -34,6 +35,19 @@ export const sourceSchema = z.discriminatedUnion('type', [
   }).strict(),
   z.object({ type: z.literal('csv'), file: name, fields, delimiter: z.string().length(1).default(','), quote: z.string().length(1).default('"'), encoding: z.enum(['utf8', 'utf16le', 'latin1']).default('utf8'), headerRow: z.number().int().min(1).default(1) }).strict(),
   z.object({ type: z.literal('xlsx'), file: name, fields, sheet: name, headerRow: z.number().int().min(1).default(1) }).strict(),
+  z.object({
+    type: z.literal('ui'), url: httpUrl, storageState: name.optional(), table: name,
+    rows: name.default('tbody tr'), fields, nextPage: name.optional(), readySelector: name.optional(),
+    allowedOrigins: z.array(httpUrl.refine((v) => new URL(v).origin === v, 'Use an origin without a path, query or fragment')).default([]),
+    timeoutMs: z.number().int().min(1).max(300000).default(10000),
+    maxPages: z.number().int().min(1).max(100000).default(1000),
+  }).strict(),
+  z.object({
+    type: z.literal('sql'), connectionEnv: envName, query: name, fields,
+    params: z.array(z.union([z.string(), z.number().finite(), z.boolean(), z.null()])).default([]),
+    timeoutMs: z.number().int().min(1).max(300000).default(10000),
+    batchSize: z.number().int().min(1).max(10000).default(1000),
+  }).strict(),
 ]);
 export const ruleSchema = z.object({
   type: z.enum(['string', 'number', 'money', 'datetime', 'enum']),
@@ -90,7 +104,9 @@ export const configSchema = z.object({
 }).strict().refine((v) => new Set(v.entities.map((e) => e.name)).size === v.entities.length, 'Entity names must be unique');
 export type SourceConfig = z.infer<typeof sourceSchema>;
 export type RestConfig = Extract<SourceConfig, { type: 'rest' }>;
-export type FileConfig = Exclude<SourceConfig, { type: 'rest' }>;
+export type FileConfig = Extract<SourceConfig, { type: 'csv' | 'xlsx' }>;
+export type UiConfig = Extract<SourceConfig, { type: 'ui' }>;
+export type SqlConfig = Extract<SourceConfig, { type: 'sql' }>;
 export type ComparisonRule = z.infer<typeof ruleSchema>;
 export type EntityConfig = z.infer<typeof entitySchema>;
 export type AggregateConfig = z.infer<typeof aggregateSchema>;

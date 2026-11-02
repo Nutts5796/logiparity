@@ -12,7 +12,7 @@ async function directory() { const d = await mkdtemp(join(tmpdir(), 'logiparity-
 afterEach(async () => { await Promise.all(temporary.splice(0).map((d) => rm(d, { recursive: true, force: true }))); });
 function config(extra: Record<string, unknown>): FileConfig {
   const result = sourceSchema.parse({ type: 'csv', file: 'records.csv', fields: { id: 'ID', value: 'Value' }, ...extra });
-  if (result.type === 'rest') throw new Error('Invalid file fixture.'); return result;
+  if (result.type !== 'csv' && result.type !== 'xlsx') throw new Error('Invalid file fixture.'); return result;
 }
 
 describe('streaming file adapters', () => {

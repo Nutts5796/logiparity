@@ -1,0 +1,28 @@
+# Synthetic smoke check only. Use a read-only role on a test/staging database.
+# The default query uses constants: it creates or modifies no database objects.
+version: 1
+environment: test
+entities:
+  - name: shipment
+    key: shipment_id
+    sources:
+      export:
+        type: csv
+        file: ./shipments.csv
+        fields: { shipment_id: ID, status: Status, payout: Payout }
+      database:
+        type: sql
+        connectionEnv: STAGING_DATABASE_URL
+        query: >-
+          SELECT 'S000001'::text AS shipment_id, 'delivered'::text AS status, 1.01::numeric AS payout
+          UNION ALL
+          SELECT 'S000002'::text AS shipment_id, 'in_transit'::text AS status, 2.00::numeric AS payout
+        fields: { shipment_id: shipment_id, status: status, payout: payout }
+    compare:
+      payout: { type: money, currency: USD }
+      status: { type: enum }
+    aggregates:
+      - { name: payout_total, type: sum, field: payout }
+report:
+  outputs: [console, html, json, markdown]
+  dir: ../../logiparity-report-postgres

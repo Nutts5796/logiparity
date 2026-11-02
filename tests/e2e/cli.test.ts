@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parse, stringify } from 'yaml';
+import { chromium } from 'playwright';
+import { testDatabase } from '../postgres.js';
 
 const cli = resolve('node_modules/.bin/logiparity');
 const demo = resolve('apps/demo-delivery/dist/main.js');
@@ -17,7 +19,7 @@ afterEach(async () => {
 });
 
 async function startDemo(flags: Record<string, string> = {}, args: string[] = []) {
-  const child = spawn(process.execPath, [demo, ...args], { env: { ...process.env, DEMO_PORT: '0', BUG_EXPORT_DROPS_LAST_ROW: '0', BUG_ROUNDING_PAYOUT: '0', ...flags }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [demo, ...args], { env: { ...process.env, DEMO_PORT: '0', BUG_EXPORT_DROPS_LAST_ROW: '0', BUG_ROUNDING_PAYOUT: '0', BUG_STATUS_STALE_UI: '0', BUG_TZ_SHIFT_EXPORT: '0', ...flags }, stdio: ['ignore', 'pipe', 'pipe'] });
   children.push(child);
   return await new Promise<string>((resolveUrl, reject) => {
     const timeout = setTimeout(() => reject(new Error('Demo did not start within 10 seconds.')), 10000);
@@ -58,7 +60,7 @@ async function writeConfig(dir: string, url: string, entityOptions: Record<strin
     report: { outputs, dir: './report' },
   }));
 }
-interface JsonFinding { type: string; source: string; key: string; field: string; expected?: string; actual?: string; blocking?: boolean }
+interface JsonFinding { type: string; source: string; key: string; field: string; expected?: string | number; actual?: string | number; blocking?: boolean; screenshot?: string }
 interface JsonReport { schemaVersion: number; findings: JsonFinding[]; entities: { counts: Record<string, number> }[] }
 const id = (i: number) => `S${String(i).padStart(6, '0')}`;
 // Frozen expected affected positions for the synthetic decimal bases, repeated every 300 records.
@@ -67,10 +69,10 @@ const roundingKeys = Array.from({ length: 10 }, (_, block) => roundingPositions.
 const droppedKeys = [...Array.from({ length: 13 }, (_, i) => (i + 1) * 200), 2750].map(id);
 
 describe.sequential('CLI against the actual demo executable', () => {
-  it('enables both implemented bugs with the demo:bugs startup flag', async () => {
+  it('enables all four implemented bugs with the demo:bugs startup flag', async () => {
     const url = await startDemo({}, ['--bugs']);
     const health = await fetch(`${url}/health`).then((r) => r.json()) as { bugs: Record<string, boolean> };
-    expect(health.bugs).toEqual({ dropLastRow: true, roundingPayout: true });
+    expect(health.bugs).toEqual({ dropLastRow: true, roundingPayout: true, staleUi: true, timezoneShift: true });
   });
   it.each([
     { name: 'bugs off', drop: false, rounding: false },
@@ -100,7 +102,7 @@ describe.sequential('CLI against the actual demo executable', () => {
   it('exposes synthetic domain lists, details, status filters and rejects unsupported requests', async () => {
     const url = await startDemo();
     const health = await fetch(`${url}/health`).then((r) => r.json()) as { synthetic: boolean; bugs: Record<string, boolean> };
-    expect(health.synthetic).toBe(true); expect(health.bugs).toEqual({ dropLastRow: false, roundingPayout: false });
+    expect(health.synthetic).toBe(true); expect(health.bugs).toEqual({ dropLastRow: false, roundingPayout: false, staleUi: false, timezoneShift: false });
     const drivers = await fetch(`${url}/api/drivers?limit=100`).then((r) => r.json()) as { data: unknown[] }; expect(drivers.data).toHaveLength(55);
     const shipment = await fetch(`${url}/api/shipments/S000001`).then((r) => r.json()) as { data: { id: string } }; expect(shipment.data.id).toBe('S000001');
     const filtered = await fetch(`${url}/api/orders?status=delivered`).then((r) => r.json()) as { data: { status: string }[] }; expect(filtered.data.every((s) => s.status === 'delivered')).toBe(true);
@@ -127,7 +129,7 @@ describe.sequential('CLI against the actual demo executable', () => {
     expect(failedReport.code).toBe(2); expect(failedReport.stderr).toContain('report');
   });
   it('generates every M2 report with aggregate mismatches and schema-valid JUnit', async () => {
-    const dir = await directory(); const url = await startDemo({}, ['--bugs']);
+    const dir = await directory(); const url = await startDemo({ BUG_EXPORT_DROPS_LAST_ROW: '1', BUG_ROUNDING_PAYOUT: '1' });
     await saveExport(url, dir, 'xlsx'); await saveExport(url, dir, 'csv');
     await writeConfig(dir, url, { aggregates: [{ name: 'delivered_count', type: 'count', where: { status: 'delivered' } }, { name: 'payout_total', type: 'sum', field: 'payout' }] }, ['console', 'html', 'junit', 'json', 'markdown']);
     expect((await runCli(['check', '--config', 'parity.yaml'], dir)).code).toBe(1);
@@ -137,11 +139,13 @@ describe.sequential('CLI against the actual demo executable', () => {
     expect(report.findings).toHaveLength(301);
     const html = await readFile(join(dir, 'report/report.html'), 'utf8'); expect(html).toContain('Showing 301 of 301'); expect(html).toContain('Aggregates');
     expect(await readFile(join(dir, 'report/report.md'), 'utf8')).toContain('251 further findings omitted');
+    expect(html).toContain('682625 ($6,826.25)'); expect(await readFile(join(dir, 'report/report.md'), 'utf8')).toContain('$6,826.25');
+    expect(await readFile(join(dir, 'report/report.json'), 'utf8')).not.toContain('$6,826.25');
     await promisify(execFile)('xmllint', ['--nonet', '--noout', '--schema', resolve('tests/fixtures/junit/JUnit.xsd'), join(dir, 'report/junit.xml')]);
     const xml = await readFile(join(dir, 'report/junit.xml'), 'utf8'); expect(xml).toContain('failures="3"'); expect(xml.match(/<testcase /g)).toHaveLength(6);
   });
   it('applies CLI thresholds at the boundary, preserves observations and cannot suppress runtime errors', async () => {
-    const dir = await directory(); const url = await startDemo({}, ['--bugs']);
+    const dir = await directory(); const url = await startDemo({ BUG_EXPORT_DROPS_LAST_ROW: '1', BUG_ROUNDING_PAYOUT: '1' });
     await saveExport(url, dir, 'xlsx'); await saveExport(url, dir, 'csv');
     for (const [failOn, code] of [[{ missing: 14, mismatch: 284 }, 0], [{ missing: 13, mismatch: 284 }, 1], [[], 0]] as const) {
       await writeConfig(dir, url, { failOn }, ['console', 'json', 'junit']);
@@ -171,4 +175,74 @@ describe.sequential('CLI against the actual demo executable', () => {
     expect(result.code).toBe(0); expect(result.stderr).toBe('');
     expect(await readFile(join(dir, 'logiparity-report/report.html'), 'utf8')).toContain('All configured comparisons passed');
   });
+  it.each([
+    { stale: false, timezone: false }, { stale: true, timezone: false },
+    { stale: false, timezone: true }, { stale: true, timezone: true },
+  ])('detects exact M3 bug keys: stale=$stale timezone=$timezone', async ({ stale, timezone }) => {
+    const dir = await directory(); const url = await startDemo({ BUG_STATUS_STALE_UI: stale ? '1' : '0', BUG_TZ_SHIFT_EXPORT: timezone ? '1' : '0' });
+    await saveExport(url, dir, 'xlsx'); await saveExport(url, dir, 'csv'); await loginState(dir, url);
+    await writeUiConfig(dir, url);
+    const result = await runCli(['check', '--config', 'parity.yaml'], dir); expect(result.stderr).toBe(''); expect(result.code).toBe(stale || timezone ? 1 : 0);
+    const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
+    expect(report.entities[0]?.counts).toEqual({ api: 2750, export: 2750, csv: 2750, ui: 2750 });
+    const staleKeys = Array.from({ length: 46 }, (_, i) => [51, 53, 54, 56, 57, 59, 60].map((n) => n + i * 60)).flat().filter((n) => n <= 2750).map(id).sort();
+    expect(report.findings.filter((f) => f.source === 'ui' && f.field === 'status').map((f) => f.key)).toEqual(stale ? staleKeys : []);
+    const delivered = Array.from({ length: 2750 }, (_, i) => i + 1).filter((n) => n % 3 !== 1).map(id);
+    for (const source of ['export', 'csv']) {
+      const findings = report.findings.filter((f) => f.source === source && f.field === 'delivered_at');
+      expect(findings.map((f) => f.key)).toEqual(timezone ? delivered : []);
+      for (const f of findings) expect(Number(f.expected) - Number(f.actual)).toBe(6 * 3600000);
+    }
+    expect(report.findings.filter((f) => f.type === 'aggregate_mismatch')).toHaveLength(stale ? 1 : 0);
+    expect(report.findings).toHaveLength((stale ? 316 : 0) + (timezone ? 3666 : 0));
+  });
+  it('links a real UI failure screenshot from the HTML report and exits 2', async () => {
+    const dir = await directory(); const url = await startDemo(); await loginState(dir, url); await saveExport(url, dir, 'xlsx'); await saveExport(url, dir, 'csv');
+    await writeUiConfig(dir, url, { table: 'table#missing', timeoutMs: 500 });
+    expect((await runCli(['check', '--config', 'parity.yaml'], dir)).code).toBe(2);
+    const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
+    expect(report.findings).toHaveLength(1); const error = report.findings[0]; expect(error?.type).toBe('source_error'); expect(error?.screenshot).toMatch(/^screenshots\/ui-/);
+    expect((await readFile(join(dir, 'report', error?.screenshot ?? ''))).subarray(1, 4).toString()).toBe('PNG');
+    expect(await readFile(join(dir, 'report/report.html'), 'utf8')).toContain('View screenshot');
+  });
+  it('runs the SQL adapter through the CLI and refuses non-SELECT before connecting', async () => {
+    const db = await testDatabase();
+    try {
+      const dir = await directory(); const url = await startDemo();
+      const response = await fetch(url + '/api/shipments?limit=2').then((r) => r.json()) as { data: { id: string; driver_payout: string }[] };
+      await db.client.query(`CREATE TABLE ${db.schema}.shipments(id text, payout numeric(30,2))`);
+      for (const row of response.data) await db.client.query(`INSERT INTO ${db.schema}.shipments VALUES($1,$2)`, [row.id, row.driver_payout]);
+      const config = { version: 1, entities: [{ name: 'shipment', key: 'id', sources: {
+        api: { type: 'rest', baseUrl: url, path: '/api/shipments?limit=2', fields: { id: '$.id', payout: '$.driver_payout' } },
+        database: { type: 'sql', connectionEnv: 'CLI_TEST_DB', query: `SELECT id, payout FROM ${db.schema}.shipments ORDER BY id`, fields: { id: 'id', payout: 'payout' } },
+      }, compare: { payout: { type: 'money', currency: 'USD' } }, aggregates: [{ name: 'payout_total', type: 'sum', field: 'payout' }] }], report: { outputs: ['console', 'json', 'html'], dir: './report' } };
+      await writeFile(join(dir, 'parity.yaml'), stringify(config));
+      expect((await runCli(['check', '--config', 'parity.yaml'], dir, { CLI_TEST_DB: db.url })).code).toBe(0);
+      expect(await readFile(join(dir, 'report/report.html'), 'utf8')).toContain('$2.03');
+      config.entities[0]!.sources.database.query = `DELETE FROM ${db.schema}.shipments`;
+      await writeFile(join(dir, 'parity.yaml'), stringify(config));
+      expect((await runCli(['check', '--config', 'parity.yaml'], dir, { CLI_TEST_DB: '' })).code).toBe(2);
+      expect((await db.client.query(`SELECT count(*) AS n FROM ${db.schema}.shipments`)).rows[0]?.n).toBe('2');
+    } finally { await db.close(); }
+  });
 });
+
+async function loginState(dir: string, url: string): Promise<void> {
+  const browser = await chromium.launch();
+  try {
+    const session = await browser.newContext(); const page = await session.newPage(); await page.goto(url + '/dispatcher');
+    await page.getByLabel('Username', { exact: true }).fill('dispatcher'); await page.getByLabel('Password', { exact: true }).fill('demo-password');
+    await Promise.all([page.waitForURL('**/dispatcher*'), page.getByRole('button', { name: 'Sign in', exact: true }).click()]);
+    await session.storageState({ path: join(dir, 'state.json') });
+  } finally { await browser.close(); }
+}
+
+async function writeUiConfig(dir: string, url: string, uiOptions: Record<string, unknown> = {}): Promise<void> {
+  await writeConfig(dir, url, { aggregates: [{ name: 'delivered_count', type: 'count', where: { status: 'delivered' } }, { name: 'payout_total', type: 'sum', field: 'payout' }] }, ['console', 'json', 'html', 'markdown']);
+  const config = parse(await readFile(join(dir, 'parity.yaml'), 'utf8')) as { entities: { sources: Record<string, unknown>; compare: Record<string, unknown> }[] };
+  const entity = config.entities[0]!;
+  entity.sources.ui = { type: 'ui', url: url + '/dispatcher', storageState: './state.json', table: 'table#shipments', nextPage: 'button[aria-label="Next page"]', fields: { id: 'td[data-col=id]', status: 'td[data-col=status]', payout: 'td[data-col=payout]', delivered_at: 'td[data-col=delivered_at]' }, ...uiOptions };
+  entity.compare.status = { type: 'enum', map: { Delivered: 'delivered', 'In transit': 'in_transit' } };
+  entity.compare.delivered_at = { type: 'datetime', sourceTimezones: { export: 'UTC', csv: 'UTC' } };
+  await writeFile(join(dir, 'parity.yaml'), stringify(config));
+}
