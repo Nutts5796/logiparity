@@ -1,6 +1,6 @@
-# Configuration reference (M3)
+# Configuration reference
 
-The strict Zod schema is [packages/core/src/config.ts](../packages/core/src/config.ts). Supported sources are REST, CSV, XLSX, UI and PostgreSQL. Unknown options fail with the file/configuration path. YAML errors include line/column; missing environment variables are reported by name without their value. `logiparity init [--config path]` writes a commented REST/CSV starter without loading sources or overwriting files.
+The strict Zod schema is [packages/core/src/config.ts](../packages/core/src/config.ts). Supported sources are REST, CSV, XLSX, UI and PostgreSQL. Unknown options fail with the file and configuration path, followed by valid keys for that object. YAML errors include line/column; missing environment variables are reported by name without their value. `logiparity init [--config path]` writes a commented REST/CSV starter without loading sources or overwriting files.
 
 Required root fields: `version: 1` and a nonempty `entities` array. Optional `environment` is `test` (default) or `staging`; `production` is rejected. This declaration cannot verify a target's actual deployment environment. Entity names must be unique. `variables` maps names to quoted strings. Every scalar string supports `${ENV_VAR}` substitution followed by `{{variable}}`; interpolation occurs after YAML parsing so values cannot inject additional YAML structure.
 
@@ -15,7 +15,7 @@ path: /api/shipments?date={{date}}
 headers: { Accept: application/json }
 headersEnv: { X-API-Key: STAGING_API_KEY }
 auth: { type: bearer, tokenEnv: STAGING_API_TOKEN }
-pagination: { type: page, pageParam: page, sizeParam: limit, size: 200, start: 1 }
+pagination: { type: page, pageParam: page, sizeParam: limit, size: 200, start: 1, totalPath: $.pagination.total }
 items: $.data[*]
 fields: { id: $.id, payout: $.driver_payout }
 timeoutMs: 10000
@@ -32,10 +32,16 @@ Pagination options (omit `pagination` for a single request):
 
 | Type | Configuration | Completion |
 | --- | --- | --- |
-| page | `pageParam: page`, `sizeParam: limit`, `size: 200`, `start: 1` | Page contains fewer than `size` records. |
-| offset | `offsetParam: offset`, `sizeParam: limit`, `size: 200` | Fewer than `size`; offset begins at 0. |
+| page | `pageParam: page`, `sizeParam: limit`, `size: 200`, `start: 1` | Configured completion metadata says finished; otherwise a short page. |
+| offset | `offsetParam: offset`, `sizeParam: limit`, `size: 200` | Configured metadata says finished; otherwise a short page. Offset begins at 0. |
 | cursor | `cursorParam: cursor`, `sizeParam: limit`, `size: 200`, required `next: $.next_cursor` | Next value is null or empty. Response must include the mapped path. |
 | link | No other fields. | No `rel="next"` in the Link header. |
+
+Page and offset pagination accept optional `totalPath`, `totalPagesPath` and `hasMorePath` JSONPaths. Counts must be nonnegative safe integers; hasMore must be boolean. Configure one signal or consistent signals together. `totalPath` counts items across the complete result; `totalPagesPath` counts pages, including the final short page. Page numbers start at 1 by default, or 0 when configured; offset starts at 0.
+
+If a response has more items than requested, the source fails. A short page that still advertises more items or pages also fails, naming the page, requested size and received count. Set `size` to the API's actual page-size cap before comparing. The engine does not use an incomplete source to blame another source with extra records. Full final pages stop immediately when metadata says complete. Conflicting signals, invalid counts and missing paths are source errors.
+
+Without a signal, a short first page retains the historical completion behavior and prints one warning suggesting totalPath or hasMorePath. A short first page alone cannot distinguish an API cap from a complete small result. Configure metadata for reliable completeness checks.
 
 Page size is 1–10,000. Repeated request URLs/cursors or exhausting `maxPages` produce source errors. 429 and 5xx responses and connection/timeout failures retry with exponential backoff; Retry-After is honored with a maximum 30-second response delay. Other HTTP errors fail immediately. `timeoutMs` covers headers and body reads for each request; the complete run may exceed one request timeout. Full pages may require one final empty-page request.
 
@@ -53,7 +59,7 @@ fields: { id: "Shipment ID", payout: "Driver payout" }
 
 CSV defaults to comma, double quote, UTF-8 and header row 1. Other encodings: `utf16le`, `latin1`. Empty physical lines are skipped; `headerRow` counts nonempty parsed CSV records, so multiline quoted records count once. Duplicate headers, absent mapped columns and inconsistent column counts fail. Whitespace around headers is trimmed; cell values are normalized later. File locations resolve from the YAML file's directory.
 
-XLSX requires `type: xlsx`, `file`, `sheet` (exact worksheet name), `fields` and optional `headerRow: 1` (physical worksheet row). String, boolean, numeric, date, rich text, hyperlink text and cached formula scalar results are supported. Formula execution, encrypted workbooks and Excel error cells are unsupported. Monetary columns must contain decimal text. The reader opens ZIP entries lazily, parses metadata first, then streams the selected sheet through ExcelJS; shared strings and metadata are cached. Standard `xl/worksheets/sheetN.xml` worksheet paths are currently required.
+XLSX requires `type: xlsx`, `file`, `sheet` (exact worksheet name), `fields` and optional `headerRow: 1` (physical worksheet row). String, boolean, numeric, date, rich text, hyperlink text and cached formula scalar results are supported. Formula execution, encrypted workbooks and Excel error cells are unsupported. Monetary columns use decimal text by default; numeric cells require the explicit allowNumber option described below. The reader opens ZIP entries lazily, parses metadata first, then streams the selected sheet through ExcelJS; shared strings and metadata are cached. Standard `xl/worksheets/sheetN.xml` worksheet paths are currently required.
 
 ## UI source (Playwright Chromium)
 
@@ -108,7 +114,7 @@ Column mappings use result aliases exactly. pg numeric/int8 remain exact decimal
 | string | `caseFold: false`, `locale: en-US`, `emptyAsNull: true`. Trimmed text comparison. |
 | enum | `map: {Delivered: delivered}` followed by optional case folding. Unknown values keep their trimmed text. |
 | number | Locale separators/grouping with Latin digits; finite decimals; `tolerance: 0` by default. Exponents and currency symbols are rejected. |
-| money | Required ISO currency code (e.g. `USD`); decimal string → bigint minor units. Currency fraction digits follow Intl. `tolerance` is a nonnegative safe integer in minor units. No rounding is performed; excess nonzero decimal places fail. |
+| money | Required ISO currency code (e.g. `USD`); decimal string → bigint minor units by default, with opt-in `allowNumber: true` for finite numeric input. Currency fraction digits follow Intl. `tolerance` is a nonnegative safe integer in minor units. No rounding is performed; excess nonzero decimal places fail. |
 | datetime | ISO 8601 → UTC milliseconds; `sourceTimezones: {export: America/Chicago}` for offsetless values; `toleranceSeconds: 0` default. Missing zones, invalid dates, DST gaps and ambiguous local clock times fail. |
 
 Empty and null are equivalent by default; `emptyAsNull: false` preserves empty strings for string/enum fields. Number/money/datetime fields still require valid nonempty values. Comparisons involving null pass only when both sides normalize to null. Keys are nonempty trimmed strings or safe integers, compared as strings; normalization rules do not change key identity. Duplicate keys produce findings, with first record retained and total row counts preserved.
@@ -152,3 +158,16 @@ M4 scenarios and mutation targets have separate schemas from Parity. Use `logipa
 ## AI settings
 
 M5 AI commands use a separate `--ai-config` file with version 1, redactFields, timeoutMs and maxFindings. Provider URL/model/key come only from the three LOGIPARITY_AI environment variables. Normal Parity/scenario configuration has no automatic AI hook. See [AI reference](ai.md).
+
+## Numeric money inputs
+
+Money rules default to strict decimal strings. Use `allowNumber: true` only when a source returns JSON numbers or numeric spreadsheet cells:
+
+```yaml
+compare:
+  payout: {type: money, currency: USD, allowNumber: true}
+```
+
+Finite numbers are converted through `String(value)` and parsed as locale-independent decimals, including exponent notation. Conversion to bigint minor units uses the same exact rule as strings: extra nonzero decimals fail rather than round. For USD, 12.34 becomes 1234 minor units; 12.345 fails. NaN and infinities fail. A computed value such as 0.1 + 0.2 also fails when its decimal string contains extra nonzero digits. String inputs continue to use the configured locale.
+
+JavaScript may already have lost precision while parsing or computing a number. String conversion cannot recover those digits, especially for large amounts. Decimal strings preserve the original decimal amount and remain the recommended interchange format. The option does not change JSON output, money tolerance units or exact aggregate arithmetic.

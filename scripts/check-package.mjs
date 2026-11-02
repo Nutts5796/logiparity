@@ -16,7 +16,8 @@ try {
   const dry = JSON.parse((await npm(['pack', '--dry-run', ...args])).stdout)[0];
   assert.equal(dry.name, 'logiparity'); assert.equal(dry.version, '1.0.0');
   const files = new Set(dry.files.map((file) => file.path));
-  for (const file of ['bin/logiparity.js', 'README.md', 'LICENSE', 'CODE_OF_CONDUCT.md', 'docs/ci.md', 'docs/faq.md', 'templates/github-actions.yml', 'templates/gitlab-ci.yml']) assert(files.has(file), `Missing packaged ${file}`);
+  for (const file of ['bin/logiparity.js', 'README.md', 'LICENSE', 'CODE_OF_CONDUCT.md', 'docs/ci.md', 'docs/faq.md', 'docs/development/milestones.md', 'examples/staging/driver-no-show-target.yaml', 'examples/staging/driver-no-show.yaml', 'templates/github-actions.yml', 'templates/gitlab-ci.yml']) assert(files.has(file), `Missing packaged ${file}`);
+  assert(!files.has('MILESTONE_REPORT.md'));
   for (const name of ['cli', 'core', 'adapters', 'scenarios', 'ai']) {
     for (const file of ['package.json', 'LICENSE', `dist/${name === 'cli' ? 'main' : 'index'}.js`]) assert(files.has(`node_modules/@logiparity/${name}/${file}`), `Missing bundled ${name}/${file}`);
   }
@@ -53,6 +54,7 @@ export {provider};
   let exit; try { await cli(['check', '--config', 'parity.yaml']); } catch (error) { exit = error.code; } assert.equal(exit, 1);
   const report = JSON.parse(await readFile(join(work, 'report/report.json'), 'utf8'));
   assert.equal(report.findings.length, 2);
+  assert.deepEqual(report.groups.map((group) => group.kind), ['datetime_offset', 'money_delta']);
   const html = await readFile(join(work, 'report/report.html'), 'utf8');
   assert(html.includes('625 ($6.25)')); assert(html.includes('1793624460000 (2026-11-02T13:01:00Z)'));
   const preview = await cli(['ai', 'scenario', '--from', 'Synthetic van breakdown']); assert.match(preview.stdout, /nothing sent/);

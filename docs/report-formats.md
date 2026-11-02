@@ -32,7 +32,7 @@ Markdown escapes untrusted markup, links/images and table separators. It include
 
 JSON schema version remains 1: M2 adds optional `blocking`, `screenshot` and entity `aggregates` metadata, permitted by the v1 additive-field policy. Consumers should tolerate optional fields. See report-schema.md for units and structure.
 
-## Monetary presentation (M3 owner addition)
+## Monetary presentation
 
 HTML/Markdown display configured monetary fields and sum aggregates as `682625 ($6,826.25)`: integer minor units with a major-unit currency equivalent beside them. Currency/locale come from the entity's money rule; counts and non-money fields are never formatted as currency. Formatting uses bigint arithmetic and Intl parts, retaining large amounts and negative sub-unit signs without conversion through floating-point major amounts.
 
@@ -40,8 +40,14 @@ The CLI supplies `{entities: config.entities}` as separate presentation context.
 
 ## M4 UTC presentation and scenario reports
 
-Configured datetime fields in HTML/Markdown show both epoch milliseconds and ISO 8601 UTC: `1793624460000 (2026-11-02T13:01:00Z)`. Nonzero milliseconds are retained (`.123Z`); formatting does not use the machine timezone. JSON, console and JUnit comparison values remain unchanged. Renderer callers pass entity configuration as presentation context, as for currency; numeric fields are not guessed to be datetimes.
+Configured datetime fields in HTML/Markdown show both epoch milliseconds and ISO 8601 UTC: `1793624460000 (2026-11-02T13:01:00Z)`. Nonzero milliseconds are retained (`.123Z`); formatting does not use the machine timezone. JSON and JUnit keep normalized comparison values; console also shows UTC text. Renderer callers pass entity configuration as presentation context, as for currency; numeric fields are not guessed to be datetimes.
 
 Scenario runs write `scenario.html`, `scenario.md`, `scenario.json` and `junit.xml`, with one result per invariant, explanations and affected keys. Optional post-scenario Parity writes the existing formats into `parity/`, linked from the scenario summary. See [scenario reference](scenarios.md).
 
 ![Datetime Parity findings with UTC equivalents and search](images/report-datetime.png)
+
+## Pattern summaries and console dates
+
+HTML, Markdown and console show uniform patterns by entity, source and field: constant datetime offsets, exact money deltas or a repeated value mapping. Individual findings remain in JSON and HTML; Markdown retains its first 50 rows and console its first 10 rows. The new JSON groups array is additive and does not change schemaVersion or thresholds. HTML includes totals and blocking counts for every finding type, matching the Markdown count table.
+
+Console datetime fields show ISO 8601 UTC beside epoch milliseconds, including nonzero milliseconds, when comparison rules are supplied. The CLI supplies that context; library callers pass `{entities: config.entities}` to consoleReport, htmlReport and markdownReport. Money remains in minor units in console, while HTML and Markdown retain configured currency equivalents.

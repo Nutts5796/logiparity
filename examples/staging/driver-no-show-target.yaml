@@ -1,0 +1,40 @@
+# Replace every /replace-with-* path and field JSONPath with your staging API contract.
+version: 1
+name: staging-dispatch
+environment: staging
+allowMutations: true
+baseUrl: ${STAGING_API_URL}
+headersEnv:
+  Authorization: STAGING_AUTHORIZATION # Full "Bearer ..." value from the environment.
+events:
+  driver_no_show:
+    method: POST
+    path: /replace-with-events/drivers/{{params.driver}}/absence
+    body: {reason: no_show}
+# Omit replan if the event starts asynchronous replanning automatically.
+replan:
+  method: POST
+  path: /replace-with-replanning
+  body: {}
+state:
+  orders:
+    type: rest
+    baseUrl: ${STAGING_API_URL}
+    path: /replace-with-orders
+    auth: {type: bearer, tokenEnv: STAGING_API_TOKEN}
+    pagination: {type: page, size: 100, totalPath: $.pagination.total}
+    fields: {id: $.id, status: $.status}
+  assignments:
+    type: rest
+    baseUrl: ${STAGING_API_URL}
+    path: /replace-with-assignments
+    auth: {type: bearer, tokenEnv: STAGING_API_TOKEN}
+    pagination: {type: page, size: 100, totalPath: $.pagination.total}
+    fields: {id: $.id, order_id: $.order_id, driver_id: $.driver_id}
+  planning:
+    type: rest
+    baseUrl: ${STAGING_API_URL}
+    path: /replace-with-planning-status
+    auth: {type: bearer, tokenEnv: STAGING_API_TOKEN}
+    fields: {status: $.status}
+    items: $.data[*] # Expect one status record.

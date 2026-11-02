@@ -1,6 +1,6 @@
 # JSON report schema, version 1
 
-The root contains `schemaVersion: 1`, `entities` and `findings`. No timestamps, absolute local filenames on successful comparisons, or random run IDs are added, allowing byte-stable output for the same normalized data/configuration. Source errors describe the observed input location and may naturally vary with row order or environment. Object properties follow configuration order; findings are sorted with binary string ordering by entity, key, field, source, type. Entity summaries sort by entity name.
+The root contains `schemaVersion: 1`, `entities`, `findings` and additive `groups`. No timestamps, absolute local filenames on successful comparisons, or random run IDs are added, allowing byte-stable output for the same normalized data/configuration. Source errors describe the observed input location and may naturally vary with row order or environment. Object properties follow configuration order; findings are sorted with binary string ordering by entity, key, field, source, type. Entity summaries sort by entity name.
 
 ```json
 {
@@ -18,7 +18,8 @@ The root contains `schemaVersion: 1`, `entities` and `findings`. No timestamps, 
       "message": "export: key S000001, field payout differs from reference api; check formatting, rounding and business rules."
     }
   ],
-  "entities": [{"entity": "shipment", "reference": "api", "counts": {"api": 2750, "export": 2750}}]
+  "entities": [{"entity": "shipment", "reference": "api", "counts": {"api": 2750, "export": 2750}}],
+  "groups": [{"entity": "shipment", "source": "export", "field": "payout", "count": 1, "kind": "money_delta", "delta": "-1", "summary": "1 payout value in export differs by exactly -1 USD minor unit."}]
 }
 ```
 
@@ -42,3 +43,9 @@ M3's HTML/Markdown currency equivalents use separate configuration context. They
 Exit 0 means no blocking findings; exit 1 means blocking ordinary findings, with source errors taking precedence as exit 2. Thresholds apply per entity/category across sources; all findings remain in reports. Schema changes will increment schemaVersion; optional properties may be added within a version. See report-formats.md for HTML/JUnit/Markdown.
 
 M4 changes HTML/Markdown presentation only: configured datetime values show epoch milliseconds plus ISO 8601 UTC. Existing Parity JSON retains the same schema and numeric epochs. The separate `scenario.json` envelope uses `schemaVersion: 1`, `kind: scenario`, target/environment, completed event steps, invariant results, optional nested unchanged Parity report, runtime error and exit code; it omits raw snapshots and request bodies. Its format is documented in [scenario reference](scenarios.md).
+
+## Finding groups (M7 additive field)
+
+New Parity JSON includes `groups: []` when no uniform patterns exist. Schema version stays 1; older reports without groups remain readable. Each group has entity, source, field, count, kind and summary. Kinds are datetime_offset, money_delta and value_mapping. Offset/delta groups contain a signed decimal-integer delta string, defined as actual minus expected; datetime units are milliseconds and money units are configured minor units. Value mappings contain the normalized expected and actual pair. No individual finding is removed or changes blocking status.
+
+Grouping considers all field mismatches in one entity/source/field bucket. A delta group requires a single nonzero delta across every mismatch and a known datetime or money rule. A value mapping requires the same expected/actual pair across the bucket. Mixed patterns remain individual findings. Summaries describe observed patterns; likely-cause labels are investigation hints. AI explain accepts both old reports and the additive groups field.

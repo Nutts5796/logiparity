@@ -1,24 +1,20 @@
-# Milestone roadmap
+# Roadmap
 
-| Milestone | Scope | State |
-| --- | --- | --- |
-| M1 | Scaffold, core, REST/file adapters, check CLI, console/JSON, synthetic API/exports and M1 bugs | Approved by the owner on 2026-11-02. |
-| M2 | HTML/JUnit/Markdown, aggregates, failOn, tested failure controls, init | Approved by the owner on 2026-11-02. |
-| M3 | Dispatcher UI/login, Playwright, read-only PostgreSQL, stale UI/timezone detection, currency presentation | Approved by the owner on 2026-11-02. |
-| M4 | Scenario DSL/runner, event mappings, invariants, virtual clock and five disruption examples, ISO UTC presentation | Approved by the owner on 2026-11-02. |
-| M5 | Optional provider-agnostic AI drafts with preview/redaction and mock-provider tests | Approved by the owner on 2026-11-02. |
-| M6 | Full docs, screenshots, Contributor Covenant 2.1, templates, Docker, package/release checks | Local 1.0.0 candidate implemented, awaiting owner review; see MILESTONE_REPORT.md. |
+Current focus is reliable first-use workflows: pagination completeness, actionable report summaries, numeric API money and small staging scenarios.
 
-No next milestone begins before the owner reviews the previous milestone. No push, release or publication is authorized by this roadmap. GitHub repository creation, npm and Docker publication are owner release steps after M6.
+Next areas to explore:
 
-Five proposed starter issues for the eventual GitHub repository:
+- Additional export producers, workbook formats and localization fixtures.
+- Clearer readiness contracts for asynchronous browser tables.
+- More logistics examples with independently verified invariant state.
+- Broader container-platform checks and dependency maintenance.
 
-| Proposed issue | Suggested label |
+## Starter issues
+
+| Task | Suggested label |
 | --- | --- |
-| Document a second CSV source mapping with localized decimal strings | good first issue |
+| Document a second CSV mapping with localized decimal strings | good first issue |
 | Add regression fixtures for workbook cell types and alternate producers | help wanted |
 | Add a custom adapter example using synthetic records | good first issue |
-| Improve console examples for missing/duplicate keys | good first issue |
-| Extend locale parsing fixtures to additional numeral/grouping systems | help wanted |
-
-These are suggestions, not claims that GitHub issues or labels already exist.
+| Improve console examples for missing and duplicate keys | good first issue |
+| Extend locale fixtures to additional numeral and grouping systems | help wanted |

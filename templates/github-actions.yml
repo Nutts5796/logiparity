@@ -1,9 +1,11 @@
-# Consumer template. Copy into .github/workflows/logiparity.yml after the owner publishes 1.0.0.
-# Keep report.dir: ./logiparity-report in parity.yaml and prepare its CSV/XLSX inputs beforehand.
+# Copy to .github/workflows/logiparity.yml. Shared staging runs manually or nightly.
+# Prepare parity.yaml with report.dir: ./logiparity-report and a current CSV export.
 name: Staging data parity
 on:
   workflow_dispatch:
-  pull_request:
+  schedule:
+    - cron: '0 3 * * *'
+  # pull_request: # Opt in only for an isolated test target.
 permissions:
   contents: read
 jobs:
@@ -15,15 +17,26 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '22'
-      - name: Install the released CLI
-        run: npm install --no-save --ignore-scripts logiparity@1.0.0
-      # For a UI source, install matching Chromium first:
-      # node node_modules/logiparity/node_modules/playwright/cli.js install --with-deps chromium
-      - name: Compare configured staging sources
-        run: ./node_modules/.bin/logiparity check --config parity.yaml
-      - name: Retain the complete report even when findings fail the job
+        with: {node-version: '22'}
+      - name: Install from the versioned release asset
+        run: npm install --no-save --ignore-scripts https://github.com/Nutts5796/logiparity/releases/download/v1.0.0/logiparity-1.0.0.tgz
+      # After npm publication: npm install --no-save --ignore-scripts logiparity@1.0.0
+      # For UI: node node_modules/logiparity/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Download the current staging export
+        run: >-
+          curl --fail --silent --show-error
+          -H "Authorization: Bearer $STAGING_API_TOKEN"
+          "$STAGING_API_URL/exports/shipments.csv" --output shipments.csv
+      - name: Compare staging sources
+        run: |
+          set +e
+          ./node_modules/.bin/logiparity check --config parity.yaml
+          code=$?
+          set -e
+          if [ "$code" -eq 1 ]; then echo '::error::Data findings'; fi
+          if [ "$code" -eq 2 ]; then echo '::error::Source or configuration error'; fi
+          exit "$code"
+      - name: Retain reports after failure
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

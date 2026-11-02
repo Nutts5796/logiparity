@@ -16,7 +16,6 @@
 !CODE_OF_CONDUCT.md
 !CONTRIBUTING.md
 !SECURITY.md
-!MILESTONE_REPORT.md
 **/node_modules
 **/dist
 **/*.tsbuildinfo

@@ -72,7 +72,7 @@ The runner loads YAML, fixture, custom modules and Parity configuration and rend
 
 ## Canonical state for built-in invariants
 
-Each named state source uses the existing REST/CSV/XLSX/UI/SQL adapter configuration. Map the following canonical fields. IDs are nonempty strings and unique within each collection; missing collections, malformed scalar types or duplicate IDs are runtime errors. Quantities accept finite nonnegative numbers or plain nonnegative decimal strings; flags accept booleans or the exact strings `true`/`false`. Times must be ISO instants with an offset. The raw adapter snapshots remain available to custom checks.
+Each named state source uses the existing REST, CSV, XLSX, UI or SQL adapter configuration. Map the fields required by the selected invariants below. The collection table shows the union of fields used by the full demo. IDs are nonempty strings and unique within each collection; missing collections, malformed scalar types or duplicate IDs are runtime errors. Quantities accept finite nonnegative numbers or plain nonnegative decimal strings; flags accept booleans or the exact strings `true`/`false`. Times must be ISO instants with an offset. The raw adapter snapshots remain available to custom checks.
 
 | Source | Required fields |
 | --- | --- |
@@ -85,18 +85,35 @@ Each named state source uses the existing REST/CSV/XLSX/UI/SQL adapter configura
 
 Active orders exclude `delivered` and `cancelled`. Cancellation retains the order record and removes its assignment. Completed deliveries keep their historical single assignment. Separate assignment rows allow double assignment to be detected even when the order's primary driver looks normal.
 
-Affected keys are derived from the **baseline** and event parameters: `driver` for no-show/breakdown, `zone` for traffic, `orders` for cancellation, and `driver` or `vehicle` for capacity changes. The custom HTTP event can declare `affectedKeys`; the target does not supply the built-in affected set. Invalid baseline references fail before events.
+Affected keys are derived from the **baseline** and event parameters: `driver` for no-show/breakdown, `zone` for traffic, `orders` for cancellation, and `driver` or `vehicle` for capacity changes. The custom HTTP event can declare `affectedKeys`; the target does not supply the built-in affected set. Affected ETA and notification checks validate their baseline references before events.
 
 | Invariant | Checks |
 | --- | --- |
 | `no_order_lost` | Every baseline order ID is still present, including cancelled orders. |
-| `single_assignment` | Each noncancelled order has exactly one assignment; cancelled orders have zero; assignment orders/drivers exist; requested cancellations are reflected in state. |
+| `single_assignment` | Each noncancelled order has exactly one assignment; cancelled orders have zero; assignment orders exist; requested cancellations are reflected in state. |
 | `capacity_respected` | Active assignment units per vehicle do not exceed capacity; each active assignment uses an available driver and operational vehicle. |
 | `eta_updated_for_affected` | Each affected active order has a changed ETA instant. Cancelled orders are exempt. |
 | `customer_notified_for_affected` | Every affected order, including cancellations, has a notification ID absent from baseline, with timestamp at/after the baseline clock. |
 | `sla_window_violations: {max: 0}` | Number of active orders whose ETA exceeds delivery end is within the inclusive maximum. |
 
 Every result has `name`, `passed`, `affectedKeys` and `explanation`. Failing keys are sorted; a passing SLA check with a nonzero allowance can still list observed violations. These checks establish the documented snapshot properties, not optimization quality or proof of customer message delivery.
+
+## Select only the state you need
+
+Built-ins validate and read only their required sources and fields. Unknown or malformed required data fails before event injection. Unrelated configured sources are not read. `wait.source` can be any configured singleton source with the fields in `wait.until`; it does not need to be named meta or include the canonical clock fields.
+
+| Invariant | State sources and required fields |
+| --- | --- |
+| `no_order_lost` | orders: id. |
+| `single_assignment` | orders: id, status; assignments: id, order_id, driver_id. |
+| `capacity_respected` | orders: id, status, units; assignments: id, order_id, driver_id; drivers: id, vehicle_id, available; vehicles: id, capacity, operational. |
+| `eta_updated_for_affected` | orders: id, status, eta; assignments: id, order_id, driver_id, plus the event-dependent fields below. |
+| `customer_notified_for_affected` | orders: id, status; assignments: id, order_id, driver_id; notifications: id, order_id, created_at; singleton meta: id, clock, plus event-dependent fields below. |
+| `sla_window_violations` | orders: id, status, eta, delivery_end. |
+
+Affected-order checks additionally need orders.zone for traffic_delay, or drivers.id and drivers.vehicle_id when capacity_change identifies a vehicle. Driver-based events derive affected keys from assignments. single_assignment verifies cardinality, cancellation and order references; capacity_respected verifies driver and vehicle resources. Custom modules and JSONPath checks can access any configured source, so a run containing a custom check reads all configured sources.
+
+A minimal no-show scenario can use `invariants: [no_order_lost, single_assignment]` with only orders, assignments and its chosen wait source. See the [bring-your-own-API target](../examples/staging/driver-no-show-target.yaml) and [scenario](../examples/staging/driver-no-show.yaml). Their paths, IDs and payloads are placeholders to replace with your staging contract; they use no demo-specific replan or clock endpoint.
 
 ## Custom checks
 

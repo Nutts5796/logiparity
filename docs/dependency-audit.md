@@ -13,7 +13,7 @@ Vitest and its coverage provider were upgraded to 4.1.12 to remove the initial m
 
 The remaining npm recommendations include downgrades or incompatible major replacements; none were applied blindly. Forcing minimatch 11 into legacy callers that expect the earlier callable interface needs its own compatibility review. The current M1 tool uses explicit XLSX entries/rows and local synthetic fixtures rather than accepting arbitrary archive patterns. This is a limited usage surface, not a claim that the dependency advisories are fixed.
 
-Before a public release, the owner must review the remaining chain and choose a tested upstream/override strategy or explicitly document the residual exposure. M1 is unreleased, test/staging only, and is not approved for adversarial files. Repeat the audit after changing the lockfile because counts and advisories can change independently of this document. Runtime license notices, including jszip's MIT alternative and pako's Zlib notice, are inventoried in dependencies.md.
+Before a public release, the maintainer reviews the remaining chain and chooses a tested upstream/override strategy or explicitly documents the residual exposure. M1 is unreleased, test/staging only, and is not approved for adversarial files. Repeat the audit after changing the lockfile because counts and advisories can change independently of this document. Runtime license notices, including jszip's MIT alternative and pako's Zlib notice, are inventoried in dependencies.md.
 
 ## M3 recheck (2026-11-02)
 
@@ -29,4 +29,4 @@ The AI workspace reuses existing pinned yaml/zod/core/scenarios dependencies and
 
 ## M6 release-candidate recheck (2026-11-02)
 
-Bundling the private workspaces for the single 1.0.0 CLI artifact adds no external package version. The regenerated inventory remains 109 external runtime versions. Online audit remains 17 moderate affected-package entries overall, 7 runtime, zero high/critical; affected names are unchanged. The bundle preserves the tested unzipper/uuid overrides. Before publication, the owner must decide how to address or document the remaining chain and review the final container image separately.
+Bundling the private workspaces for the single 1.0.0 CLI artifact adds no external package version. The regenerated inventory remains 109 external runtime versions. Online audit remains 17 moderate affected-package entries overall, 7 runtime, zero high/critical; affected names are unchanged. The bundle preserves the tested unzipper/uuid overrides. Before publication, the maintainer decides how to address or document the remaining chain and review the final container image separately.

@@ -1,13 +1,21 @@
-# Security and operational scope
+# Security
 
-LogiParity is intended only for test/staging environments. The environment declaration is not a production-host detector. Supply only test/staging URLs and credentials. M4 adds scenario mutations, requiring an explicit test/staging target and allowMutations: true. Event HTTP requests stay on the target origin and reject redirects. Setup/events have no rollback or automatic retries. Custom invariant modules are trusted local code executed with Node permissions; review them before running.
+Use LogiParity only against test and staging systems. Configuration labels do not detect a production hostname.
 
-There is no telemetry, analytics or automatic update check. Optional AI commands preview locally by default; --send and all three provider variables are required for a provider request. Normal checks/scenarios never call AI. Review the entire redacted prompt before sending test data; structured field masking is not a general PII detector. Provider credentials stay in the Authorization header, not prompt data. Generated drafts are marked for review, saved as private new files and never executed automatically. See docs/ai.md for redaction, limits and provider behavior. Install/development tooling may access npm; normal checks access only configured source targets. REST redirects, embedded URL credentials and cross-origin pagination links are rejected. Authentication is read from environment variables, never written into the report. Reports intentionally contain compared field values and may include local file paths in errors: treat artifacts according to the sensitivity of your test data.
+## Report a vulnerability
 
-UI browser requests are restricted to configured origins; service workers and WebSockets are blocked. storageState files contain session material and must remain private/ignored. UI error screenshots can contain visible test data. The local demo login uses public synthetic credentials and is not production authentication; its login helper refuses non-loopback targets.
+Use [GitHub private vulnerability reporting](https://github.com/Nutts5796/logiparity/security/advisories/new). Include the version, affected component, impact and a minimal synthetic reproduction. Keep credentials, browser state and customer data out of public issues. For general bugs, use the normal issue template with sanitized examples.
 
-SQL is parsed before connecting and executed with READ ONLY on a dedicated client. Use a SELECT-only staging role: transaction restrictions are not a general sandbox for privileged side effects hidden inside database objects. The adapter never seeds/migrates databases. Development tests create disposable loopback clusters or random schemas only in an explicitly named logiparity_test database, and remove their fixtures.
+## Operational boundaries
 
-Do not submit secrets, real customer records or exploit details in a public issue. Agree a private reporting channel with the owner, Sergei Orekhovskii, before transmitting sensitive details. No security mailbox or private advisory process is currently configured. This project is an unpublished 1.0.0 candidate and does not claim an independent security audit.
+Parity reads configured sources. REST requests reject redirects and embedded credentials. Browser reads restrict requests to configured origins and block service workers and WebSockets. Saved authentication and failure screenshots can contain sensitive test data; keep them private.
 
-Dependency versions and integrity hashes are committed in package-lock.json; direct/runtime licenses are in docs/dependencies.md. The final milestone report records the most recent npm audit result and remaining limitations. ExcelJS 4.4.0 depends on older glob/minimatch chains with moderate advisories; forcing a new major minimatch into callers expecting the legacy callable API is not a safe automatic fix. Do not parse untrusted or adversarial exports. Reassess the dependency tree before any public release. Vitest is a development dependency and runs in non-listening run mode for these tests.
+SQL is parsed before connecting and runs in a READ ONLY transaction. Use a dedicated SELECT-only staging role. This is not a sandbox for privileged effects hidden inside database objects. Development database fixtures are separate from the installed read adapter and restricted to disposable loopback databases.
+
+Scenarios send only explicitly mapped requests to a configured test or staging target with allowMutations: true. There is no automatic rollback or retry. Custom invariant modules are trusted Node.js code with local permissions; review their imports and behavior.
+
+AI commands preview locally by default. --send and complete provider configuration are required for a request; normal checks and scenarios never use AI. Structured field masking is not general PII detection. Review the full prompt and protect preview logs. Draft files are marked for review, written privately and never executed automatically.
+
+## Dependencies and distribution
+
+Runtime versions and integrity hashes are locked; [licenses](docs/dependencies.md) and [audit notes](docs/dependency-audit.md) document the bundle. Existing ExcelJS dependencies have moderate advisories. Do not parse adversarial exports, and review the dependency chain and final container image before deployment. No telemetry or automatic update check runs during checks.
