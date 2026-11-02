@@ -5,12 +5,16 @@ import { adapters } from '@logiparity/adapters';
 import { compareEntities, consoleReport, errorText, loadConfig, reportExitCode, writeReports } from '@logiparity/core';
 import { runScenario, scenarioConsole } from '@logiparity/scenarios';
 import { basename } from 'node:path';
+import { aiCommand } from './ai.js';
 import { initConfig } from './init.js';
 
-const help = `LogiParity 0.1.0 (M4) — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
+const help = `LogiParity 0.1.0 (M5) — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
 
 Usage: logiparity check --config <parity.yaml>
        logiparity scenario run <scenario.yaml> --target <target.yaml> [--report-dir <dir>]
+       logiparity ai suggest-config --openapi <spec.yaml> --entity <name>
+       logiparity ai scenario --from <description>
+       logiparity ai explain <report.json>
        logiparity init [--config <parity.yaml>]
        logiparity --help
 
@@ -20,12 +24,18 @@ Exit codes: 0 = parity, 1 = findings, 2 = configuration or runtime error.
 Money must be decimal strings; tolerance is in integer minor units.
 Outputs: console, HTML, JUnit XML, JSON, Markdown.
 failOn: category list or allowed counts (e.g. {missing: 2}); runtime errors always exit 2.
+AI commands preview locally by default. Add --send to call the explicitly configured provider.
+AI options: --ai-config <ai.yaml>, --redact-fields <field,...> (repeatable), --output <new file>.
+AI requires LOGIPARITY_AI_BASE_URL, LOGIPARITY_AI_MODEL and LOGIPARITY_AI_API_KEY for --send.
+Drafts are marked for review, never overwritten or executed automatically.
 init writes a commented starter config without overwriting an existing file.
 `;
 
 async function main(): Promise<number> {
-  const { values, positionals } = parseArgs({ options: { config: { type: 'string', short: 'c' }, target: { type: 'string' }, 'report-dir': { type: 'string' }, help: { type: 'boolean', short: 'h' } }, allowPositionals: true, strict: true });
+  const { values, positionals } = parseArgs({ options: { config: { type: 'string', short: 'c' }, target: { type: 'string' }, 'report-dir': { type: 'string' }, help: { type: 'boolean', short: 'h' }, openapi: { type: 'string' }, entity: { type: 'string' }, from: { type: 'string' }, output: { type: 'string' }, 'ai-config': { type: 'string' }, 'redact-fields': { type: 'string', multiple: true }, send: { type: 'boolean' } }, allowPositionals: true, strict: true });
   if (values.help) { process.stdout.write(help); return 0; }
+  if (positionals[0] === 'ai') return aiCommand(positionals.slice(1), values);
+  if (values.openapi !== undefined || values.entity !== undefined || values.from !== undefined || values.output !== undefined || values['ai-config'] !== undefined || values['redact-fields'] !== undefined || values.send !== undefined) throw new Error('AI options require logiparity ai; see --help.');
   if (positionals.length === 3 && positionals[0] === 'scenario' && positionals[1] === 'run' && positionals[2] && values.target && !values.config) {
     const report = await runScenario(positionals[2], values.target, resolve(values['report-dir'] ?? `logiparity-scenario-report/${basename(positionals[2], '.yaml')}`));
     process.stdout.write(scenarioConsole(report));
@@ -46,4 +56,9 @@ async function main(): Promise<number> {
 }
 
 try { process.exitCode = await main(); }
-catch (error) { process.stderr.write(`LogiParity: ${errorText(error)}\n`); process.exitCode = 2; }
+catch (error) {
+  let message = errorText(error);
+  const credential = process.env.LOGIPARITY_AI_API_KEY;
+  if (credential) message = message.replaceAll(credential, '[REDACTED]');
+  process.stderr.write(`LogiParity: ${message}\n`); process.exitCode = 2;
+}
