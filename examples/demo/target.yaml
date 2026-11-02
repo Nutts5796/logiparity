@@ -1,0 +1,58 @@
+# Explicit mutation consent applies only to this configured test/staging target.
+version: 1
+name: demo
+environment: test
+allowMutations: true
+baseUrl: ${DEMO_API_URL}
+headers: {x-logiparity-environment: test}
+setup: {method: POST, path: /api/test/reset, body: "{{fixture}}"}
+events:
+  driver_no_show: {method: POST, path: /api/events/driver-no-show, body: "{{params}}"}
+  vehicle_breakdown: {method: POST, path: /api/events/vehicle-breakdown, body: "{{params}}"}
+  traffic_delay: {method: POST, path: /api/events/traffic-delay, body: "{{params}}"}
+  order_cancel: {method: POST, path: /api/events/order-cancel, body: "{{params}}"}
+  capacity_change: {method: POST, path: /api/events/capacity-change, body: "{{params}}"}
+  http: {method: POST, path: "{{params.path}}", body: "{{params.body}}"}
+replan: {method: POST, path: /api/replan, body: {}}
+clock:
+  advance: {method: POST, path: /api/clock/advance, body: {seconds: "{{seconds}}"}}
+state:
+  orders:
+    type: rest
+    baseUrl: ${DEMO_API_URL}
+    path: /api/orders
+    pagination: {type: page, size: 500}
+    fields: {"id": "$.id", "status": "$.status", "units": "$.units", "zone": "$.zone", "eta": "$.eta", "delivery_end": "$.delivery_window.end"}
+  drivers:
+    type: rest
+    baseUrl: ${DEMO_API_URL}
+    path: /api/drivers
+    pagination: {type: page, size: 500}
+    fields: {"id": "$.id", "vehicle_id": "$.vehicle_id", "available": "$.available"}
+  vehicles:
+    type: rest
+    baseUrl: ${DEMO_API_URL}
+    path: /api/vehicles
+    pagination: {type: page, size: 500}
+    fields: {"id": "$.id", "capacity": "$.capacity", "operational": "$.operational"}
+  assignments:
+    type: rest
+    baseUrl: ${DEMO_API_URL}
+    path: /api/assignments
+    pagination: {type: page, size: 500}
+    fields: {"id": "$.id", "order_id": "$.order_id", "driver_id": "$.driver_id"}
+  notifications:
+    type: rest
+    baseUrl: ${DEMO_API_URL}
+    path: /api/notifications
+    pagination: {type: page, size: 500}
+    fields: {"id": "$.id", "order_id": "$.order_id", "type": "$.type", "created_at": "$.created_at"}
+  meta:
+    type: rest
+    baseUrl: ${DEMO_API_URL}
+    path: /api/state
+    pagination: {type: page, size: 500}
+    fields: {"id": "$.id", "replan_status": "$.replan_status", "clock": "$.clock"}
+artifacts:
+  - {path: /exports/shipments.csv, file: shipments.csv}
+  - {path: /exports/shipments.xlsx, file: shipments.xlsx}

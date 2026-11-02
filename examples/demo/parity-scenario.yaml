@@ -1,0 +1,43 @@
+# Test and staging only. Fresh artifacts are downloaded by scenario run.
+version: 1
+environment: test
+entities:
+  - name: shipment
+    key: shipment_id
+    sources:
+      api: # First source is the reference.
+        type: rest
+        baseUrl: ${DEMO_API_URL}
+        path: /api/shipments?date={{date}}
+        pagination: { type: page, pageParam: page, sizeParam: limit, size: 200 }
+        items: $.data[*]
+        fields:
+          shipment_id: $.id
+          status: $.status
+          payout: $.driver_payout
+          delivered_at: $.delivered_at
+          eta: $.eta
+      export:
+        type: xlsx
+        file: ${LOGIPARITY_SCENARIO_ARTIFACT_DIR}/shipments.xlsx
+        sheet: Shipments
+        headerRow: 1
+        fields: { shipment_id: "Shipment ID", status: Status, payout: "Driver payout", delivered_at: "Delivered at", eta: ETA }
+      csv:
+        type: csv
+        file: ${LOGIPARITY_SCENARIO_ARTIFACT_DIR}/shipments.csv
+        fields: { shipment_id: "Shipment ID", status: Status, payout: "Driver payout", delivered_at: "Delivered at", eta: ETA }
+    compare:
+      status: { type: enum, map: { "In transit": in_transit, Delivered: delivered } }
+      payout: { type: money, currency: USD, tolerance: 0 }
+      delivered_at: { type: datetime, sourceTimezones: { export: UTC, csv: UTC }, toleranceSeconds: 60 }
+      eta: { type: datetime, sourceTimezones: { export: UTC, csv: UTC }, toleranceSeconds: 0 }
+    aggregates:
+      - { name: delivered_count, type: count, where: { status: delivered } }
+      - { name: payout_total, type: sum, field: payout }
+    failOn: [missing, extra, mismatch, aggregate, duplicate]
+variables:
+  date: "2026-11-02"
+report:
+  outputs: [console, html, junit, json, markdown]
+  dir: ../../logiparity-report

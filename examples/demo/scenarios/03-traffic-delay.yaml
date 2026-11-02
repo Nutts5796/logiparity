@@ -1,0 +1,22 @@
+version: 1
+name: Traffic delay in zone Z2
+target: demo
+setup:
+  fixture: ../fixtures/day-55-drivers.json
+events:
+  - step: 1
+    type: traffic_delay
+    params: {zone: Z2, minutes: 30, at: "14:00"}
+wait:
+  until: {replan_status: completed}
+  timeoutSeconds: 60
+  pollSeconds: 2
+invariants:
+  - no_order_lost
+  - single_assignment
+  - capacity_respected
+  - eta_updated_for_affected
+  - customer_notified_for_affected
+  - {sla_window_violations: {max: 0}}
+afterwards:
+  parity: ../parity-scenario.yaml

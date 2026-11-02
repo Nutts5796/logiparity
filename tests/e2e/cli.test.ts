@@ -19,7 +19,7 @@ afterEach(async () => {
 });
 
 async function startDemo(flags: Record<string, string> = {}, args: string[] = []) {
-  const child = spawn(process.execPath, [demo, ...args], { env: { ...process.env, DEMO_PORT: '0', BUG_EXPORT_DROPS_LAST_ROW: '0', BUG_ROUNDING_PAYOUT: '0', BUG_STATUS_STALE_UI: '0', BUG_TZ_SHIFT_EXPORT: '0', ...flags }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [demo, ...args], { env: { ...process.env, DEMO_PORT: '0', BUG_EXPORT_DROPS_LAST_ROW: '0', BUG_ROUNDING_PAYOUT: '0', BUG_STATUS_STALE_UI: '0', BUG_TZ_SHIFT_EXPORT: '0', BUG_REPLAN_LOSES_ORDER: '0', BUG_DOUBLE_ASSIGN: '0', ...flags }, stdio: ['ignore', 'pipe', 'pipe'] });
   children.push(child);
   return await new Promise<string>((resolveUrl, reject) => {
     const timeout = setTimeout(() => reject(new Error('Demo did not start within 10 seconds.')), 10000);
@@ -69,10 +69,10 @@ const roundingKeys = Array.from({ length: 10 }, (_, block) => roundingPositions.
 const droppedKeys = [...Array.from({ length: 13 }, (_, i) => (i + 1) * 200), 2750].map(id);
 
 describe.sequential('CLI against the actual demo executable', () => {
-  it('enables all four implemented bugs with the demo:bugs startup flag', async () => {
+  it('enables all six implemented bugs with the demo:bugs startup flag', async () => {
     const url = await startDemo({}, ['--bugs']);
     const health = await fetch(`${url}/health`).then((r) => r.json()) as { bugs: Record<string, boolean> };
-    expect(health.bugs).toEqual({ dropLastRow: true, roundingPayout: true, staleUi: true, timezoneShift: true });
+    expect(health.bugs).toEqual({ dropLastRow: true, roundingPayout: true, staleUi: true, timezoneShift: true, loseOrder: true, doubleAssign: true });
   });
   it.each([
     { name: 'bugs off', drop: false, rounding: false },
@@ -102,7 +102,7 @@ describe.sequential('CLI against the actual demo executable', () => {
   it('exposes synthetic domain lists, details, status filters and rejects unsupported requests', async () => {
     const url = await startDemo();
     const health = await fetch(`${url}/health`).then((r) => r.json()) as { synthetic: boolean; bugs: Record<string, boolean> };
-    expect(health.synthetic).toBe(true); expect(health.bugs).toEqual({ dropLastRow: false, roundingPayout: false, staleUi: false, timezoneShift: false });
+    expect(health.synthetic).toBe(true); expect(health.bugs).toEqual({ dropLastRow: false, roundingPayout: false, staleUi: false, timezoneShift: false, loseOrder: false, doubleAssign: false });
     const drivers = await fetch(`${url}/api/drivers?limit=100`).then((r) => r.json()) as { data: unknown[] }; expect(drivers.data).toHaveLength(55);
     const shipment = await fetch(`${url}/api/shipments/S000001`).then((r) => r.json()) as { data: { id: string } }; expect(shipment.data.id).toBe('S000001');
     const filtered = await fetch(`${url}/api/orders?status=delivered`).then((r) => r.json()) as { data: { status: string }[] }; expect(filtered.data.every((s) => s.status === 'delivered')).toBe(true);
@@ -246,3 +246,16 @@ async function writeUiConfig(dir: string, url: string, uiOptions: Record<string,
   entity.compare.delivered_at = { type: 'datetime', sourceTimezones: { export: 'UTC', csv: 'UTC' } };
   await writeFile(join(dir, 'parity.yaml'), stringify(config));
 }
+
+describe.sequential('M4 environment bug flags through the demo executable', () => {
+  it.each([
+    { flag: 'BUG_REPLAN_LOSES_ORDER', invariant: 'no_order_lost' },
+    { flag: 'BUG_DOUBLE_ASSIGN', invariant: 'single_assignment' },
+  ])('$flag names S000801 after a breakdown scenario', async ({ flag, invariant }) => {
+    const dir = await directory(); const url = await startDemo({ [flag]: '1' });
+    const result = await runCli(['scenario', 'run', resolve('examples/demo/scenarios/02-vehicle-breakdown.yaml'), '--target', resolve('examples/demo/target.yaml'), '--report-dir', join(dir, 'scenario-report')], tmpdir(), { DEMO_API_URL: url });
+    expect(result.code).toBe(1); expect(result.stderr).toBe('');
+    const report = JSON.parse(await readFile(join(dir, 'scenario-report/scenario.json'), 'utf8')) as { invariants: { name: string; passed: boolean; affectedKeys: string[] }[] };
+    expect(report.invariants.find((i) => i.name === invariant)).toMatchObject({ passed: false, affectedKeys: ['S000801'] });
+  });
+});

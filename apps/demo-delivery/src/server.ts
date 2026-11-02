@@ -2,19 +2,21 @@ import { createServer, type Server, type ServerResponse } from 'node:http';
 import { once } from 'node:events';
 import ExcelJS from 'exceljs';
 import { DEMO_DATE, seedData, type DemoData, type Shipment } from './seed.js';
+import { createOperations } from './operations.js';
 import { createDispatcher } from './dispatcher.js';
 
-export interface DemoBugs { dropLastRow: boolean; roundingPayout: boolean; staleUi: boolean; timezoneShift: boolean }
-export const noBugs: DemoBugs = { dropLastRow: false, roundingPayout: false, staleUi: false, timezoneShift: false };
+export interface DemoBugs { dropLastRow: boolean; roundingPayout: boolean; staleUi: boolean; timezoneShift: boolean; loseOrder: boolean; doubleAssign: boolean }
+export const noBugs: DemoBugs = { dropLastRow: false, roundingPayout: false, staleUi: false, timezoneShift: false, loseOrder: false, doubleAssign: false };
 const exportPageSize = 200;
-const headers = ['Shipment ID', 'Status', 'Driver payout', 'Delivered at'];
+const headers = ['Shipment ID', 'Status', 'Driver payout', 'Delivered at', 'ETA'];
 const chicagoClock = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
 
 export function exportValues(shipment: Shipment, bugs: DemoBugs): string[] {
   // Intentionally incorrect floating-point arithmetic exists only behind the seeded bug.
   const payout = bugs.roundingPayout ? (Math.round(Number(shipment.payout_basis) * 100) / 100).toFixed(2) : shipment.driver_payout;
   const delivered = shipment.delivered_at && bugs.timezoneShift ? chicagoClock.format(new Date(shipment.delivered_at)).replace(' ', 'T') : shipment.delivered_at ?? '';
-  return [shipment.id, shipment.status, payout, delivered];
+  const eta = bugs.timezoneShift ? chicagoClock.format(new Date(shipment.eta)).replace(' ', 'T') : shipment.eta;
+  return [shipment.id, shipment.status, payout, delivered, eta];
 }
 
 function json(response: ServerResponse, status: number, data: unknown): void {
@@ -36,16 +38,19 @@ export function createDemoServer(options: { bugs?: Partial<DemoBugs>; date?: str
   const bugs = { ...noBugs, ...options.bugs };
   const data = seedData(options.date ?? DEMO_DATE);
   const dispatcher = createDispatcher(data, bugs);
-  const collections: Record<string, unknown[]> = {
+  const operations = createOperations(data, bugs);
+  const collections = (): Record<string, unknown[]> => ({
     shipments: data.shipments, orders: data.shipments, drivers: data.drivers, vehicles: data.vehicles,
-    routes: data.routes, notifications: data.notifications,
+    routes: data.routes, notifications: data.notifications, assignments: data.assignments,
+    state: [{ id: 'state', replan_status: data.replan_status, clock: data.clock }],
     payouts: data.shipments.map((s) => ({ id: s.id, driver_id: s.driver_id, amount: s.driver_payout })),
-  };
+  });
   const server = createServer((request, response) => {
     void (async () => {
       const url = new URL(request.url ?? '/', 'http://127.0.0.1');
       if (await dispatcher(request, response, url)) return;
-      if (request.method !== 'GET') { json(response, 405, { error: 'Use GET for API/exports; POST is available only for demo login/logout. Scenario events are planned for M4.' }); return; }
+      if (await operations(request, url.pathname)) { json(response, 200, { synthetic: true, replan_status: data.replan_status, clock: data.clock }); return; }
+      if (request.method !== 'GET') { json(response, 405, { error: 'Use GET for API/exports; Use the configured test-only operational endpoints for scenario events.' }); return; }
       if (url.pathname === '/health') { json(response, 200, { status: 'ok', synthetic: true, date: data.date, bugs }); return; }
       if (url.searchParams.has('date') && url.searchParams.get('date') !== data.date) { json(response, 400, { error: `Synthetic data exists only for ${data.date}; set variables.date or DEMO_DATE accordingly.` }); return; }
       if (url.pathname === '/exports/shipments.csv') {
@@ -67,7 +72,7 @@ export function createDemoServer(options: { bugs?: Partial<DemoBugs>; date?: str
         sheet.commit(); await workbook.commit(); return;
       }
       const match = url.pathname.match(/^\/api\/([a-z]+)(?:\/([^/]+))?$/);
-      const collection = match?.[1] ? collections[match[1]] : undefined;
+      const collection = match?.[1] ? collections()[match[1]] : undefined;
       if (collection) {
         if (match?.[2]) {
           const record = collection.find((item) => typeof item === 'object' && item !== null && 'id' in item && item.id === match[2]);
