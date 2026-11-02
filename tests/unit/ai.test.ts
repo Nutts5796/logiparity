@@ -46,6 +46,14 @@ it('accepts additive report groups and redacts their values and summaries before
   expect(input.report.groups).toHaveLength(1); expect(input.report.groups[0]).toMatchObject({ expected: '[REDACTED]', actual: '[REDACTED]', summary: '[REDACTED] -> [REDACTED]' });
   expect(prepared.messages[1]?.content).not.toContain('@example.test');
 });
+it.each(['missing_stride', 'extra_stride'])('accepts %s groups with the empty record-level field in AI explanations', async (kind) => {
+  const dir = await directory(); const file = join(dir, 'record-groups.json');
+  const findings = ['S000200', 'S000400', 'S000600'].map((key) => ({ type: kind === 'missing_stride' ? 'missing_in_source' : 'extra_in_source', entity: 'shipment', source: 'csv', key, field: '', message: 'Synthetic record difference' }));
+  await writeFile(file, JSON.stringify({ schemaVersion: 1, entities: [], findings, groups: [{ entity: 'shipment', source: 'csv', field: '', count: 3, kind, stride: '200', summary: 'Three record keys follow a stride of 200.' }] }));
+  const prepared = await prepareDraft({ kind: 'explain', report: file }, settings);
+  const input = JSON.parse(prepared.messages[1]!.content) as { report: { groups: { kind: string; field: string }[] }; sampling: { totalFindings: number } };
+  expect(input.report.groups[0]).toMatchObject({ kind, field: '' }); expect(input.sampling.totalFindings).toBe(3);
+});
 it('validates settings, YAML syntax, finite JSON-compatible input and input size without echoing content', async () => {
   const dir = await directory(); const file = join(dir, 'bad.yaml'); await writeFile(file, 'version: 1\nredactFields: [email]\ntimeoutMs: 100\n');
   expect((await loadAiSettings(file)).redactFields).toEqual(['email']);

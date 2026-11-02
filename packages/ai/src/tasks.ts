@@ -13,7 +13,7 @@ const scalar = z.union([z.string(), z.number().finite(), z.boolean(), z.null()])
 const reportSchema = z.object({
   schemaVersion: z.literal(1),
   entities: z.array(z.object({ entity: text, reference: text, counts: z.record(text, z.number().int().nonnegative()), aggregates: z.array(z.object({ name: text, type: z.enum(['count', 'sum']), values: z.record(text, z.union([z.string(), z.number().finite()])), skippedSources: z.array(text) }).strict()).optional() }).strict()),
-  groups: z.array(z.object({ entity: text, source: text, field: text, count: z.number().int().positive(), kind: z.enum(['datetime_offset', 'money_delta', 'value_mapping', 'missing_stride', 'extra_stride']), stride: z.string().optional(), delta: z.string().optional(), expected: scalar.optional(), actual: scalar.optional(), summary: text }).strict()).optional(),
+  groups: z.array(z.object({ entity: text, source: text, field: z.string(), count: z.number().int().positive(), kind: z.enum(['datetime_offset', 'money_delta', 'value_mapping', 'missing_stride', 'extra_stride']), stride: z.string().optional(), delta: z.string().optional(), expected: scalar.optional(), actual: scalar.optional(), summary: text }).strict()).optional(),
   findings: z.array(z.object({ type: z.enum(['missing_in_source', 'extra_in_source', 'field_mismatch', 'aggregate_mismatch', 'duplicate_key', 'source_error']), entity: text, source: text, key: z.string(), field: z.string(), message: z.string(), expected: scalar.optional(), actual: scalar.optional(), blocking: z.boolean().optional(), screenshot: z.string().optional() }).strict()),
 }).strict();
 export async function prepareDraft(task: DraftTask, settings: AiSettings, secrets: readonly string[] = []): Promise<PreparedDraft> {

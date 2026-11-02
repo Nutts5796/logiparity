@@ -60,6 +60,10 @@ export {provider};
   const html = await readFile(join(work, 'report/report.html'), 'utf8');
   assert(html.includes('625 ($6.25)')); assert(html.includes('1793624460000 (2026-11-02T13:01:00Z)'));
   const preview = await cli(['ai', 'scenario', '--from', 'Synthetic van breakdown']); assert.match(preview.stdout, /nothing sent/);
+  const recordGroups = ['missing_stride', 'extra_stride'].map((kind) => ({ entity: 'shipment', source: 'csv', field: '', count: 3, kind, stride: '200', summary: 'Synthetic record stride.' }));
+  const recordFindings = recordGroups.flatMap((group, index) => [200, 400, 600].map((number) => ({ type: index === 0 ? 'missing_in_source' : 'extra_in_source', entity: 'shipment', source: 'csv', key: `${index === 0 ? 'S' : 'X'}${number}`, field: '', message: 'Synthetic record difference' })));
+  await writeFile(join(work, 'record-groups.json'), JSON.stringify({ schemaVersion: 1, entities: [{ entity: 'shipment', reference: 'api', counts: { api: 3, csv: 3 } }], findings: recordFindings, groups: recordGroups }));
+  const explanation = await cli(['ai', 'explain', 'record-groups.json']); assert.match(explanation.stdout, /missing_stride/); assert.match(explanation.stdout, /extra_stride/); assert.match(explanation.stdout, /nothing sent/);
   // Exercise the separately bundled scenario DSL without importing the checkout.
   await writeFile(join(work, 'scenario.yaml'), 'version: 1\nname: invalid target reference\ntarget: demo\nevents: [{step: 1, type: vehicle_breakdown, params: {driver: D17}}]\nwait: {until: {replan_status: completed}}\ninvariants: [no_order_lost]\n');
   let errorCode; try { await cli(['scenario', 'run', 'scenario.yaml', '--target', 'missing-target.yaml']); } catch (error) { errorCode = error.code; } assert.equal(errorCode, 2);
