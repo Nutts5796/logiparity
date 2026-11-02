@@ -8,7 +8,7 @@ function cell(text: string): string {
 }
 
 export function markdownReport(report: Report, presentation: ReportPresentation = {}): string {
-  const lines = ['# LogiParity report', '', `**${verdict(report)}** · ${report.entities.length} entities · ${report.findings.length} findings · ${report.findings.filter(isBlocking).length} blocking`, '', 'Test and staging environments only. Money values show minor units and configured currency equivalents; datetime values are UTC epoch milliseconds.', '', '| Finding type | Total | Blocking |', '| --- | ---: | ---: |'];
+  const lines = ['# LogiParity report', '', `**${verdict(report)}** · ${report.entities.length} entities · ${report.findings.length} findings · ${report.findings.filter(isBlocking).length} blocking`, '', 'Test and staging environments only. Money values show minor units and configured currency equivalents; datetime values show UTC epoch milliseconds and ISO 8601 UTC.', '', '| Finding type | Total | Blocking |', '| --- | ---: | ---: |'];
   for (const type of findingTypes) {
     const findings = report.findings.filter((f) => f.type === type);
     lines.push(`| ${type} | ${findings.length} | ${findings.filter(isBlocking).length} |`);

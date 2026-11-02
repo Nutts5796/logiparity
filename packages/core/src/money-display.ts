@@ -5,6 +5,12 @@ import { displayValue } from './report-utils.js';
 // Presentation context stays outside Report, preserving the JSON wire format.
 export interface ReportPresentation { entities?: readonly EntityConfig[] }
 
+export function formatDatetimeUtc(epoch: number): string | undefined {
+  if (!Number.isSafeInteger(epoch)) return undefined;
+  const date = new Date(epoch);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString().replace(/\.000Z$/, 'Z');
+}
+
 export function formatMoneyMajor(minor: bigint, currency: string, locale = 'en-US'): string {
   const formatter = new Intl.NumberFormat(locale, { style: 'currency', currency });
   const digits = formatter.resolvedOptions().maximumFractionDigits ?? 0;
@@ -31,6 +37,10 @@ export function presentationValue(value: NormalizedValue | undefined, entityName
     moneyField = definition.field;
   }
   const rule = entity?.compare[moneyField];
+  if (!aggregate && rule?.type === 'datetime' && typeof value === 'number') {
+    const iso = formatDatetimeUtc(value);
+    return iso ? `${plain} (${iso})` : plain;
+  }
   if (rule?.type !== 'money' || !rule.currency || (typeof value !== 'bigint' && !(typeof value === 'string' && /^-?\d+$/.test(value)))) return plain;
   return `${plain} (${formatMoneyMajor(BigInt(value), rule.currency, rule.locale)})`;
 }

@@ -57,6 +57,6 @@ export function htmlReport(report: Report, presentation: ReportPresentation = {}
 <noscript>All findings are shown. Enable JavaScript to use filters.</noscript><div class="scroll"><table id="findings"><thead><tr><th>Entity / source</th><th>Record key</th><th>Field</th><th>Finding</th><th>Expected</th><th>Actual</th><th>Explanation</th></tr></thead><tbody>${report.findings.map((f) => findingRow(f, presentation)).join('\n')}</tbody></table></div>
 ${report.findings.length ? '' : '<p class="empty">No findings. All configured comparisons passed.</p>'}<p class="empty" id="no-matches" hidden>No findings match these filters.</p></section>
 ${aggregateRows.length ? `<section class="section" aria-labelledby="aggregate-title"><div class="section-head"><h2 id="aggregate-title">Aggregates</h2><span class="muted">Normalized values by source</span></div><div class="scroll"><table><thead><tr><th>Entity</th><th>Aggregate</th><th>Values by source</th><th>Skipped sources</th></tr></thead><tbody>${aggregateRows.join('\n')}</tbody></table></div></section>` : ''}
-<footer><span>Money: minor units + configured currency equivalent · Dates: UTC epoch milliseconds</span><span>Generated locally by LogiParity · Report schema v${report.schemaVersion}</span></footer>
+<footer><span>Money: minor units + configured currency equivalent · Dates: epoch milliseconds + ISO 8601 UTC</span><span>Generated locally by LogiParity · Report schema v${report.schemaVersion}</span></footer>
 </main><script>${filterScript}</script></body></html>\n`;
 }
