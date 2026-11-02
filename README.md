@@ -4,14 +4,14 @@ Logistics software often shows the same shipments in an API, dispatcher screen a
 
 **Use only in test and staging environments.** Parity reads explicitly configured sources. Scenarios also send configured mutation requests after explicit target consent. It has no telemetry. Optional AI is disabled by default and runs only through explicit AI commands with --send. It does not identify whether a configured hostname is production: you are responsible for choosing a test or staging target. Never put production credentials in this project.
 
-Current status: **M5 / 0.1.0, unreleased**. Implemented: REST, CSV, XLSX, Playwright UI and read-only PostgreSQL sources; normalized record/aggregate comparisons; `logiparity check` and `init`; failure thresholds; five report formats; a synthetic delivery demo with dispatcher UI/login and six switchable bugs; disruption scenarios, invariants and a virtual clock. Optional AI can draft configs/scenarios and explain reports with local payload preview and redaction. No npm package, Docker image or hosted service has been published.
+Current status: **1.0.0 release candidate / M6, unpublished**. Implemented: REST, CSV, XLSX, Playwright UI and read-only PostgreSQL sources; normalized record/aggregate comparisons; `logiparity check` and `init`; failure thresholds; five report formats; a synthetic delivery demo with dispatcher UI/login and six switchable bugs; disruption scenarios, invariants and a virtual clock. Optional AI can draft configs/scenarios and explain reports with local payload preview and redaction. The installable npm tarball, Docker build and CI/release templates are prepared locally. No npm package, Docker image or hosted service has been published.
 
-## Quickstart from this checkout
+## Five-minute quickstart from source
 
-Install Node.js 20 or 22 and npm. All commands below start in the repository root. The demo uses only synthetic data: 55 drivers, 55 vehicles and 2,750 orders for `2026-11-02`.
+Install Node.js 20 or 22 and npm. Start from a clean checkout of the owner-provided source; all commands below run in its repository root. Browser/PostgreSQL tooling is unnecessary for this first API/file report. Dependency downloads vary by network; the [release guide](docs/release.md) describes the measured clean-source check. The demo uses only synthetic data: 55 drivers, 55 vehicles and 2,750 orders for `2026-11-02`.
 
 ```sh
-npm ci
+npm ci --ignore-scripts
 npm run demo
 ```
 
@@ -20,7 +20,6 @@ Leave the demo running. In another terminal at the repository root:
 ```sh
 export DEMO_API_URL=http://127.0.0.1:3010
 npm run demo:export
-npm run build
 ./node_modules/.bin/logiparity check --config examples/demo/parity.yaml
 ```
 
@@ -39,6 +38,25 @@ Then repeat `npm run demo:export` and the check command. With all six bugs enabl
 The HTML report is self-contained: entity/type filters, record search and styles need no CDN or service. All findings remain visible without JavaScript. [Report formats and CI interpretation](docs/report-formats.md) describe the output files.
 
 The demo binds only to `127.0.0.1`. Set `DEMO_PORT` to change its port; set `DEMO_DATE` when starting/exporting to change the synthetic day, and update `variables.date` to match. API/exports need no credentials. The dispatcher at `/dispatcher` uses the public synthetic account **dispatcher / demo-password**, with a one-hour session. This demonstration login is not production authentication.
+
+## Install a local release artifact or use Docker
+
+The candidate is not published. To inspect and produce its local npm artifact:
+
+```sh
+npm pack --dry-run
+mkdir -p output/release
+npm pack --pack-destination output/release
+```
+
+`logiparity-1.0.0.tgz` bundles the private compiled workspaces and locked runtime dependencies/licenses; private packages do not require separate registry publication. Consumer libraries/types are available through `logiparity/core`, `logiparity/adapters`, `logiparity/scenarios` and `logiparity/ai`. Install that tarball in another directory with `npm install /absolute/path/to/logiparity-1.0.0.tgz`, then run `./node_modules/.bin/logiparity --help`. Packaging excludes saved auth state, generated exports/reports and first-party tests. Chromium is a separate explicit install for UI sources.
+
+```sh
+docker build --tag logiparity:1.0.0 .
+docker run --rm --network=none logiparity:1.0.0 --help
+```
+
+The non-root image includes matching Chromium. For mounted staging configurations, networking and writable report paths, see [Docker usage](docs/docker.md). Read the [owner release guide](docs/release.md) before publication; these commands build local artifacts only.
 
 ## Include the dispatcher UI
 
@@ -139,12 +157,20 @@ This writes a commented REST/CSV example with aggregates and all report outputs.
 - [Adapter extension interface](docs/writing-adapters.md)
 - [JSON report schema](docs/report-schema.md)
 - [HTML, JUnit and Markdown output](docs/report-formats.md)
+- [CI guide](docs/ci.md)
+- [Docker usage](docs/docker.md)
+- [FAQ](docs/faq.md)
+- [Owner release guide](docs/release.md)
 - [Dependency and license inventory](docs/dependencies.md)
 - [Milestone results and limitations](MILESTONE_REPORT.md)
 
 REST supports page, offset, cursor and Link pagination, timeouts and bounded retries. Redirects and cross-origin pagination links are rejected. JSONPath support deliberately covers properties, quoted properties, array indexes and wildcards; expressions and filters are unsupported. Locale parsing accepts Latin digits and locale-specific separators/grouping.
 
 XLSX formulas require a cached scalar result; LogiParity never executes spreadsheet formulas. Encrypted workbooks and alternate nonstandard worksheet entry names are unsupported. Reports may contain compared business values; keep them in your test/staging CI artifacts with appropriate access controls.
+
+## CI and troubleshooting
+
+Use the [GitHub Actions](templates/github-actions.yml) or [GitLab CI](templates/gitlab-ci.yml) consumer template after the owner publishes the package, or adapt it to the verified local tarball. Both run a configured staging comparison, preserve artifacts after failure and keep exit 1/2 as failed jobs. Prepare same-snapshot exports beforehand. The [CI guide](docs/ci.md) covers credentials, UI/SQL prerequisites, scenario jobs and JUnit interpretation; the [FAQ](docs/faq.md) addresses common data/timezone/auth questions.
 
 ## Development and CI
 
@@ -154,16 +180,20 @@ npm run typecheck
 npm test
 npm run test:e2e
 npm run build
+npm run check:docs
+npm run test:package
+npm run test:quickstart
+npm run test:docker
 ```
 
 Unit/adapter tests use Vitest, Playwright, local HTTP fixtures and real PostgreSQL. Core line coverage is enforced at 85%. Install Chromium (`npx playwright install chromium`) and `xmllint` (on Debian/Ubuntu: libxml2-utils). PostgreSQL tests auto-create and remove an isolated temporary cluster when initdb/pg_ctl are on PATH; `LOGIPARITY_PG_BIN` can point to their directory. Alternatively set `LOGIPARITY_TEST_DATABASE_URL` to a disposable **loopback database named logiparity_test**; fixtures refuse other hosts/database names and isolate data in random schemas. Never point fixture setup at business data.
 
-E2E checks verify all five healthy scenarios, each implemented bug on/off, exact affected keys, read-only SQL, screenshots, failure policies, init and monetary presentation. CI runs Node 20/22, installs Chromium/XML tooling and uses an ephemeral PostgreSQL 16 service. Local validation uses PostgreSQL 14.16. The committed workflow has not yet run on GitHub for this repository.
+E2E checks verify all five healthy scenarios, each implemented bug on/off, exact affected keys, read-only SQL, screenshots, failure policies, init and monetary presentation. CI runs Node 20/22, installs Chromium/XML tooling and uses an ephemeral PostgreSQL 16 service. Local validation uses PostgreSQL 14.16. The workflow also checks the installable tarball, clean-source quickstart and Docker image; a remote GitHub run is not claimed before the owner creates/pushes the repository.
 
-Run `node scripts/dependencies.mjs` after changing runtime dependencies and review [SECURITY.md](SECURITY.md) for dependency limitations. Contribution guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md).
+Run `node scripts/dependencies.mjs` after changing runtime dependencies and review [SECURITY.md](SECURITY.md) for dependency limitations. Contribution guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md), with the [Contributor Covenant 2.1](CODE_OF_CONDUCT.md) and issue/PR templates. Five suggested starter issues/labels are listed in the roadmap; they have not been created remotely.
 
 ## Roadmap
 
-M1–M4 were approved by the owner; M5 awaits review. M5 implements optional AI drafts with preview/redaction and mock-provider tests. M6: complete documentation, CI templates, Docker and release packaging. See [docs/roadmap.md](docs/roadmap.md). Each milestone requires owner review before the next begins.
+M1–M5 were approved by the owner; M6 is ready for owner review. The local 1.0.0 candidate includes complete documentation, CI templates, Docker and release packaging. Publication remains an owner action after review. See [docs/roadmap.md](docs/roadmap.md). Each milestone requires owner review before the next begins.
 
 MIT © Sergei Orekhovskii.

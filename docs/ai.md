@@ -96,7 +96,7 @@ The serialized provider body is limited to 256 KiB and response bytes to 1 MiB, 
 
 ## Provider interface and compatibility
 
-`@logiparity/ai` exports `AiProvider` with `complete(messages): Promise<string>`, `prepareDraft`, `prepareDestination` and `generateDraft`. A custom provider can be injected into the library; the CLI uses `ChatCompletionsProvider`. The interface has no provider SDK dependency.
+The installed package exposes `logiparity/ai` (source workspace: `@logiparity/ai`), which exports `AiProvider` with `complete(messages): Promise<string>`, `prepareDraft`, `prepareDestination` and `generateDraft`. A custom provider can be injected into the library; the CLI uses `ChatCompletionsProvider`. The interface has no provider SDK dependency.
 
 The built-in adapter sends only `model`, system/user `messages` and `stream: false`, plus a Bearer header. It expects a nonempty string at `choices[0].message.content`, `finish_reason: stop`, and no refusal/tool calls. It follows the documented [Chat Completions request/response contract](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create). Providers/models that do not support this text/system-message contract need a custom library provider. Vendor extensions, Responses API, tools, streaming UI, model discovery and automatic provider failover are outside M5.
 

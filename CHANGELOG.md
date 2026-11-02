@@ -4,7 +4,15 @@ This file follows Keep a Changelog. Versions are unreleased until explicitly pub
 
 ## [Unreleased]
 
+No changes after the 1.0.0 candidate below.
+
+## [1.0.0] - 2026-11-02 (local release candidate; unpublished)
+
 ### Added
+
+- M6 single-package release bundle with compiled private workspaces, runtime licenses and empty-cache offline installation checks.
+- Non-root Docker image with matching Chromium, CI consumer templates and expanded Node 20/22 verification.
+- Complete user/release/CI/FAQ guides, Contributor Covenant 2.1 and GitHub issue/pull-request templates.
 
 - M5 optional AI suggest-config/scenario/explain commands with local previews, explicit sends, provider-agnostic injection and a bounded chat-completions adapter.
 - Structured redaction including finding values/message aliases, disclosed report sampling, schema-checked new draft files and mock-only AI tests; normal commands stay independent of AI.

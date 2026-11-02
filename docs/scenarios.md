@@ -114,7 +114,7 @@ invariants:
 TypeScript/JavaScript modules must export a default function. Jiti 2.7.0 supplies TypeScript loading on both supported Node versions. Modules are imported during preflight and may execute top-level code. The function receives a cloned snapshot and must return (or resolve) exactly an `InvariantResult`; thrown exceptions or malformed results exit 2.
 
 ```ts
-import type { InvariantState, InvariantResult } from '@logiparity/scenarios';
+import type { InvariantState, InvariantResult } from 'logiparity/scenarios';
 export default function check(state: InvariantState): InvariantResult {
   const orders = state.after.orders ?? [];
   return {

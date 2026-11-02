@@ -26,3 +26,7 @@ Adding Jiti 2.7.0 (MIT, no external dependencies) for explicitly configured Type
 ## M5 recheck (2026-11-02)
 
 The AI workspace reuses existing pinned yaml/zod/core/scenarios dependencies and native fetch; no external package version or SDK was added. The runtime inventory remains 109 versions. Online npm audit remains 17 moderate affected-package entries overall and 7 runtime entries, zero high/critical, with unchanged affected package names. These are observed advisory counts, not remediation claims.
+
+## M6 release-candidate recheck (2026-11-02)
+
+Bundling the private workspaces for the single 1.0.0 CLI artifact adds no external package version. The regenerated inventory remains 109 external runtime versions. Online audit remains 17 moderate affected-package entries overall, 7 runtime, zero high/critical; affected names are unchanged. The bundle preserves the tested unzipper/uuid overrides. Before publication, the owner must decide how to address or document the remaining chain and review the final container image separately.

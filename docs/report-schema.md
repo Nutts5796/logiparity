@@ -1,4 +1,4 @@
-# JSON report schema, version 1 (M3)
+# JSON report schema, version 1
 
 The root contains `schemaVersion: 1`, `entities` and `findings`. No timestamps, absolute local filenames on successful comparisons, or random run IDs are added, allowing byte-stable output for the same normalized data/configuration. Source errors describe the observed input location and may naturally vary with row order or environment. Object properties follow configuration order; findings are sorted with binary string ordering by entity, key, field, source, type. Entity summaries sort by entity name.
 

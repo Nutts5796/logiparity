@@ -365,9 +365,9 @@ Jiti adds one pinned external runtime package with MIT metadata and no external 
 5. Post-scenario Parity reads API plus fresh CSV/XLSX in the shipped mapping. Existing UI/SQL adapters can be configured, with their documented authentication/read-only constraints. Scenarios do not provision external database fixtures or synthesize UI authentication.
 6. Report outputs contain synthetic/test business values and affected IDs. Existing dependency advisories are unchanged. Chromium/XML/PostgreSQL prerequisites remain required for the complete local suite. Publication, npm/Docker packaging and final release review remain M6.
 
-## M5 — Implemented, awaiting owner review
+## M5 — Approved by owner
 
-Date: 2026-11-02. Version remains 0.1.0, unreleased. The owner approved M4 and explicitly authorized M5. **M5 acceptance checks pass; work stops before M6.** No live AI provider was called, no real credentials were added, and no push, release, publication or git identity change was performed. M6 packaging/templates/release work has not started.
+Date: 2026-11-02. Version remains 0.1.0, unreleased. The owner approved M4 and explicitly authorized M5. M5 acceptance checks passed and the original delivery stopped at its review gate. The owner subsequently approved M5 and explicitly authorized M6 on 2026-11-02. No live AI provider was called, no real credentials were added, and no push, release, publication or git identity change was performed. M6 packaging/templates/release work has not started.
 
 ### Delivered
 
@@ -443,3 +443,90 @@ A separate manual loopback mock exercise also ran all three real CLI commands wi
 5. Explain includes a disclosed bounded sample in report order, not a statistically representative/full finding list. It accepts Parity v1 report.json; for M4 use parity/report.json. OpenAPI validation is lightweight and does not resolve $ref. Input/request/response limits and conventional URL-placeholder validation are documented in docs/ai.md.
 6. --send authorizes that invocation after printing its full payload; there is no interactive approval or persisted preview token. Inputs/settings can change between a preview and a send invocation. All required provider variables must be present; their presence alone never invokes AI.
 7. Runtime license inventory remains 109 package versions with declared licenses. Online audit is unchanged: 17 moderate affected-package entries overall, 7 moderate runtime entries, zero high/critical and no new affected package names. Existing ExcelJS/glob/minimatch advisory limitations remain in docs/dependency-audit.md. No incompatible forced updates were applied.
+
+## M6 — Local 1.0.0 candidate implemented; owner release review pending
+
+Date: 2026-11-02. The owner approved M5 and authorized M6. Version 1.0.0 is a **local, unpublished release candidate**. All implementation milestones M1–M6 are delivered; publication is a separate owner decision. No push, repository creation, tag, GitHub release, npm/Docker publication, registry login, real AI call, production target or git identity change was performed.
+
+### Final feature summary
+
+| Area | Delivered behavior |
+| --- | --- |
+| Parity | Shared-key REST, CSV, XLSX, authenticated Playwright table and restricted read-only PostgreSQL comparisons; missing/extra/duplicate/field/aggregate/source findings; exact money and UTC datetimes; configurable normalization/tolerances/failure thresholds. |
+| Reports | Console, self-contained filterable HTML, JSON v1, Markdown and independently schema-validated JUnit. Human reports retain currency equivalents and ISO UTC beside normalized minor units/epochs; JSON remains unchanged. |
+| Scenarios | Ordered mapped HTTP events, adapter state snapshots, completion polling/virtual clock, six built-in and custom TypeScript/JSONPath checks, affected keys/explanations and fresh post-scenario Parity. |
+| Synthetic demo | 55 drivers/vehicles, 2,750 daily orders, dispatcher/login, daily exports, operational endpoints/replanning, notifications and all six independently reproducible bug flags. Five healthy disruption examples pass. |
+| Optional AI | Preview-first config/scenario/explanation drafts, explicit provider configuration/send, structured redaction and bounded payloads, schema checks and exclusive marked output files; no automatic execution or normal-command AI hook. Tests use mocks only. |
+| Distribution | One standalone logiparity@1.0.0 artifact bundling private compiled workspaces and locked runtime dependencies/licenses; public library/type subpaths; non-root Docker image with matching Chromium and digest-pinned Node 22.23.4/Debian base. |
+| Project materials | MIT software license, Contributor Covenant 2.1 with separate document attribution/license, issue/PR templates, five suggested starter issues/labels, complete configuration/scenario/adapter/report/AI/CI/Docker/FAQ/release guides and real synthetic UI/report captures. |
+
+### M6 packaging, documentation and CI changes
+
+- Aligned workspace versions to 1.0.0 and made the root logiparity manifest the single public candidate. Internal @logiparity packages remain private and are bundled; the CLI workspace is @logiparity/cli. The root executable works in an installed consumer without checkout-relative imports or private registry access.
+- Added explicit first-party file allowlists and package inspection checks. An initial broad examples include exposed generated demo auth/exports in a dry-run; the final allowlist excludes those paths, and the smoke check rejects their inclusion. No auth file contents were logged or published. First-party source/tests, dev dependencies, environment files and generated artifacts are excluded. Bundled third-party files/licenses are retained as upstream packages ship them.
+- Added logiparity/core, logiparity/adapters, logiparity/scenarios and logiparity/ai public API/type bridges. Package smoke verifies their native ESM imports and compiles consumer declarations with TypeScript NodeNext, outside the checkout.
+- Added prepack build and test:package, test:quickstart, test:docker, check:docs scripts. Package acceptance performs dry-run inspection, real packing, an empty-cache offline consumer install, help/init/mismatch reports, exact money/UTC presentation and offline AI. New checks are separate acceptance scripts; the existing Vitest counts are not inflated for documentation changes.
+- Added a multi-stage Dockerfile, context exclusions, fixed non-root UID 1000 and build-time-only Chromium/system dependency installation. The runtime installs the exact local npm tarball offline. Base reference: node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da. No credentials or host auth state are copied.
+- Expanded the repository Node 20/22 workflow with package/quickstart/docs checks and retained verification receipts, plus a separate Docker job. Official checkout/setup-node/upload-artifact revisions are pinned by release commit. Consumer GitHub/GitLab templates retain artifacts after findings/runtime failures and do not publish or silently ignore failures. Consumer registry installation is explicitly contingent on owner publication.
+- Completed the 1.0.0 candidate changelog, README path to a finished report, API/CI/Docker/FAQ/release references, contributor instructions and Code of Conduct. Reporting contact text honestly requires a private channel agreed with Sergei Orekhovskii; a confidential mailbox has not been invented. The owner must establish it before public community operation.
+
+### Verification commands and observed results
+
+Run from the repository root. Chromium, xmllint and disposable PostgreSQL prerequisites remain as documented; Docker checks require a local engine:
+
+```sh
+npm ci --ignore-scripts
+npx playwright install chromium
+npm run lint
+npm run typecheck
+npm test
+npm run test:e2e
+npm run check:docs
+npm run test:package
+npm run test:quickstart
+npm run test:docker
+npm pack --dry-run
+node scripts/dependencies.mjs
+npm audit --json
+npm audit --omit=dev --json
+git diff --check
+```
+
+Complete Node pipelines ran sequentially with PATH pointing to /private/tmp/logiparity-node20/node_modules/.bin and the corresponding node22 directory, avoiding coverage collisions. E2E builds first. Package/quickstart acceptance used actual subprocesses and source copies outside the checkout. Public API/type bridge checks were repeated on both versions after being added.
+
+| Check | Node 20.20.2 | Node 22.23.4 |
+| --- | --- | --- |
+| lint / strict typecheck / build | Pass | Pass |
+| Vitest unit/adapter | 205 pass, 18 files | 205 pass, 18 files |
+| CLI/demo e2e | 62 pass, 3 files | 62 pass, 3 files |
+| core lines | 100% (340/340) | 100% (340/340) |
+| statements / branches / functions | 98.97% / 94.72% / 98.97% | 98.97% / 94.72% / 98.97% |
+| standalone pack + empty-cache offline install + public ESM/types + CLI reports | Pass | Pass |
+| clean-source quickstart, using local npm cache | 7.42 seconds | 7.84 seconds |
+
+No tests are skipped. Core retains its 85% enforced line threshold; these percentages do not claim full-project coverage. Existing 100,000-row functional size checks, bug on/off matrices, five healthy scenarios, independent JUnit validation, real Chromium and isolated PostgreSQL 14.16 tests remain passing. Hosted CI is configured for PostgreSQL 16 and Linux, but no remote success is claimed.
+
+A separate Node 22 quickstart with a new empty npm cache downloaded dependencies and finished in **15.33 seconds**, producing zero findings for 2,750 API/XLSX/CSV records and all four report files. Command: `LOGIPARITY_QUICKSTART_OUTPUT=output/release-checks/quickstart-cold-cache.json npm_config_cache=/private/tmp/logiparity-m6-cold-cache npm run test:quickstart`. This measures a clean local source copy/install/build/demo/export/check on this machine, not a public-network or cross-machine performance guarantee. A remote git clone cannot be exercised before the owner creates/pushes the repository; the source-copy check uses the exact nonignored git source file set and no existing node_modules/dist/auth/reports.
+
+Documentation validation checks local links and YAML parsing, plus completed Covenant 2.1 contact/adaptation. Both GitHub workflows additionally pass checksum-verified actionlint 1.7.12. GitLab syntax is parsed/reviewed against its documentation; a real GitLab hosted pipeline/lint service was not used. Screenshots in docs/images remain actual captures of the synthetic dispatcher, Parity money/UTC findings and scenario keys, not generated mockups.
+
+### Docker and artifact evidence
+
+The host had stale Docker Desktop symlinks and no live engine. To complete the requested build, a disposable Lima 2.2.1 VZ VM ran only this task's Docker workload, with no host directory mounts and no user SSH-key loading. Its config and Docker client context were isolated under /private/tmp; default Docker contexts were not changed. Official Lima/Buildx/actionlint downloads were checked against published checksums/digests. Temporary VM, daemon, forwarding processes and task-owned cache files were stopped/removed after artifact export.
+
+The image was built and smoke-tested on **linux/arm64** with Docker 29.9.2 and Buildx 0.38.1. Acceptance containers had --network=none: help/version, UID 1000, actual headless Chromium, mismatch exit 1, JSON/HTML/Markdown/JUnit files, `625 ($6.25)`, `1793624460000 (2026-11-02T13:01:00Z)` and offline AI preview passed. No privileged flag, host credential mount or application network target was used. The Docker base/browser/npm downloads occur only during build. No additional architecture, vulnerability scan or remote registry pull/push is claimed.
+
+Ignored owner-review artifacts live under output/release/ and output/release-checks/: the local logiparity-1.0.0.tgz, linux-arm64 Docker save archive, package file-list/consumer receipts, quickstart timing receipts and final artifact hashes/image metadata. Hashes live in external receipts rather than inside the tarball that contains this report. The package includes 107 bundled package-name entries, while the license inventory records 109 distinct external runtime versions including nested versions; these counts describe different sets. The final dry-run rejects sensitive/generated first-party paths and an empty-cache offline install succeeds.
+
+### Known limitations and owner release checklist
+
+1. **Review the complete local candidate and evidence before publication.** M1–M5 owner approvals do not authorize repository creation, pushes, tags, registry logins or releases. Version 1.0.0 is not asserted to exist in npm or a Docker registry. A read-only npm metadata query returned E404 during this check; that is not a package-name reservation or future ownership guarantee.
+2. **Dependency decision:** online audit remains 17 moderate affected-package entries overall, 7 runtime, zero high/critical, with unchanged affected names. The 109-version external runtime inventory has declared licenses; MIT software and third-party notices remain included. Decide how to resolve or document the existing ExcelJS/glob/minimatch chain before public release; no incompatible forced update was applied. The final image also needs the owner's platform/security review and scan.
+3. **Operational limits remain documented:** test/staging only; scenario mutations have no rollback/retry; custom modules are trusted Node code; UI snapshots exclude virtualization/service workers/WebSockets; SQL uses a restricted grammar and a dedicated read-only role, not a universal privileged-object sandbox; snapshot and size checks are not routing/performance proofs.
+4. **AI:** no live provider/model quality was tested. Preview/redaction is structured masking, not general PII detection; drafts need review and never execute automatically. Report explanations contain a disclosed bounded sample. CI uses synthetic mocks only.
+5. **Platform/CI/community decisions:** Docker was verified only on linux/arm64; verify linux/amd64/other intended architectures before claiming them. Hosted GitHub/GitLab jobs have not run. Establish confidential conduct/security contacts before public community operation, and review the intended GitHub/npm/Docker ownership/access settings.
+6. **Create the repository and run remote CI:** owner creates Nutts5796/logiparity, adds the intended remote, pushes the reviewed branch and inspects actual hosted checks. Optionally create the suggested good first issue/help wanted labels and five starter issues from docs/roadmap.md. No issue, label or release was created remotely by this task.
+7. **Approve exact artifacts, then tag/release:** confirm final 1.0.0 changelog/date, dependency decisions, MIT/notice inventory, reviewed commit and artifact hashes. Owner creates/pushes v1.0.0 and the GitHub release for that exact candidate. Do not substitute an unverified rebuild between review and publication.
+8. **Owner publishes npm and Docker:** authenticate through the owner's own approved process, publish the reviewed tarball under logiparity, and tag/push the reviewed image to the owner-selected registry. Internal private packages remain bundled and unpublished separately. Test a fresh registry installation/pull and record published digests before announcing availability or adding release links/badges.
+
+The implementation work stops here for final owner review. Detailed reproduction and owner-only publication guidance is in docs/release.md.
