@@ -9,7 +9,7 @@
    git push origin v1.0.1
    ```
 
-   [The release workflow](../.github/workflows/release.yml) runs the reusable CI once for the tag; ordinary CI push triggers accept branches only. The release job uses Node 22 and npm 11.6.0, with `id-token: write` for npm OIDC, `contents: write` for GitHub releases and `packages: write` for GHCR. npm trusted publishing requires npm 11.5.1+ and Node 22.14+.
+   [The release workflow](https://github.com/Nutts5796/logiparity/blob/main/.github/workflows/release.yml) runs the reusable CI once for the tag; ordinary CI push triggers accept branches only. The release job uses Node 22 and npm 11.6.0, with `id-token: write` for npm OIDC, `contents: write` for GitHub releases and `packages: write` for GHCR. npm trusted publishing requires npm 11.5.1+ and Node 22.14+.
 
    `npm run release:prepare` builds the tarball, writes its SHA-256 file and a CycloneDX SBOM from an empty-cache offline consumer installation. The SBOM names the installed LogiParity artifact as root and lists bundled runtime dependencies, including the private ExcelJS package; development tooling is excluded. You can run this command locally without publishing anything.
 
