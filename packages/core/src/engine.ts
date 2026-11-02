@@ -1,6 +1,8 @@
 import { errorText, type EntityConfig } from './config.js';
 import { equalValues, normalize } from './normalize.js';
-import type { Finding, NormalizedValue, Report, SourceReader } from './types.js';
+import type { EntitySummary, Finding, NormalizedValue, Report, SourceReader } from './types.js';
+import { aggregateEqual, measureAggregate } from './aggregates.js';
+import { applyFailurePolicies } from './policy.js';
 
 type Row = Record<string, NormalizedValue>;
 const order = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
@@ -14,7 +16,8 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
   for (const entity of entities) {
     const sources = Object.entries(entity.sources);
     const reference = sources[0]?.[0] ?? '';
-    const summary = { entity: entity.name, reference, counts: {} as Record<string, number> };
+    const summary: EntitySummary = { entity: entity.name, reference, counts: {} };
+    if (entity.aggregates.length) summary.aggregates = entity.aggregates.map((a) => ({ name: a.name, type: a.type, values: Object.create(null) as Record<string, number | bigint>, skippedSources: [] }));
     report.entities.push(summary);
     let baseline: Map<string, Row> | undefined;
     for (const [source, config] of sources) {
@@ -22,6 +25,7 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
       const duplicates: Finding[] = [];
       let rowNumber = 0;
       let context = '';
+      const measurements = new Map<string, number | bigint | undefined>();
       try {
         for await (const raw of read(source, config)) {
           rowNumber++;
@@ -41,6 +45,10 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
           }
           rows.set(key, row);
         }
+        for (const aggregate of entity.aggregates) {
+          context = `aggregate ${aggregate.name}`;
+          measurements.set(aggregate.name, measureAggregate(aggregate, entity, source, config, rows));
+        }
         summary.counts[source] = rowNumber;
       } catch (error) {
         report.findings.push({ type: 'source_error', entity: entity.name, source, key: '', field: '', message: `${entity.name}/${source}${context ? ` (${context})` : ''}: ${errorText(error)} Check this source's configuration and data.` });
@@ -48,6 +56,15 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
         continue;
       }
       report.findings.push(...duplicates);
+      for (const [index, aggregate] of entity.aggregates.entries()) {
+        const result = summary.aggregates?.[index];
+        if (!result) continue;
+        const actual = measurements.get(aggregate.name);
+        if (actual === undefined) { result.skippedSources.push(source); continue; }
+        result.values[source] = actual;
+        const expected = result.values[reference];
+        if (source !== reference && expected !== undefined && !aggregateEqual(expected, actual, aggregate)) report.findings.push({ type: 'aggregate_mismatch', entity: entity.name, source, key: '', field: aggregate.name, expected, actual, message: `${source}: aggregate ${aggregate.name} differs from reference ${reference}; check row filtering, missing records and summed values.` });
+      }
       if (source === reference) { baseline = rows; continue; }
       if (!baseline) continue;
       for (const [key, expected] of baseline) {
@@ -68,5 +85,6 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
   }
   sortFindings(report.findings);
   report.entities.sort((a, b) => order(a.entity, b.entity));
+  applyFailurePolicies(report, entities);
   return report;
 }

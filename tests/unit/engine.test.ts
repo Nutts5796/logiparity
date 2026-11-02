@@ -63,8 +63,10 @@ describe('comparison engine', () => {
     const read: SourceReader = async function* () {
       for (let i = 0; i < 100000; i++) yield { id: String(i), payout: '9007199254740993.01' };
     };
-    const report = await compareEntities([entity], read);
+    const largeEntity = entitySchema.parse({ ...entity, aggregates: [{ name: 'count', type: 'count' }, { name: 'payout', type: 'sum', field: 'payout' }] });
+    const report = await compareEntities([largeEntity], read);
     expect(report.findings).toEqual([]);
     expect(report.entities[0]?.counts).toEqual({ api: 100000, export: 100000 });
+    expect(report.entities[0]?.aggregates?.[1]?.values).toEqual({ api: 90071992547409930100000n, export: 90071992547409930100000n });
   }, 30000);
 });

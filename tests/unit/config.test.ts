@@ -73,7 +73,8 @@ describe('configuration', () => {
     const file = await configFile(valid + 'environment: production\n');
     await expect(loadConfig(file, { API_URL: 'http://localhost' })).rejects.toThrow('environment');
     const { config } = await loadConfig(await configFile(valid), { API_URL: 'http://localhost' });
-    expect(configSchema.safeParse({ ...config, report: { outputs: ['html'] } }).success).toBe(false);
+    expect(configSchema.safeParse({ ...config, report: { outputs: ['html', 'junit', 'markdown'] } }).success).toBe(true);
+    expect(configSchema.safeParse({ ...config, report: { outputs: ['pdf'] } }).success).toBe(false);
     expect(configSchema.safeParse({ ...config, entities: [...config.entities, ...config.entities] }).success).toBe(false);
     await expect(loadConfig(await configFile(valid.replace('baseUrl: ${API_URL}', 'baseUrl: ftp://localhost')), {})).rejects.toThrow('HTTP(S)');
     await expect(loadConfig(await configFile(valid.replace('path: /api/shipments?date={{date}}', 'path: /api\n        auth: {type: bearer, token: SECRET}')), { API_URL: 'http://localhost' })).rejects.toThrow('tokenEnv');

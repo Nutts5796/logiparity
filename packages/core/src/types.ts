@@ -10,7 +10,10 @@ export type NormalizedValue = string | number | bigint | boolean | null;
 export interface Finding {
   type: FindingType; entity: string; source: string; key: string; field: string;
   message: string; expected?: NormalizedValue; actual?: NormalizedValue;
+  blocking?: boolean;
+  screenshot?: string;
 }
-export interface EntitySummary { entity: string; reference: string; counts: Record<string, number> }
+export interface AggregateResult { name: string; type: 'count' | 'sum'; values: Record<string, number | bigint>; skippedSources: string[] }
+export interface EntitySummary { entity: string; reference: string; counts: Record<string, number>; aggregates?: AggregateResult[] }
 export interface Report { schemaVersion: 1; findings: Finding[]; entities: EntitySummary[] }
 export type SourceReader = (source: string, config: SourceConfig) => AsyncIterable<DataRow>;
