@@ -11,6 +11,9 @@
       ],
       "@logiparity/scenarios": [
         "packages/scenarios/src/index.ts"
+      ],
+      "@logiparity/ai": [
+        "packages/ai/src/index.ts"
       ]
     }
   },
