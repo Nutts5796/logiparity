@@ -19,7 +19,7 @@ const filterScript = `(() => {
       row.hidden = (entity.value !== '' && row.dataset.entity !== entity.value) || (type.value !== '' && row.dataset.type !== type.value) || (query !== '' && !row.textContent.toLowerCase().includes(query));
       if (!row.hidden) visible++;
     }
-    count.textContent = 'Showing ' + visible + ' of ' + rows.length + ' findings';
+    count.textContent = 'Showing ' + visible + ' of ' + rows.length + (rows.length === 1 ? ' finding' : ' findings');
     empty.hidden = visible !== 0 || rows.length === 0;
   }
   entity.addEventListener('change', filter);
@@ -57,7 +57,7 @@ export function htmlReport(report: Report, presentation: ReportPresentation = {}
 <div class="cards"><div class="card status"><span class="label">Check result</span><strong class="number">${status}</strong></div><div class="card"><span class="label">Findings</span><strong class="number">${report.findings.length}</strong></div><div class="card"><span class="label">Blocking</span><strong class="number">${blocking}</strong></div><div class="card"><span class="label">Entities</span><strong class="number">${report.entities.length}</strong></div></div>
 ${groups.length ? `<section class="section" aria-labelledby="groups-title"><div class="section-head"><h2 id="groups-title">Patterns to investigate</h2></div><ul>${groups.map((g) => `<li><strong>${escape(g.entity)}</strong>: ${escape(g.summary)}</li>`).join('')}</ul></section>` : ''}
 <section class="section" aria-labelledby="counts-title"><div class="section-head"><h2 id="counts-title">Finding counts</h2></div><div class="scroll"><table id="finding-counts"><thead><tr><th>Finding type</th><th>Total</th><th>Blocking</th></tr></thead><tbody>${countRows}</tbody></table></div></section>
-<section class="section" aria-labelledby="findings-title"><div class="section-head"><h2 id="findings-title">Findings</h2><span class="muted" id="visible-count" aria-live="polite">Showing ${report.findings.length} of ${report.findings.length} findings</span></div>
+<section class="section" aria-labelledby="findings-title"><div class="section-head"><h2 id="findings-title">Findings</h2><span class="muted" id="visible-count" aria-live="polite">Showing ${report.findings.length} of ${report.findings.length} ${report.findings.length === 1 ? 'finding' : 'findings'}</span></div>
 <div class="filters"><div class="filter-field"><label for="entity-filter">Entity</label><select id="entity-filter"><option value="">All entities</option>${options(entityNames(report))}</select></div><div class="filter-field"><label for="type-filter">Finding type</label><select id="type-filter"><option value="">All finding types</option>${options(findingTypes)}</select></div><div class="filter-field"><label for="search">Search records</label><input id="search" type="search" placeholder="Key, source or explanation"></div></div>
 <noscript>All findings are shown. Enable JavaScript to use filters.</noscript><div class="scroll"><table id="findings"><thead><tr><th>Entity / source</th><th>Record key</th><th>Field</th><th>Finding</th><th>Expected</th><th>Actual</th><th>Explanation</th></tr></thead><tbody>${report.findings.map((f) => findingRow(f, presentation)).join('\n')}</tbody></table></div>
 ${report.findings.length ? '' : '<p class="empty">No findings. All configured comparisons passed.</p>'}<p class="empty" id="no-matches" hidden>No findings match these filters.</p></section>

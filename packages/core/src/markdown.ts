@@ -9,7 +9,7 @@ function cell(text: string): string {
 }
 
 export function markdownReport(report: Report, presentation: ReportPresentation = {}): string {
-  const lines = ['# LogiParity report', '', `**${verdict(report)}** · ${report.entities.length} entities · ${report.findings.length} findings · ${report.findings.filter(isBlocking).length} blocking`, '', 'Test and staging environments only. Money values show minor units and configured currency equivalents; datetime values show UTC epoch milliseconds and ISO 8601 UTC.', '', '| Finding type | Total | Blocking |', '| --- | ---: | ---: |'];
+  const lines = ['# LogiParity report', '', `**${verdict(report)}** · ${report.entities.length} ${report.entities.length === 1 ? 'entity' : 'entities'} · ${report.findings.length} ${report.findings.length === 1 ? 'finding' : 'findings'} · ${report.findings.filter(isBlocking).length} blocking`, '', 'Test and staging environments only. Money values show minor units and configured currency equivalents; datetime values show UTC epoch milliseconds and ISO 8601 UTC.', '', '| Finding type | Total | Blocking |', '| --- | ---: | ---: |'];
   for (const type of findingTypes) {
     const findings = report.findings.filter((f) => f.type === type);
     lines.push(`| ${type} | ${findings.length} | ${findings.filter(isBlocking).length} |`);
@@ -24,7 +24,7 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
   if (report.findings.length) {
     lines.push('', '## Findings', '', '| Entity | Source | Key | Field | Type | Blocking | Expected | Actual | Explanation |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
     for (const f of report.findings.slice(0, 50)) lines.push(`| ${[f.entity, f.source, f.key || '—', f.field || '—', f.type, isBlocking(f) ? 'yes' : 'no', presentationValue(f.expected, f.entity, f.field, f.type === 'aggregate_mismatch', presentation), presentationValue(f.actual, f.entity, f.field, f.type === 'aggregate_mismatch', presentation), f.message].map(cell).join(' | ')} |`);
-    if (report.findings.length > 50) lines.push('', `${report.findings.length - 50} further findings omitted from this summary. Select HTML or JSON output for the complete finding list.`);
+    if (report.findings.length > 50) lines.push('', `${report.findings.length - 50} further ${report.findings.length === 51 ? 'finding' : 'findings'} omitted from this summary. Select HTML or JSON output for the complete finding list.`);
   }
   return lines.join('\n') + '\n';
 }

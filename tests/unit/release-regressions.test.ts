@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { compareEntities, consoleReport, entitySchema, groupFindings, htmlReport, normalize, ruleSchema, type Report } from '@logiparity/core';
+import { compareEntities, consoleReport, entitySchema, groupFindings, htmlReport, markdownReport, normalize, ruleSchema, type Report } from '@logiparity/core';
 const source={type:'csv',file:'unused.csv',fields:{load_id:'ID',pay:'Pay',status:'Status'}};
 const entity=entitySchema.parse({name:'load',key:'load_id',sources:{reference:source,lines:{...source,rollup:{by:'load_id',sum:['pay'],first:['status']}}},compare:{pay:{type:'money',currency:'USD'},status:{type:'enum'}},aggregates:[{name:'total',type:'sum',field:'pay'}]});
 it.each(['reference','lines'])('reports first-field conflicts in rolled-up %s without guessing a mapping',async name=>{
@@ -32,7 +32,8 @@ it('supports explicit export datetime formats and retains DST gap and overlap ch
 it('uses singular grammar, meaningful money units and clean finding locations',()=>{
   const finding={type:'field_mismatch' as const,entity:'load',source:'lines',key:'L1',field:'pay',expected:100n,actual:99n,message:'Mismatch'};
   const report:Report={schemaVersion:1,entities:[{entity:'load',reference:'reference',counts:{}}],findings:[finding]};const presentation={entities:[entity]};
-  const output=consoleReport(report,presentation);expect(output).toContain('1 entity, 1 finding (1 blocking)');expect(output).toContain('-$0.01 (1 cent)');expect(output).toContain('$1.00 (100 cents)');expect(groupFindings([finding],[entity])[0]?.delta).toBe('-1');
+  const output=consoleReport(report,presentation);expect(output).toContain('1 entity, 1 finding (1 blocking)');expect(output).toContain('-$0.01 (1 cent)');expect(output).toContain('$1.00 (100 cents)');expect(markdownReport(report,presentation)).toContain('1 entity · 1 finding');
+  const aggregate=consoleReport({...report,findings:[{...finding,type:'aggregate_mismatch',field:'total',key:''}]},presentation);expect(aggregate).toContain('$1.00 (100 cents)');expect(groupFindings([finding],[entity])[0]?.delta).toBe('-1');
   const error=consoleReport({...report,findings:[{type:'source_error',entity:'load',source:'',key:'',field:'',message:'Invalid source'}]});expect(error).toContain('1 entity, 0 findings (0 blocking), 1 configuration/source error');expect(error).not.toMatch(/key=-|field=-|load\//);
   const html=htmlReport(report,presentation);expect(html.indexOf('id="groups-title"')).toBeLessThan(html.indexOf('id="counts-title"'));
 });
