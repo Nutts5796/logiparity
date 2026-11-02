@@ -90,7 +90,7 @@ report:
   dir: ./logiparity-report
 ```
 
-Match the paths, headers and pagination metadata to your API. `totalPagesPath` detects a server that caps pages below the requested size. `allowNumber` accepts numeric API payouts through their decimal string representation; decimal strings remain the safest money input. Read the [configuration reference](docs/configuration.md) for precision rules, SQL and browser sources.
+Match the paths, headers and pagination metadata to your API, then run `./node_modules/.bin/logiparity validate --config parity.yaml` to check the file without reading any source. `logiparity init` writes a commented starter config. `totalPagesPath` detects a server that caps pages below the requested size. `allowNumber` accepts numeric API payouts through their decimal string representation; decimal strings remain the safest money input. Read the [configuration reference](docs/configuration.md) for precision rules, SQL and browser sources.
 
 This GitHub Actions job downloads the export and preserves reports after either kind of failure. Run shared staging checks manually or nightly; enable pull requests only with an isolated target.
 

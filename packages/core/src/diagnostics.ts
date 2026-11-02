@@ -2,18 +2,21 @@ const normalizedName = (name: string) => name.toLowerCase().replace(/[-_]/g, '')
 export const isSecretName = (name: string): boolean => /token|secret|password|apikey|auth|cookie|session/.test(normalizedName(name));
 export function secretValues(config: unknown, env: NodeJS.ProcessEnv = process.env): string[] {
   const values = new Set<string>();
+  // Only variables the configuration actually uses are secrets. Scanning the whole
+  // environment by name redacted unrelated values such as TERM_SESSION_ID or a flag "1".
   const add = (value: string | undefined) => {
     if (!value) return;
     values.add(value);
     if (/^Bearer\s+/i.test(value)) values.add(value.replace(/^Bearer\s+/i, ''));
     try { const url = new URL(value); if (url.password) values.add(decodeURIComponent(url.password)); for (const [key, item] of url.searchParams) if (isSecretName(key) && item) values.add(item); } catch { /* Not a URL. */ }
   };
-  for (const [name, value] of Object.entries(env)) if (isSecretName(name)) add(value);
+  add(env.LOGIPARITY_AI_API_KEY);
   const walk = (value: unknown): void => {
     if (!value || typeof value !== 'object') return;
     for (const [key, child] of Object.entries(value)) {
       if (/^(?:tokenEnv|passwordEnv|usernameEnv|connectionEnv)$/.test(key) && typeof child === 'string') add(env[child]);
       else if (key === 'headersEnv' && child && typeof child === 'object') { for (const name of Object.values(child)) if (typeof name === 'string') add(env[name]); }
+      else if (typeof child === 'string') { for (const [, name] of child.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) if (name && isSecretName(name)) add(env[name]); }
       else walk(child);
     }
   };
