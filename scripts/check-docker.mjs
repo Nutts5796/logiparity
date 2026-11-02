@@ -1,0 +1,21 @@
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
+const root = fileURLToPath(new URL('../', import.meta.url));
+const image = process.env.LOGIPARITY_DOCKER_IMAGE ?? 'logiparity:1.0.0';
+const run = promisify(execFile);
+const build = spawn('docker', ['build', '--tag', image, '.'], { cwd: root, stdio: 'inherit' });
+const code = await new Promise((accept, reject) => { build.once('error', reject); build.once('exit', accept); });
+assert.equal(code, 0, 'Docker build failed');
+const help = await run('docker', ['run', '--rm', '--network=none', image, '--help']); assert.match(help.stdout, /LogiParity 1\.0\.0/);
+const probe = `const fs=require('node:fs/promises'); const {execFile}=require('node:child_process'); const {promisify}=require('node:util'); const run=promisify(execFile);
+(async()=>{
+if(process.getuid()===0) throw Error('Container must be non-root');
+const p='/usr/local/lib/node_modules/logiparity'; const {chromium}=require(p+'/node_modules/playwright'); const browser=await chromium.launch({headless:true}); const page=await browser.newPage(); await page.setContent('<title>LogiParity container smoke</title>'); if(await page.title()!=='LogiParity container smoke') throw Error('Chromium failed'); await browser.close();
+await fs.writeFile('/tmp/a.csv','ID,Payout,At\\nS1,6.25,2026-11-02T13:01:00Z\\n'); await fs.writeFile('/tmp/b.csv','ID,Payout,At\\nS1,6.24,2026-11-02T13:00:00Z\\n');
+const source=file=>({type:'csv',file,fields:{id:'ID',payout:'Payout',at:'At'}}); await fs.writeFile('/tmp/parity.yaml',JSON.stringify({version:1,entities:[{name:'shipment',key:'id',sources:{a:source('/tmp/a.csv'),b:source('/tmp/b.csv')},compare:{payout:{type:'money',currency:'USD'},at:{type:'datetime'}}}],report:{outputs:['html','json','markdown','junit'],dir:'/tmp/report'}}));
+let code;try{await run('logiparity',['check','--config','/tmp/parity.yaml'])}catch(e){code=e.code}if(code!==1)throw Error('Wrong parity exit '+code); const html=await fs.readFile('/tmp/report/report.html','utf8');if(!html.includes('625 ($6.25)')||!html.includes('1793624460000 (2026-11-02T13:01:00Z)'))throw Error('Display values missing');
+const ai=await run('logiparity',['ai','scenario','--from','Synthetic container breakdown']); if(!ai.stdout.includes('nothing sent'))throw Error('AI not offline'); console.log('Docker non-root, Chromium, parity reports, money/UTC values and offline AI passed; uid='+process.getuid());
+})().catch(e=>{console.error(e.message);process.exitCode=1});`;
+const result = await run('docker', ['run', '--rm', '--network=none', '--shm-size=1g', '--entrypoint', 'node', image, '-e', probe], { maxBuffer: 1024 * 1024, timeout: 60000 }); console.log(result.stdout.trim());

@@ -1,0 +1,33 @@
+# Consumer template. Copy into .github/workflows/logiparity.yml after the owner publishes 1.0.0.
+# Keep report.dir: ./logiparity-report in parity.yaml and prepare its CSV/XLSX inputs beforehand.
+name: Staging data parity
+on:
+  workflow_dispatch:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    env:
+      STAGING_API_URL: ${{ vars.STAGING_API_URL }}
+      STAGING_API_TOKEN: ${{ secrets.STAGING_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - name: Install the released CLI
+        run: npm install --no-save --ignore-scripts logiparity@1.0.0
+      # For a UI source, install matching Chromium first:
+      # node node_modules/logiparity/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Compare configured staging sources
+        run: ./node_modules/.bin/logiparity check --config parity.yaml
+      - name: Retain the complete report even when findings fail the job
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: logiparity-report
+          path: logiparity-report/
+          retention-days: 7
+          if-no-files-found: warn
