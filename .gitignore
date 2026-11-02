@@ -8,3 +8,5 @@ examples/demo/out/
 .env.*
 !.env.example
 .DS_Store
+output/
+.playwright-cli/

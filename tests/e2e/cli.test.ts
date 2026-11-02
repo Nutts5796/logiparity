@@ -1,10 +1,11 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { promisify } from 'node:util';
 import { once } from 'node:events';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { stringify } from 'yaml';
+import { parse, stringify } from 'yaml';
 
 const cli = resolve('node_modules/.bin/logiparity');
 const demo = resolve('apps/demo-delivery/dist/main.js');
@@ -45,7 +46,7 @@ async function saveExport(url: string, dir: string, extension: string) {
   const response = await fetch(`${url}/exports/shipments.${extension}?date=2026-11-02`);
   expect(response.status).toBe(200); await writeFile(join(dir, `shipments.${extension}`), new Uint8Array(await response.arrayBuffer()));
 }
-async function writeConfig(dir: string, url: string) {
+async function writeConfig(dir: string, url: string, entityOptions: Record<string, unknown> = {}, outputs = ['console', 'json']) {
   const fields = { id: 'Shipment ID', payout: 'Driver payout', status: 'Status', delivered_at: 'Delivered at' };
   await writeFile(join(dir, 'parity.yaml'), stringify({
     version: 1,
@@ -53,11 +54,11 @@ async function writeConfig(dir: string, url: string) {
       api: { type: 'rest', baseUrl: url, path: '/api/shipments', pagination: { type: 'page', size: 200 }, items: '$.data[*]', fields: { id: '$.id', payout: '$.driver_payout', status: '$.status', delivered_at: '$.delivered_at' } },
       export: { type: 'xlsx', file: 'shipments.xlsx', sheet: 'Shipments', fields },
       csv: { type: 'csv', file: 'shipments.csv', fields },
-    }, compare: { payout: { type: 'money', currency: 'USD' }, status: { type: 'enum' }, delivered_at: { type: 'datetime' } } }],
-    report: { outputs: ['console', 'json'], dir: './report' },
+    }, compare: { payout: { type: 'money', currency: 'USD' }, status: { type: 'enum' }, delivered_at: { type: 'datetime' } }, ...entityOptions }],
+    report: { outputs, dir: './report' },
   }));
 }
-interface JsonFinding { type: string; source: string; key: string; field: string; expected?: string; actual?: string }
+interface JsonFinding { type: string; source: string; key: string; field: string; expected?: string; actual?: string; blocking?: boolean }
 interface JsonReport { schemaVersion: number; findings: JsonFinding[]; entities: { counts: Record<string, number> }[] }
 const id = (i: number) => `S${String(i).padStart(6, '0')}`;
 // Frozen expected affected positions for the synthetic decimal bases, repeated every 300 records.
@@ -124,5 +125,50 @@ describe.sequential('CLI against the actual demo executable', () => {
     await rm(join(dir, 'report'), { recursive: true }); await writeFile(join(dir, 'report'), 'occupied');
     const failedReport = await runCli(['check', '--config', 'parity.yaml'], dir);
     expect(failedReport.code).toBe(2); expect(failedReport.stderr).toContain('report');
+  });
+  it('generates every M2 report with aggregate mismatches and schema-valid JUnit', async () => {
+    const dir = await directory(); const url = await startDemo({}, ['--bugs']);
+    await saveExport(url, dir, 'xlsx'); await saveExport(url, dir, 'csv');
+    await writeConfig(dir, url, { aggregates: [{ name: 'delivered_count', type: 'count', where: { status: 'delivered' } }, { name: 'payout_total', type: 'sum', field: 'payout' }] }, ['console', 'html', 'junit', 'json', 'markdown']);
+    expect((await runCli(['check', '--config', 'parity.yaml'], dir)).code).toBe(1);
+    const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
+    const aggregates = report.findings.filter((f) => f.type === 'aggregate_mismatch');
+    expect(aggregates.map((f) => [f.source, f.field])).toEqual([['export', 'delivered_count'], ['csv', 'payout_total'], ['export', 'payout_total']]);
+    expect(report.findings).toHaveLength(301);
+    const html = await readFile(join(dir, 'report/report.html'), 'utf8'); expect(html).toContain('Showing 301 of 301'); expect(html).toContain('Aggregates');
+    expect(await readFile(join(dir, 'report/report.md'), 'utf8')).toContain('251 further findings omitted');
+    await promisify(execFile)('xmllint', ['--nonet', '--noout', '--schema', resolve('tests/fixtures/junit/JUnit.xsd'), join(dir, 'report/junit.xml')]);
+    const xml = await readFile(join(dir, 'report/junit.xml'), 'utf8'); expect(xml).toContain('failures="3"'); expect(xml.match(/<testcase /g)).toHaveLength(6);
+  });
+  it('applies CLI thresholds at the boundary, preserves observations and cannot suppress runtime errors', async () => {
+    const dir = await directory(); const url = await startDemo({}, ['--bugs']);
+    await saveExport(url, dir, 'xlsx'); await saveExport(url, dir, 'csv');
+    for (const [failOn, code] of [[{ missing: 14, mismatch: 284 }, 0], [{ missing: 13, mismatch: 284 }, 1], [[], 0]] as const) {
+      await writeConfig(dir, url, { failOn }, ['console', 'json', 'junit']);
+      const result = await runCli(['check', '--config', 'parity.yaml'], dir); expect(result.code).toBe(code);
+      const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
+      expect(report.findings).toHaveLength(298);
+      expect(report.findings.filter((f) => f.blocking)).toHaveLength(code === 1 ? 14 : 0);
+      if (code === 0) expect(await readFile(join(dir, 'report/junit.xml'), 'utf8')).toContain('skipped="2"');
+    }
+    await rm(join(dir, 'shipments.csv'));
+    expect((await runCli(['check', '--config', 'parity.yaml'], dir)).code).toBe(2);
+    await writeConfig(dir, url, { failOn: { mismatch: -1 } });
+    const invalid = await runCli(['check', '--config', 'parity.yaml'], dir); expect(invalid.code).toBe(2); expect(invalid.stderr).toContain('failOn');
+  });
+  it('init creates commented usable YAML, performs no reads, and never overwrites a file', async () => {
+    const dir = await directory();
+    const created = await runCli(['init'], dir, { STAGING_API_URL: '' }); expect(created.code).toBe(0);
+    const original = await readFile(join(dir, 'parity.yaml'), 'utf8'); expect(original).toContain('# LogiParity starter'); expect(original).toContain('${STAGING_API_URL}');
+    const exists = await runCli(['init'], dir); expect(exists.code).toBe(2); expect(exists.stderr).toContain('already exists');
+    expect(await readFile(join(dir, 'parity.yaml'), 'utf8')).toBe(original);
+    expect((await runCli(['init', '--config', 'another.yaml'], dir)).code).toBe(0);
+    expect((await runCli(['init', '--config', 'absent/another.yaml'], dir)).code).toBe(2);
+    const url = await startDemo(); await saveExport(url, dir, 'csv');
+    const config = parse(original) as { entities: { key: string; sources: Record<string, { fields: Record<string, string> }> }[] };
+    expect(config.entities[0]?.key).toBe('shipment_id');
+    const result = await runCli(['check', '--config', 'parity.yaml'], dir, { STAGING_API_URL: url });
+    expect(result.code).toBe(0); expect(result.stderr).toBe('');
+    expect(await readFile(join(dir, 'logiparity-report/report.html'), 'utf8')).toContain('All configured comparisons passed');
   });
 });

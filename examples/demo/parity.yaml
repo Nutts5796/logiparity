@@ -30,8 +30,12 @@ entities:
       status: { type: enum, map: { "In transit": in_transit, Delivered: delivered } }
       payout: { type: money, currency: USD, tolerance: 0 }
       delivered_at: { type: datetime, toleranceSeconds: 60 }
+    aggregates:
+      - { name: delivered_count, type: count, where: { status: delivered } }
+      - { name: payout_total, type: sum, field: payout }
+    failOn: [missing, extra, mismatch, aggregate, duplicate]
 variables:
   date: "2026-11-02"
 report:
-  outputs: [console, json]
+  outputs: [console, html, junit, json, markdown]
   dir: ../../logiparity-report
