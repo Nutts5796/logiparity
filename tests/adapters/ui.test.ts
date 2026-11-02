@@ -101,3 +101,19 @@ describe('Playwright table adapter', () => {
     } finally { await fixture.close(); }
   });
 });
+
+it.each(['direct','chain','next'] as const)('blocks %s UI redirects before contacting a second origin',async(mode)=>{
+  let hits=0;const foreign=await startServer((_,res)=>{hits++;res.setHeader('content-type','text/html');res.end('<table id="t"><tbody><tr><td>FOREIGN</td></tr></tbody></table>');});
+  const local=await startServer((req,res)=>{
+    if(mode==='next'&&req.url==='/'){res.setHeader('content-type','text/html');res.end('<table id="t"><tbody><tr><td>A</td></tr></tbody></table><a id="next" href="/redirect">Next</a>');return;}
+    res.writeHead(302,{location:mode==='chain'&&req.url==='/'?'/redirect':foreign.url});res.end();
+  });
+  try{const options=config({url:local.url,table:'#t',fields:{id:'td'},timeoutMs:1000,...(mode==='next'?{nextPage:'#next'}:{})});delete options.storageState;if(mode!=='next')delete options.nextPage;
+    await expect(collect(readUi(options,context()))).rejects.toThrow('allowedOrigins');expect(hits).toBe(0);
+  }finally{await local.close();await foreign.close();}
+});
+it('follows each redirect only when its destination origin is explicitly allowed',async()=>{
+  const foreign=await startServer((_,res)=>{res.setHeader('content-type','text/html');res.end('<table id="t"><tbody><tr><td>ALLOWED</td></tr></tbody></table>');});
+  const local=await startServer((_,res)=>{res.writeHead(302,{location:foreign.url});res.end();});
+  try{const options=config({url:local.url,allowedOrigins:[foreign.url],table:'#t',fields:{id:'td'}});delete options.storageState;delete options.nextPage;expect(await collect(readUi(options,context()))).toEqual([{id:'ALLOWED'}]);}finally{await local.close();await foreign.close();}
+});

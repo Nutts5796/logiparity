@@ -1,3 +1,4 @@
+import { safeConsole } from '@logiparity/core';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { AdapterContext, DataRow, RestConfig } from '@logiparity/core';
 import { selectJson, selectOne } from './jsonpath.js';
@@ -74,7 +75,11 @@ export async function* readRest(config: RestConfig, context: AdapterContext): As
       if (signals.some(Boolean) && items.length < pagination.size) throw new Error(`${location}; a completion signal says more pages exist. Match the server's page-size cap before comparing.`);
       if (signals.some((value) => value !== signals[0])) throw new Error(`${location}; completion signals disagree. Correct the response metadata or pagination paths.`);
       more = signals[0];
-      if (more === undefined && page === 0 && items.length < pagination.size) (context.warn ?? console.warn)(`${location}; no completion signal is configured. Set totalPath or hasMorePath to detect server page-size caps.`);
+      if (more === undefined && page === 0 && items.length < pagination.size) {
+        const message = `${location}; no completion signal is configured. Set totalPath, totalPagesPath or hasMorePath to verify completeness.`;
+        if (!pagination.allowShortFirstPage) throw new Error(`${message} Set allowShortFirstPage: true only to explicitly accept an unverified short first page.`);
+        (context.warn ?? console.warn)(safeConsole(message));
+      }
     }
     for (let index = 0; index < items.length; index++) {
       try { yield Object.fromEntries(Object.entries(config.fields).map(([field, path]) => [field, selectOne(items[index], path)])); }

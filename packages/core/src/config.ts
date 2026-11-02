@@ -1,3 +1,4 @@
+import { redactSecrets, secretValues } from './diagnostics.js';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { parseDocument } from 'yaml';
@@ -13,9 +14,10 @@ const httpUrl = z.url().refine((v) => {
 }, 'Use an HTTP(S) URL without embedded credentials');
 const pageSize = z.number().int().min(1).max(10000).default(200);
 const completionSignals = { totalPath: name.optional(), totalPagesPath: name.optional(), hasMorePath: name.optional() };
+const rollup = z.object({ by: name, sum: z.array(name).default([]), first: z.array(name).default([]) }).strict().refine((v) => new Set([v.by, ...v.sum, ...v.first]).size === 1 + v.sum.length + v.first.length, 'Rollup fields must be unique and disjoint');
 const pagination = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('page'), ...completionSignals, pageParam: name.default('page'), sizeParam: name.default('limit'), size: pageSize, start: z.number().int().min(0).default(1) }).strict(),
-  z.object({ type: z.literal('offset'), ...completionSignals, offsetParam: name.default('offset'), sizeParam: name.default('limit'), size: pageSize }).strict(),
+  z.object({ type: z.literal('page'), ...completionSignals, allowShortFirstPage: z.boolean().default(false), pageParam: name.default('page'), sizeParam: name.default('limit'), size: pageSize, start: z.number().int().min(0).default(1) }).strict(),
+  z.object({ type: z.literal('offset'), ...completionSignals, allowShortFirstPage: z.boolean().default(false), offsetParam: name.default('offset'), sizeParam: name.default('limit'), size: pageSize }).strict(),
   z.object({ type: z.literal('cursor'), cursorParam: name.default('cursor'), next: name, sizeParam: name.default('limit'), size: pageSize }).strict(),
   z.object({ type: z.literal('link') }).strict(),
 ]);
@@ -25,7 +27,7 @@ const auth = z.discriminatedUnion('type', [
 ]);
 export const sourceSchema = z.discriminatedUnion('type', [
   z.object({
-    type: z.literal('rest'), baseUrl: httpUrl,
+    type: z.literal('rest'), rollup: rollup.optional(), baseUrl: httpUrl,
     path: name, fields, items: name.default('$.data[*]'),
     headers: z.record(name, z.string()).default({}).refine((v) => !Object.keys(v).some((k) => /^(authorization|proxy-authorization|cookie|x-api-key)$/i.test(k)), 'Use auth or headersEnv for secrets'),
     headersEnv: z.record(name, envName).default({}), auth: auth.optional(), pagination: pagination.optional(),
@@ -34,17 +36,17 @@ export const sourceSchema = z.discriminatedUnion('type', [
     backoffMs: z.number().int().min(1).max(10000).default(100),
     maxPages: z.number().int().min(1).max(1000000).default(10000),
   }).strict(),
-  z.object({ type: z.literal('csv'), file: name, fields, delimiter: z.string().length(1).default(','), quote: z.string().length(1).default('"'), encoding: z.enum(['utf8', 'utf16le', 'latin1']).default('utf8'), headerRow: z.number().int().min(1).default(1) }).strict(),
-  z.object({ type: z.literal('xlsx'), file: name, fields, sheet: name, headerRow: z.number().int().min(1).default(1) }).strict(),
+  z.object({ type: z.literal('csv'), rollup: rollup.optional(), file: name, fields, delimiter: z.string().length(1).default(','), quote: z.string().length(1).default('"'), encoding: z.enum(['utf8', 'utf16le', 'latin1']).default('utf8'), headerRow: z.number().int().min(1).default(1) }).strict(),
+  z.object({ type: z.literal('xlsx'), rollup: rollup.optional(), file: name, fields, sheet: name, headerRow: z.number().int().min(1).default(1) }).strict(),
   z.object({
-    type: z.literal('ui'), url: httpUrl, storageState: name.optional(), table: name,
+    type: z.literal('ui'), rollup: rollup.optional(), url: httpUrl, storageState: name.optional(), table: name,
     rows: name.default('tbody tr'), fields, nextPage: name.optional(), readySelector: name.optional(),
     allowedOrigins: z.array(httpUrl.refine((v) => new URL(v).origin === v, 'Use an origin without a path, query or fragment')).default([]),
     timeoutMs: z.number().int().min(1).max(300000).default(10000),
     maxPages: z.number().int().min(1).max(100000).default(1000),
   }).strict(),
   z.object({
-    type: z.literal('sql'), connectionEnv: envName, query: name, fields,
+    type: z.literal('sql'), rollup: rollup.optional(), connectionEnv: envName, query: name, fields,
     params: z.array(z.union([z.string(), z.number().finite(), z.boolean(), z.null()])).default([]),
     timeoutMs: z.number().int().min(1).max(300000).default(10000),
     batchSize: z.number().int().min(1).max(10000).default(1000),
@@ -81,6 +83,12 @@ export const entitySchema = z.object({
   if (Object.keys(v.sources).length < 2) ctx.addIssue({ code: 'custom', path: ['sources'], message: 'Configure at least two sources; the first is the reference' });
   for (const [source, config] of Object.entries(v.sources)) {
     if (!Object.hasOwn(config.fields, v.key)) ctx.addIssue({ code: 'custom', path: ['sources', source, 'fields'], message: `Map the entity key ${v.key}` });
+  }
+  for (const [source, config] of Object.entries(v.sources)) if (config.rollup) {
+    const r = config.rollup; const fields = new Set([r.by, ...r.sum, ...r.first]);
+    if (r.by !== v.key) ctx.addIssue({ code: 'custom', path: ['sources', source, 'rollup', 'by'], message: 'Rollup by must match the entity key' });
+    if ([...fields].some((f) => !Object.hasOwn(config.fields, f)) || Object.keys(config.fields).some((f) => !fields.has(f))) ctx.addIssue({ code: 'custom', path: ['sources', source, 'rollup'], message: 'Every mapped field must appear in rollup by, sum or first' });
+    for (const field of r.sum) if (!['money', 'number'].includes(v.compare[field]?.type ?? '')) ctx.addIssue({ code: 'custom', path: ['sources', source, 'rollup', 'sum'], message: `Rollup sum field ${field} requires a number or money rule` });
   }
   const reference = Object.values(v.sources)[0];
   const names = new Set<string>();
@@ -124,7 +132,7 @@ export async function loadYaml(file: string, env: NodeJS.ProcessEnv = process.en
   const absolute = resolve(file);
   let content: string;
   try { content = await readFile(absolute, 'utf8'); }
-  catch { throw new ConfigError(`${absolute}: cannot read configuration; check the file path and permissions.`); }
+  catch { throw new ConfigError(redactSecrets(`${absolute}: cannot read configuration; check the file path and permissions.`, secretValues(undefined, env))); }
   const doc = parseDocument(content, { uniqueKeys: true });
   if (doc.errors.length) throw new ConfigError(`${absolute}: ${doc.errors.map((e) => e.message).join('; ')} Fix the YAML syntax.`);
   let raw: unknown;
@@ -147,6 +155,8 @@ export async function loadYaml(file: string, env: NodeJS.ProcessEnv = process.en
 export async function loadConfig(file: string, env: NodeJS.ProcessEnv = process.env): Promise<LoadedConfig> {
   const absolute = resolve(file);
   let raw = await loadYaml(absolute, env);
+  const secrets = secretValues(raw, env);
+  const location = redactSecrets(absolute, secrets);
   const walk = (value: unknown, transform: (s: string) => string): unknown => {
     if (typeof value === 'string') return transform(value);
     if (Array.isArray(value)) return value.map((v) => walk(v, transform));
@@ -155,13 +165,13 @@ export async function loadConfig(file: string, env: NodeJS.ProcessEnv = process.
   };
   const vars = raw && typeof raw === 'object' && 'variables' in raw ? raw.variables : {};
   raw = walk(raw, (s) => s.replace(/\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}/g, (_, key: string) => {
-    if (!vars || typeof vars !== 'object' || !Object.hasOwn(vars, key)) throw new ConfigError(`${absolute}: variables.${key} is missing; define the template variable.`);
+    if (!vars || typeof vars !== 'object' || !Object.hasOwn(vars, key)) throw new ConfigError(`${location}: variables.${key} is missing; define the template variable.`);
     const value: unknown = Reflect.get(vars, key);
-    if (typeof value !== 'string') throw new ConfigError(`${absolute}: variables.${key} must be a quoted string.`);
+    if (typeof value !== 'string') throw new ConfigError(`${location}: variables.${key} must be a quoted string.`);
     return value;
   }));
   const result = configSchema.safeParse(raw);
-  if (!result.success) throw new ConfigError(`${absolute}: invalid configuration:\n${formatConfigIssues(configSchema, raw, result.error)}\nFix the listed configuration paths.`);
+  if (!result.success) throw new ConfigError(redactSecrets(`${absolute}: invalid configuration:\n${formatConfigIssues(configSchema, raw, result.error)}\nFix the listed configuration paths.`, secrets));
   return { config: result.data, baseDir: dirname(absolute), file: absolute };
 }
 

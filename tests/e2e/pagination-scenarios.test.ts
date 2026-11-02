@@ -17,10 +17,10 @@ it.each([true,false])('CLI handles a capped page with completion metadata=%s wit
   const directory=await dir(); const url=await serve((_,res)=>res.end(JSON.stringify({data:[{id:'S1'}],total:3})));
   await writeFile(join(directory,'input.csv'),'ID\nS1\nS2\nS3\n');
   await writeFile(join(directory,'config.yaml'),JSON.stringify({version:1,entities:[{name:'shipment',key:'id',sources:{api:{type:'rest',baseUrl:url,path:'/',pagination:{type:'page',size:200,...(signal?{totalPath:'$.total'}:{})},fields:{id:'$.id'}},csv:{type:'csv',file:'input.csv',fields:{id:'ID'}}}}],report:{outputs:['console','json'],dir:'./report'}}));
-  const result=await run(['check','--config','config.yaml'],directory);expect(result.code).toBe(signal?2:1);
+  const result=await run(['check','--config','config.yaml'],directory);expect(result.code).toBe(2);
   const report=JSON.parse(await readFile(join(directory,'report/report.json'),'utf8')) as {findings:{type:string;message:string}[]};
   if(signal){expect(report.findings.map(f=>f.type)).toEqual(['source_error']);expect(result.stdout).toContain('requested size 200, received 1');}
-  else{expect(result.stderr.match(/totalPath or hasMorePath/g)).toHaveLength(1);expect(report.findings.filter(f=>f.type==='extra_in_source')).toHaveLength(2);}
+  else{expect(result.stdout).toContain('totalPath, totalPagesPath or hasMorePath');expect(report.findings.map(f=>f.type)).toEqual(['source_error']);}
 });
 it.each(['healthy','lost','double','missing dependency','eta'] as const)('runs selected invariants with only their required sources: %s',async(mode)=>{
   const directory=await dir();let injected=false;let events=0;let irrelevant=0;

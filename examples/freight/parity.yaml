@@ -1,0 +1,22 @@
+version: 1
+environment: test
+entities:
+  - name: load
+    key: load_id
+    sources:
+      tms:
+        type: csv
+        file: ./tms-loads.csv
+        fields: {load_id: "Load ID", carrier_pay: "Carrier pay", status: Status, delivered_at: "Delivered at"}
+      settlement:
+        type: csv
+        file: ./carrier-settlement-lines.csv
+        fields: {load_id: "Load ID", carrier_pay: Amount, status: Status, delivered_at: "Delivered at"}
+        rollup: {by: load_id, sum: [carrier_pay], first: [status, delivered_at]}
+    compare:
+      carrier_pay: {type: money, currency: USD}
+      status: {type: enum}
+      delivered_at: {type: datetime}
+report:
+  outputs: [console, html, json, markdown, junit]
+  dir: ../../output/freight-report

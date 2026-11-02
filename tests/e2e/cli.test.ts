@@ -247,7 +247,7 @@ async function writeUiConfig(dir: string, url: string, uiOptions: Record<string,
   await writeFile(join(dir, 'parity.yaml'), stringify(config));
 }
 
-describe.sequential('M4 environment bug flags through the demo executable', () => {
+describe.sequential('Operational scenario bug flags through the demo executable', () => {
   it.each([
     { flag: 'BUG_REPLAN_LOSES_ORDER', invariant: 'no_order_lost' },
     { flag: 'BUG_DOUBLE_ASSIGN', invariant: 'single_assignment' },

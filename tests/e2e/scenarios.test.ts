@@ -22,8 +22,8 @@ async function setup(bugs: Partial<DemoBugs> = {}) {
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('Missing demo address');
   return { directory, url: `http://127.0.0.1:${address.port}` };
 }
-async function run(scenario: string, target: string, directory: string, url: string) {
-  const child = spawn(process.execPath, [cli, 'scenario', 'run', scenario, '--target', target, '--report-dir', join(directory, 'report')], { cwd: tmpdir(), env: { ...process.env, DEMO_API_URL: url }, stdio: ['ignore', 'pipe', 'pipe'] });
+async function run(scenario: string, target: string, directory: string, url: string, allowModules = false) {
+  const child = spawn(process.execPath, [cli, 'scenario', 'run', scenario, '--target', target, '--report-dir', join(directory, 'report'), ...(allowModules ? ['--allow-modules'] : [])], { cwd: tmpdir(), env: { ...process.env, DEMO_API_URL: url }, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = ''; let stderr = ''; child.stdout.on('data', (v: Buffer) => { stdout += v.toString(); }); child.stderr.on('data', (v: Buffer) => { stderr += v.toString(); });
   const [code] = await once(child, 'exit');
   return { code, stdout, stderr };
@@ -78,7 +78,7 @@ it('runs sorted steps, configured custom HTTP, JSONPath and TypeScript invariant
     s.events = [{ step: 2, type: 'http', params: { path: '/api/events/traffic-delay', body: { zone: 'Z2', minutes: 15, at: '14:00' } } }, { step: 1, type: 'driver_no_show', params: { driver: 'D03', at: '08:00' } }];
     (s.invariants as unknown[]).push({ name: 'completed', jsonPath: '$.after.meta[0].replan_status', expected: 'completed' }, { name: 'typed record count', module: './check.ts' });
   });
-  const result = await run(scenarioFile, targetFile, directory, url); expect(result.code, result.stdout + result.stderr).toBe(0);
+  const result = await run(scenarioFile, targetFile, directory, url, true); expect(result.code, result.stdout + result.stderr).toBe(0);
   expect((await readReport(directory)).events.map((e) => e.step)).toEqual([1, 2]);
 });
 it.each(['consent', 'foreign request', 'bad module', 'missing fixture', 'duplicate step'])('preflights %s without resetting or injecting events', async (kind) => {
@@ -126,7 +126,7 @@ it.each(['failure', 'invalid result'])('handles custom invariant %s with the cor
   const { directory, url } = await setup();
   await writeFile(join(directory, 'custom.ts'), kind === 'failure' ? `export default () => ({name:'custom',passed:false,affectedKeys:['S000801'],explanation:'Intentional custom failure'})` : 'export default () => ({passed:true})');
   const { scenarioFile, targetFile } = await variant(directory, (s) => { (s.invariants as unknown[]).push({ name: 'custom', module: './custom.ts' }); });
-  expect((await run(scenarioFile, targetFile, directory, url)).code).toBe(kind === 'failure' ? 1 : 2);
+  expect((await run(scenarioFile, targetFile, directory, url, true)).code).toBe(kind === 'failure' ? 1 : 2);
   const report = await readReport(directory); expect(report.invariants.filter((i) => i.name !== 'custom').every((i) => i.passed)).toBe(true);
   if (kind === 'failure') expect(report.parity?.findings).toEqual([]); else expect(report.error).toBeDefined();
 });

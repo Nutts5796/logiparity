@@ -1,0 +1,10 @@
+Load ID,Charge,Amount,Status,Delivered at
+L001,linehaul,1000.00,delivered,2026-11-01T16:00:00Z
+L001,fuel,100.00,delivered,2026-11-01T16:00:00Z
+L001,detention,50.25,delivered,2026-11-01T16:00:00Z
+L002,linehaul,2000.00,delivered,2026-11-01T17:30:00Z
+L002,fuel,250.00,delivered,2026-11-01T17:30:00Z
+L002,detention,50.00,delivered,2026-11-01T17:30:00Z
+L003,linehaul,800.00,delivered,2026-11-01T18:00:00Z
+L003,fuel,100.00,delivered,2026-11-01T18:00:00Z
+L003,detention,0.00,delivered,2026-11-01T18:00:00Z

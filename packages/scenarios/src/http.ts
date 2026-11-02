@@ -28,6 +28,14 @@ export function renderTemplate(value: unknown, context: Record<string, unknown>,
 export function requestPlan(target: Target, template: RequestTemplate, context: Record<string, unknown>) {
   const path = renderTemplate(template.path, context, true);
   if (typeof path !== 'string') throw new ConfigError('Request path must render to a string');
+  let decoded = path.split(/[?#]/, 1)[0]!;
+  for (let depth = 0; depth < 8; depth++) {
+    if (decoded.replaceAll('\\', '/').split('/').some((part) => part === '.' || part === '..')) throw new ConfigError('Scenario request paths cannot contain dot-segments, including encoded forms');
+    let next: string; try { next = decodeURIComponent(decoded); } catch { throw new ConfigError('Scenario request path contains invalid percent encoding'); }
+    if (next === decoded) break;
+    if (depth === 7) throw new ConfigError('Scenario request path has excessive percent encoding');
+    decoded = next;
+  }
   const url = new URL(path, target.baseUrl);
   if (url.origin !== new URL(target.baseUrl).origin || url.username || url.password || url.hash) throw new ConfigError('Scenario requests must stay on the configured target origin, without credentials or fragments');
   const body = template.body === undefined ? undefined : JSON.stringify(renderTemplate(template.body, context));

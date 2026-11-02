@@ -87,11 +87,11 @@ it('supports configured redactFields, field aliases, literal credentials, and pr
   for (const secret of ['alice@example.test', 'bob@example.test', 'S000801', 'fixture-provider-key']) { expect(result.stdout).not.toContain(secret); expect(provider.requests[0]?.body).not.toContain(secret); expect(await readFile(join(dir, 'explanation.md'), 'utf8')).not.toContain(secret); }
   expect(await readFile(join(dir, 'report.json'), 'utf8')).toBe(before);
 });
-it('never executes generated scenarios or imports their custom modules', async () => {
+it('rejects generated module invariants without saving or executing the draft', async () => {
   const dir = await fixture(); await writeFile(join(dir, 'custom.ts'), `import {writeFileSync} from 'node:fs'; writeFileSync(${JSON.stringify(join(dir, 'EXECUTED'))}, 'bad'); export default () => ({name:'custom',passed:true,affectedKeys:[],explanation:'custom'});`);
   const provider = await mock(scenario.replace('invariants: [no_order_lost, single_assignment]', 'invariants: [{name: custom, module: ./custom.ts}]'));
   const result = await run(['ai', 'scenario', '--from', 'Breakdown D17', '--send', '--output', 'scenario.yaml'], dir, provider.url);
-  expect(result.code, result.stderr).toBe(0); expect(await readdir(dir)).not.toContain('EXECUTED'); expect(provider.requests).toHaveLength(1);
+  expect(result.code, result.stderr).toBe(2); expect(result.stderr).toContain('cannot contain module'); expect(await readdir(dir)).not.toContain('scenario.yaml'); expect(await readdir(dir)).not.toContain('EXECUTED'); expect(provider.requests).toHaveLength(1);
 });
 it.each(['existing output', 'bad extension', 'invalid redaction', 'bad settings', 'missing input', 'wrong command options'])('rejects %s before contacting the provider', async (kind) => {
   const dir = await fixture(); const provider = await mock(); let args = ['ai', 'scenario', '--from', 'Breakdown', '--send', '--output', 'new.yaml'];

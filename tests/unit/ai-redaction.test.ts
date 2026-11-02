@@ -17,7 +17,7 @@ it('supports exact property/index/wildcard paths and subtrees', () => {
 });
 it('scrubs explicitly supplied credential literals including copies in object keys', () => {
   const result = redactInput({ 'key-fixture-token': 'text fixture-token' }, [], ['fixture-token']);
-  expect(result.data).toEqual({ [`key-${redacted}`]: `text ${redacted}` }); expect(result.scrub('fixture-token echoed by a provider')).toBe(`${redacted} echoed by a provider`);
+  expect(result.data).toEqual({ [`key-${redacted}`]: redacted }); expect(result.scrub('fixture-token echoed by a provider')).toBe(`${redacted} echoed by a provider`);
 });
 it.each(['$..key', '$.rows[?(@.secret)]', '$'])('rejects unsupported redaction expression %s before sending', (path) => expect(() => redactInput({}, [path])).toThrow());
 it('fails closed if redaction would exceed its bounded sensitive-value budget', () => {

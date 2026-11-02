@@ -39,3 +39,11 @@ it.each([
   await writeFile(file, JSON.stringify({ version: 1, name: 'No-show', target: 'staging', events: [{ step: 1, type: 'driver_no_show' }], wait: { until: { ready: true } }, invariants: [invariant] }));
   await expect(loadScenario(file, {})).rejects.toThrow(`Valid keys: ${valid}`);
 });
+
+it.each(['entity','aggregate'] as const)('lists valid keys for an unknown %s property',async(location)=>{
+  const dir=await directory();const source={type:'csv',file:'unused.csv',fields:{id:'ID'}};
+  const aggregate={name:'loads',type:'count',typo:true};
+  const entity={name:'load',key:'id',sources:{a:source,b:source},...(location==='entity'?{typo:true}:{aggregates:[aggregate]})};
+  const file=join(dir,'parity.yaml');await writeFile(file,JSON.stringify({version:1,entities:[entity]}));
+  const error=await loadConfig(file).catch((e:unknown)=>e);expect(String(error)).toContain('Valid keys:');expect(String(error)).toContain(location==='entity'?'aggregates':'where');
+});

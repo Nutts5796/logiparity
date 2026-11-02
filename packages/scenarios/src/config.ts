@@ -1,5 +1,5 @@
 import { dirname, resolve } from 'node:path';
-import { loadYaml, sourceSchema, ConfigError, formatConfigIssues } from '@logiparity/core';
+import { loadYaml, sourceSchema, ConfigError, formatConfigIssues, redactSecrets, secretValues } from '@logiparity/core';
 import { z } from 'zod';
 
 const text = z.string().min(1);
@@ -17,7 +17,7 @@ export const scenarioSchema = z.object({
   version: z.literal(1), name: text, target: text,
   setup: z.object({ fixture: text }).strict().optional(),
   events: z.array(event).min(1),
-  wait: z.object({ source: text.default('meta'), until: z.record(text, scalar).refine((v) => Object.keys(v).length > 0, 'Set a completion condition'), timeoutSeconds: z.number().positive().max(3600).default(60), pollSeconds: z.number().positive().max(60).default(2) }).strict(),
+  wait: z.union([z.object({ seconds: z.number().finite().nonnegative().max(3600) }).strict(), z.object({ source: text.default('meta'), until: z.record(text, scalar).refine((v) => Object.keys(v).length > 0, 'Set a completion condition'), timeoutSeconds: z.number().positive().max(3600).default(60), pollSeconds: z.number().positive().max(60).default(2) }).strict()]).optional(),
   invariants: z.array(invariant).min(1),
   afterwards: z.object({ parity: text }).strict().optional(),
 }).strict().refine((v) => new Set(v.events.map((e) => e.step)).size === v.events.length, 'Event steps must be unique')
@@ -40,13 +40,13 @@ export type Invariant = Scenario['invariants'][number];
 export type Target = z.infer<typeof targetSchema>;
 export type RequestTemplate = z.infer<typeof request>;
 export async function loadScenario(file: string, env: NodeJS.ProcessEnv) {
-  return { scenario: parse(scenarioSchema, await loadYaml(file, env), file), baseDir: dirname(resolve(file)) };
+  return { scenario: parse(scenarioSchema, await loadYaml(file, env), file, env), baseDir: dirname(resolve(file)) };
 }
 export async function loadTarget(file: string, env: NodeJS.ProcessEnv) {
-  return { target: parse(targetSchema, await loadYaml(file, env), file), baseDir: dirname(resolve(file)) };
+  return { target: parse(targetSchema, await loadYaml(file, env), file, env), baseDir: dirname(resolve(file)) };
 }
-function parse<T>(schema: z.ZodType<T>, value: unknown, file: string): T {
+function parse<T>(schema: z.ZodType<T>, value: unknown, file: string, env: NodeJS.ProcessEnv): T {
   const result = schema.safeParse(value);
-  if (!result.success) throw new ConfigError(`${file}: ${formatConfigIssues(schema, value, result.error)}`);
+  if (!result.success) throw new ConfigError(redactSecrets(`${file}: ${formatConfigIssues(schema, value, result.error)}`, secretValues(value, env)));
   return result.data;
 }

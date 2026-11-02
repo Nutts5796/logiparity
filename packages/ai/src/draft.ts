@@ -37,6 +37,10 @@ export function renderDraft(prepared: PreparedDraft, answer: string): string {
     // Validate structure using dummy URL substitutions. Never read real environment values or referenced files.
     const result = schema.safeParse(prepared.kind === 'suggest-config' ? substituteUrls(raw) : raw);
     if (!result.success) throw new Error(`AI ${prepared.kind} draft does not match the LogiParity schema at ${result.error.issues.slice(0, 8).map((i) => i.path.join('.') || '<root>').join(', ')}; no file was written. Revise the input or try another model.`);
+    if (prepared.kind === 'scenario') {
+      const scenario = scenarioSchema.parse(raw);
+      if (scenario.invariants.some((i) => typeof i === 'object' && 'module' in i)) throw new Error('AI scenario drafts cannot contain module invariants');
+    }
   }
   return `${draftMarker}\n${content}\n`;
 }

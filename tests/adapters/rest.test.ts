@@ -125,7 +125,12 @@ describe('pagination completion signals', () => {
   it('keeps an unverified short first page and emits exactly one actionable warning', async () => {
     const messages: string[] = [];
     const { url } = await server((_, res) => res.end('{"data":[{"id":"a"}]}'));
-    expect(await collect(readRest(config(url, { pagination: { type: 'page', size: 200 } }), { ...context, warn: (message) => messages.push(message) }))).toEqual([{ id: 'a' }]);
-    expect(messages).toHaveLength(1); expect(messages[0]).toContain('totalPath or hasMorePath');
+    expect(await collect(readRest(config(url, { pagination: { type: 'page', size: 200, allowShortFirstPage: true } }), { ...context, warn: (message) => messages.push(message) }))).toEqual([{ id: 'a' }]);
+    expect(messages).toHaveLength(1); expect(messages[0]).toContain('totalPath, totalPagesPath or hasMorePath');
   });
+});
+
+it.each(['page','offset'] as const)('rejects an unverified short first %s page by default', async (type) => {
+  const { url } = await server((_,res)=>res.end('{"data":[{"id":"a"}]}'));
+  await expect(collect(readRest(config(url,{pagination:{type,size:200}}),context))).rejects.toThrow('totalPath, totalPagesPath or hasMorePath');
 });

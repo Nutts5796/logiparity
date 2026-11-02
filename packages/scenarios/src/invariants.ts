@@ -2,7 +2,8 @@ import { isDeepStrictEqual } from 'node:util';
 import { createJiti } from 'jiti';
 import { selectJson } from '@logiparity/adapters';
 import { z } from 'zod';
-import { resolve } from 'node:path';
+import { resolve, relative, isAbsolute } from 'node:path';
+import { realpath } from 'node:fs/promises';
 import { canonical, canonicalFor } from './state.js';
 import type { DataRow } from '@logiparity/core';
 import type { Invariant, ScenarioEvent } from './config.js';
@@ -69,7 +70,7 @@ export function checkBuiltin(definition: Invariant, state: InvariantState): Inva
 }
 export type Check = (state: InvariantState) => InvariantResult | Promise<InvariantResult>;
 const resultSchema = z.object({ name: id, passed: z.boolean(), affectedKeys: z.array(id), explanation: id }).strict();
-export async function prepareInvariant(definition: Invariant, baseDir: string): Promise<Check> {
+export async function prepareInvariant(definition: Invariant, baseDir: string, allowModules = false): Promise<Check> {
   if (typeof definition === 'string' || 'sla_window_violations' in definition) return (state) => checkBuiltin(definition, state);
   if ('jsonPath' in definition) {
     // Parse the safe, non-evaluating JSONPath subset before the target is mutated.
@@ -80,8 +81,11 @@ export async function prepareInvariant(definition: Invariant, baseDir: string): 
       return { name: definition.name, passed, affectedKeys: passed ? [] : state.affectedKeys, explanation: passed ? 'JSONPath equals the configured expectation.' : 'JSONPath is missing or differs from the configured expectation.' };
     };
   }
+  if (!allowModules) throw new Error('Module invariants require scenario run --allow-modules');
+  const root = await realpath(baseDir); const entry = await realpath(resolve(root, definition.module)); const local = relative(root, entry);
+  if (isAbsolute(definition.module) || local === '..' || local.startsWith('../') || isAbsolute(local)) throw new Error('Invariant module must stay within the scenario directory');
   const jiti = createJiti(import.meta.url, { fsCache: false, moduleCache: false, interopDefault: false });
-  const module = await jiti.import<{ default?: unknown }>(resolve(baseDir, definition.module));
+  const module = await jiti.import<{ default?: unknown }>(entry);
   if (typeof module.default !== 'function') throw new Error(`Invariant ${definition.name} must export a default function`);
   const fn = module.default as (state: InvariantState) => unknown;
   return async (state) => {

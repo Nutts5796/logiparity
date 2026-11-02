@@ -1,3 +1,4 @@
+import { safeConsole } from './diagnostics.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { errorText, type Config } from './config.js';
@@ -32,7 +33,7 @@ export function consoleReport(report: Report, presentation: ReportPresentation =
   };
   for (const f of report.findings.slice(0, 10)) lines.push(`  [${f.type}${isBlocking(f) ? '' : '; allowed'}] ${f.entity}/${f.source} key=${f.key || '-'} field=${f.field || '-'}: ${f.message}${f.expected !== undefined ? ` Expected=${value(f.expected, f.entity, f.field)} Actual=${value(f.actual, f.entity, f.field)}` : ''}`);
   if (report.findings.length > 10) lines.push(`  ... ${report.findings.length - 10} more findings.`);
-  return lines.join('\n') + '\n';
+  return safeConsole(lines.join('\n') + '\n');
 }
 
 export async function writeJsonReport(report: Report, directory: string): Promise<void> {

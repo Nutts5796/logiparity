@@ -1,7 +1,8 @@
+import { redactSecrets, secretValues } from './diagnostics.js';
 import { errorText, type EntityConfig } from './config.js';
 import { equalValues, normalize } from './normalize.js';
 import type { EntitySummary, Finding, NormalizedValue, Report, SourceReader } from './types.js';
-import { aggregateEqual, measureAggregate } from './aggregates.js';
+import { aggregateEqual, measureAggregate, DecimalSum } from './aggregates.js';
 import { applyFailurePolicies } from './policy.js';
 import { groupFindings } from './groups.js';
 import { SourceError } from './source-error.js';
@@ -13,7 +14,8 @@ export function sortFindings(findings: Finding[]): Finding[] {
   return findings.sort((a, b) => order(a.entity, b.entity) || order(a.key, b.key) || order(a.field, b.field) || order(a.source, b.source) || order(a.type, b.type));
 }
 
-export async function compareEntities(entities: EntityConfig[], read: SourceReader): Promise<Report> {
+export async function compareEntities(entities: EntityConfig[], read: SourceReader, env: NodeJS.ProcessEnv = process.env): Promise<Report> {
+  const secrets = secretValues(entities, env);
   const report: Report = { schemaVersion: 1, findings: [], entities: [] };
   for (const entity of entities) {
     const sources = Object.entries(entity.sources);
@@ -25,6 +27,7 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
     for (const [source, config] of sources) {
       const rows = new Map<string, Row>();
       const duplicates: Finding[] = [];
+      const sums = new Map<string, Map<string, DecimalSum>>();
       let rowNumber = 0;
       let context = '';
       const measurements = new Map<string, number | bigint | undefined>();
@@ -36,7 +39,7 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
           if ((typeof rawKey !== 'string' && typeof rawKey !== 'number') || String(rawKey).trim() === '' || (typeof rawKey === 'number' && !Number.isSafeInteger(rawKey))) throw new Error(`Invalid key ${entity.key}; provide a nonempty string or safe integer.`);
           const key = String(rawKey).trim();
           context += `, key ${key}`;
-          if (rows.has(key)) {
+          if (rows.has(key) && !config.rollup) {
             duplicates.push({ type: 'duplicate_key', entity: entity.name, source, key, field: entity.key, message: `${source}: duplicate key ${key} at row ${rowNumber}; make source keys unique. The first record is used.` });
             continue;
           }
@@ -44,6 +47,20 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
           for (const [field, value] of Object.entries(raw)) {
             context = `row ${rowNumber}, key ${key}, field ${field}`;
             row[field] = field === entity.key ? key : normalize(value, entity.compare[field], source);
+          }
+          if (config.rollup) {
+            const previous = rows.get(key);
+            for (const field of config.rollup.sum) {
+              const value = row[field];
+              if (value !== null && typeof value !== 'number' && typeof value !== 'bigint') throw new Error(`Rollup sum field ${field} is not numeric`);
+              if (entity.compare[field]?.type === 'money') row[field] = (previous?.[field] as bigint | undefined ?? 0n) + (value as bigint | null ?? 0n);
+              else {
+                const perKey = sums.get(key) ?? new Map<string, DecimalSum>(); const sum = perKey.get(field) ?? new DecimalSum();
+                if (typeof value === 'number') sum.add(value);
+                perKey.set(field, sum); sums.set(key, perKey); row[field] = sum.value();
+              }
+            }
+            if (previous) for (const field of config.rollup.first) row[field] = previous[field] ?? null;
           }
           rows.set(key, row);
         }
@@ -53,7 +70,7 @@ export async function compareEntities(entities: EntityConfig[], read: SourceRead
         }
         summary.counts[source] = rowNumber;
       } catch (error) {
-        report.findings.push({ type: 'source_error', entity: entity.name, source, key: '', field: '', message: `${entity.name}/${source}${context ? ` (${context})` : ''}: ${errorText(error)}`, ...(error instanceof SourceError && error.screenshot ? { screenshot: error.screenshot } : {}) });
+        report.findings.push({ type: 'source_error', entity: entity.name, source, key: '', field: '', message: redactSecrets(`${entity.name}/${source}${context ? ` (${context})` : ''}: ${errorText(error)}`, secrets), ...(error instanceof SourceError && error.screenshot ? { screenshot: error.screenshot } : {}) });
         if (source === reference) break;
         continue;
       }

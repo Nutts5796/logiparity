@@ -66,7 +66,7 @@ it('rejects malformed task inputs and oversized provider requests', async () => 
 });
 it('validates draft syntax without expanding env or reading fixture/module paths', async () => {
   const prepared = await prepareDraft({ kind: 'scenario', description: 'Breakdown D17' }, settings);
-  const scenario = `version: 1\nname: Draft breakdown\ntarget: demo\nsetup: {fixture: ./does-not-exist.json}\nevents: [{step: 1, type: vehicle_breakdown, params: {driver: D17}}]\nwait: {until: {replan_status: completed}}\ninvariants: [{name: custom, module: ./does-not-exist.ts}]\n`;
+  const scenario = `version: 1\nname: Draft breakdown\ntarget: demo\nsetup: {fixture: ./does-not-exist.json}\nevents: [{step: 1, type: vehicle_breakdown, params: {driver: D17}}]\nwait: {until: {replan_status: completed}}\ninvariants: [no_order_lost]\n`;
   expect(renderDraft(prepared, `\`\`\`yaml\n${scenario}\n\`\`\``)).toContain(draftMarker);
   const config = { ...prepared, kind: 'suggest-config' as const }; expect(renderDraft(config, configDraft)).toContain('${STAGING_API_URL}');
   expect(() => renderDraft(config, 'version: 1\nentities: []')).toThrow('schema'); expect(() => renderDraft(prepared, '')).toThrow('empty');

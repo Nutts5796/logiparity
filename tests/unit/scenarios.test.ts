@@ -51,8 +51,8 @@ it('supports expected JSONPath values and trusted TypeScript custom invariants w
   const dir = await mkdtemp(join(tmpdir(), 'logiparity-invariant-'));
   try {
     await writeFile(join(dir, 'check.ts'), `export default (state: { affectedKeys: string[] }) => { state.affectedKeys.push('MUTATED'); return {name:'custom',passed:true,affectedKeys:[],explanation:'TypeScript loaded'}; }`);
-    const custom = await prepareInvariant({ name: 'typed', module: './check.ts' }, dir); expect(await custom(s)).toMatchObject({ name: 'typed', passed: true }); expect(s.affectedKeys).toEqual(['S1']);
-    await writeFile(join(dir, 'invalid.ts'), 'export default 42'); await expect(prepareInvariant({ name: 'invalid', module: './invalid.ts' }, dir)).rejects.toThrow('default function');
+    const custom = await prepareInvariant({ name: 'typed', module: './check.ts' }, dir, true); expect(await custom(s)).toMatchObject({ name: 'typed', passed: true }); expect(s.affectedKeys).toEqual(['S1']);
+    await writeFile(join(dir, 'invalid.ts'), 'export default 42'); await expect(prepareInvariant({ name: 'invalid', module: './invalid.ts' }, dir, true)).rejects.toThrow('default function');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 it('validates explicit mutation consent, step uniqueness, artifact paths and request destinations', () => {

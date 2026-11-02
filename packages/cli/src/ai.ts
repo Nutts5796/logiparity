@@ -1,8 +1,10 @@
+import { safeConsole, redactSecrets, secretValues } from '@logiparity/core';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { ChatCompletionsProvider, chatBody, generateDraft, loadAiSettings, prepareDestination, prepareDraft, providerConfig, requestBody, type DraftTask } from '@logiparity/ai';
 
 export interface AiOptions {
+  'allow-modules'?: boolean | undefined; version?: boolean | undefined;
   config?: string | undefined; target?: string | undefined; 'report-dir'?: string | undefined;
   openapi?: string | undefined; entity?: string | undefined; from?: string | undefined;
   output?: string | undefined; 'ai-config'?: string | undefined; 'redact-fields'?: string[] | undefined;
@@ -10,7 +12,7 @@ export interface AiOptions {
 }
 export async function aiCommand(positionals: string[], values: AiOptions): Promise<number> {
   const usage = 'Use ai suggest-config --openapi <spec.yaml> --entity <name>, ai scenario --from <description>, or ai explain <report.json>; see --help.';
-  if (values.config || values.target || values['report-dir']) throw new Error(`${usage} AI settings use --ai-config.`);
+  if (values['allow-modules'] || values.config || values.target || values['report-dir']) throw new Error(`${usage} AI settings use --ai-config.`);
   let task: DraftTask;
   if (positionals.length === 1 && positionals[0] === 'suggest-config' && values.openapi && values.entity && values.from === undefined) task = { kind: 'suggest-config', openapi: values.openapi, entity: values.entity };
   else if (positionals.length === 1 && positionals[0] === 'scenario' && values.from !== undefined && values.openapi === undefined && values.entity === undefined) task = { kind: 'scenario', description: values.from };
@@ -27,9 +29,9 @@ export async function aiCommand(positionals: string[], values: AiOptions): Promi
   const destination = resolve(values.output ?? `logiparity-ai-drafts/${task.kind}-${randomUUID()}.${task.kind === 'explain' ? 'md' : 'yaml'}`);
   if (values.send) await prepareDestination(destination, task.kind);
   const preview = `AI request preview — ${values.send ? 'will send once after this preview' : 'local only; nothing sent'}\n${JSON.stringify({ endpoint: config?.endpoint ?? '<LOGIPARITY_AI_BASE_URL>/chat/completions', headers: { 'content-type': 'application/json', authorization: '[REDACTED]' }, body, maskedFields: prepared.redactions }, null, 2)}\n`;
-  await new Promise<void>((done) => process.stdout.write(preview, () => done()));
+  await new Promise<void>((done) => process.stdout.write(safeConsole(redactSecrets(preview, secretValues(undefined))), () => done()));
   if (!values.send) { process.stdout.write('Preview only. Review this payload and rerun with --send to request a draft. No output file was created.\n'); return 0; }
   await generateDraft(prepared, new ChatCompletionsProvider(config!), destination);
-  process.stdout.write(`Created ${destination}. AI-generated draft: review before use. It has not been executed.\n`);
+  process.stdout.write(safeConsole(redactSecrets(`Created ${destination}. AI-generated draft: review before use. It has not been executed.\n`, secretValues(undefined))));
   return 0;
 }

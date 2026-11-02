@@ -4,7 +4,7 @@ import type { NormalizedValue } from './types.js';
 
 // Exact decimal addition of canonical normalized numbers keeps sums independent
 // of record order and avoids artifacts such as 0.1 + 0.2 !== 0.3.
-class DecimalSum {
+export class DecimalSum {
   private units = 0n;
   private scale = 0;
   add(value: number): void {

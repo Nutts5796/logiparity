@@ -7,3 +7,4 @@ export * from './policy.js';
 export * from './money-display.js';
 export * from './source-error.js';
 export * from './groups.js';
+export * from './diagnostics.js';

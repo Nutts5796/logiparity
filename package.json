@@ -69,7 +69,8 @@
     "examples/demo/fixtures/",
     "examples/demo/scenarios/",
     "api/",
-    "examples/staging/"
+    "examples/staging/",
+    "examples/freight/"
   ],
   "dependencies": {
     "@logiparity/cli": "1.0.0",
