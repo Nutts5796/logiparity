@@ -18,6 +18,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write
     env:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ github.ref_name }}
@@ -28,38 +29,47 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Install npm with trusted publishing support
+        run: npm install --global npm@11.6.0
       - run: npm ci --ignore-scripts
-      - name: Check tag and build the tarball
+      - name: Prepare tarball, checksum and bundled-dependency SBOM
         shell: bash
         run: |
           version=$(node -p "require('./package.json').version")
           test "$TAG" = "v$version"
-          npm run build
-          mkdir -p output/release
-          npm pack --ignore-scripts --pack-destination output/release
+          npm run release:prepare
           cd output/release
-          sha256sum "logiparity-$version.tgz" > "logiparity-$version.tgz.sha256"
           sha256sum --check "logiparity-$version.tgz.sha256"
-      - name: Build and publish versioned container images
+      - name: Attach verified assets to the GitHub release
         shell: bash
         run: |
           version=$(node -p "require('./package.json').version")
-          docker build --pull --tag "$IMAGE:$version" .
-          docker build --pull --target slim --tag "$IMAGE:$version-slim" .
+          printf 'LogiParity %s\n\nVerify the tarball with the attached SHA-256 file. The CycloneDX SBOM lists the bundled dependencies. Container digests are added after npm publication and image pushes succeed.\n' "$version" > output/release/notes.md
+          gh release create "$TAG" "output/release/logiparity-$version.tgz" "output/release/logiparity-$version.tgz.sha256" "output/release/logiparity-$version.cdx.json" --verify-tag --title "$TAG" --notes-file output/release/notes.md
+      - name: Publish the verified tarball to npm using OIDC
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          cd output/release
+          sha256sum --check "logiparity-$version.tgz.sha256"
+          npm publish "./logiparity-$version.tgz" --access public --provenance
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - name: Build and push images after GitHub and npm publication
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
           printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          docker push "$IMAGE:$version"
-          docker push "$IMAGE:$version-slim"
-          full=$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$version")
-          slim=$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$version-slim")
-          printf 'LogiParity %s\n\nContainer: `%s`\n\nSlim container: `%s`\n\nVerify the tarball with its attached .sha256 file.\n' "$version" "$full" "$slim" > output/release/notes.md
-      - name: Attach package and checksum to the GitHub release
-        shell: bash
-        run: |
-          version=$(node -p "require('./package.json').version")
-          gh release create "$TAG" "output/release/logiparity-$version.tgz" "output/release/logiparity-$version.tgz.sha256" --verify-tag --title "$TAG" --notes-file output/release/notes.md
+          docker buildx build --pull --platform linux/amd64 --target runtime --tag "$IMAGE:$version" --metadata-file output/release/full-image.json --push .
+          docker buildx build --pull --platform linux/amd64,linux/arm64 --target slim --tag "$IMAGE:$version-slim" --metadata-file output/release/slim-image.json --push .
+          full=$(node -p "require('./output/release/full-image.json')['containerimage.digest']")
+          slim=$(node -p "require('./output/release/slim-image.json')['containerimage.digest']")
+          printf '\nContainer (linux/amd64): `%s:%s@%s`\n\nSlim container (linux/amd64, linux/arm64): `%s:%s-slim@%s`\n' "$IMAGE" "$version" "$full" "$IMAGE" "$version" "$slim" >> output/release/notes.md
+          gh release edit "$TAG" --notes-file output/release/notes.md
       - name: Retain prepared files
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-files
           path: output/release/
+          retention-days: 14

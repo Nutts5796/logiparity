@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 const root = fileURLToPath(new URL('../', import.meta.url));
-const image = process.env.LOGIPARITY_DOCKER_IMAGE ?? 'logiparity:1.0.0';
+const image = process.env.LOGIPARITY_DOCKER_IMAGE ?? 'logiparity:1.0.1';
 const run = promisify(execFile);
 const probe = `const fs=require('node:fs/promises'); const {execFile}=require('node:child_process'); const {promisify}=require('node:util'); const run=promisify(execFile);
 (async()=>{
@@ -22,7 +22,7 @@ for (const target of ['runtime', 'slim']) {
   const build = spawn('docker', ['build', '--target', target, '--tag', tag, '.'], { cwd: root, stdio: 'inherit' });
   const code = await new Promise((accept, reject) => { build.once('error', reject); build.once('exit', accept); });
   assert.equal(code, 0, `Docker ${target} build failed`);
-  assert.equal((await run('docker', ['run', '--rm', '--network=none', tag, '--version'])).stdout.trim(), '1.0.0');
+  assert.equal((await run('docker', ['run', '--rm', '--network=none', tag, '--version'])).stdout.trim(), '1.0.1');
   const result = await run('docker', ['run', '--rm', '--network=none', '--shm-size=1g', '--env', `LOGIPARITY_EXPECT_BROWSER=${target === 'runtime' ? '1' : '0'}`, '--entrypoint', 'node', tag, '-e', probe], { maxBuffer: 1024 * 1024, timeout: 60000 });
   console.log(`${target}: ${result.stdout.trim()}`);
 }

@@ -21,7 +21,7 @@ RUN npm run build \
 FROM ${NODE_IMAGE} AS base
 LABEL org.opencontainers.image.title="LogiParity" \
       org.opencontainers.image.description="Test/staging logistics parity and disruption checks" \
-      org.opencontainers.image.version="1.0.0" \
+      org.opencontainers.image.version="1.0.1" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.authors="Sergei Orekhovskii" \
       org.opencontainers.image.source="https://github.com/Nutts5796/logiparity"
@@ -31,7 +31,7 @@ WORKDIR /work
 FROM base AS package
 # Bind mounts keep the release archive out of every resulting image layer.
 RUN --mount=type=bind,from=build,source=/release,target=/release,ro \
-    npm install --global --offline --ignore-scripts --no-audit --no-fund /release/logiparity-1.0.0.tgz \
+    npm install --global --offline --ignore-scripts --no-audit --no-fund /release/logiparity-1.0.1.tgz \
  && npm cache clean --force \
  && chown node:node /work
 

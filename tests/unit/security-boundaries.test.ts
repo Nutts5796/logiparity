@@ -49,5 +49,5 @@ it('redacts only variables the configuration uses, not the whole environment',()
   const env={CHILD_SESSION:'1',TERM_SESSION_ID:'w0t0p0:9F1C2D3E-4B5A-6789',SSH_AUTH_SOCK:'/private/tmp/launch/Listeners',API_TOKEN:'tok_live_123456',SVC:'svc_secret_value',PLAIN_ID:'plain-value-1'};
   const secrets=secretValues({path:'/orders/${API_TOKEN}/${PLAIN_ID}',auth:{tokenEnv:'SVC'}},env);
   expect(secrets.sort()).toEqual(['svc_secret_value','tok_live_123456']);
-  expect(redactSecrets('LogiParity 1.0.0 session w0t0p0:9F1C2D3E-4B5A-6789 token tok_live_123456',secrets)).toBe('LogiParity 1.0.0 session w0t0p0:9F1C2D3E-4B5A-6789 token [REDACTED]');
+  expect(redactSecrets('LogiParity 1.0.1 session w0t0p0:9F1C2D3E-4B5A-6789 token tok_live_123456',secrets)).toBe('LogiParity 1.0.1 session w0t0p0:9F1C2D3E-4B5A-6789 token [REDACTED]');
 });

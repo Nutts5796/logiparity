@@ -1,0 +1,44 @@
+# Set repository Actions variable LOGIPARITY_IMAGE to:
+# ghcr.io/nutts5796/logiparity:1.0.1-slim@sha256:REPLACE_WITH_VERIFIED_1_0_1_SLIM_DIGEST
+# Placeholder only: use the verified 1.0.1 slim index digest from release notes.
+# docs/release.md tracks the follow-up commit after publication. Do not use the 1.0.0 image.
+name: Staging parity in a container
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: ${{ vars.LOGIPARITY_IMAGE }}
+      options: --user 0
+    env:
+      STAGING_API_URL: ${{ vars.STAGING_API_URL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate the bundled CLI and config
+        run: |
+          test "$(logiparity --version)" = '1.0.1'
+          logiparity validate --allow-missing-env --config parity.yaml
+      - name: Download staging export
+        env:
+          STAGING_API_TOKEN: ${{ secrets.STAGING_API_TOKEN }}
+        run: |
+          node --input-type=module <<'JS'
+          import { writeFile } from 'node:fs/promises';
+          const response = await fetch(`${process.env.STAGING_API_URL}/exports/shipments.csv`, {headers: {Authorization: `Bearer ${process.env.STAGING_API_TOKEN}`}, redirect: 'error', signal: AbortSignal.timeout(30000)});
+          if (!response.ok) throw new Error(`Export HTTP ${response.status}`);
+          await writeFile('shipments.csv', new Uint8Array(await response.arrayBuffer()));
+          JS
+      - name: Compare staging sources
+        env:
+          STAGING_API_TOKEN: ${{ secrets.STAGING_API_TOKEN }}
+        run: logiparity check --config parity.yaml
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: logiparity-report
+          path: logiparity-report/
+          retention-days: 7

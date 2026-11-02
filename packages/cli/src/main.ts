@@ -10,7 +10,7 @@ import { initConfig } from './init.js';
 
 let configuredSecrets = secretValues(undefined);
 const output = (text: string) => process.stdout.write(safeConsole(redactSecrets(text, configuredSecrets)));
-const help = `LogiParity 1.0.0 — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
+const help = `LogiParity 1.0.1 — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
 
 Usage: logiparity check --config <parity.yaml>
        logiparity scenario run <scenario.yaml> --target <target.yaml> [--report-dir <dir>] [--allow-modules]
@@ -39,7 +39,7 @@ init writes a commented starter config without overwriting an existing file.
 async function main(): Promise<number> {
   const { values, positionals } = parseArgs({ options: { config: { type: 'string', short: 'c' }, target: { type: 'string' }, 'report-dir': { type: 'string' }, help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, 'allow-modules': { type: 'boolean' }, 'allow-missing-env': { type: 'boolean' }, openapi: { type: 'string' }, entity: { type: 'string' }, from: { type: 'string' }, output: { type: 'string' }, 'ai-config': { type: 'string' }, 'redact-fields': { type: 'string', multiple: true }, send: { type: 'boolean' } }, allowPositionals: true, strict: true });
   if (values.help) { output(help); return 0; }
-  if (values.version) { output('1.0.0\n'); return 0; }
+  if (values.version) { output('1.0.1\n'); return 0; }
   if (values['allow-missing-env'] && positionals[0] !== 'validate') throw new Error('--allow-missing-env requires validate');
   if (positionals[0] === 'ai') return aiCommand(positionals.slice(1), values);
   if (values.openapi !== undefined || values.entity !== undefined || values.from !== undefined || values.output !== undefined || values['ai-config'] !== undefined || values['redact-fields'] !== undefined || values.send !== undefined) throw new Error('AI options require logiparity ai; see --help.');

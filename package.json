@@ -1,6 +1,6 @@
 {
   "name": "logiparity",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "license": "MIT",
   "author": "Sergei Orekhovskii",
@@ -27,7 +27,8 @@
     "test:package": "npm run build && node scripts/check-package.mjs",
     "test:quickstart": "node scripts/check-quickstart.mjs",
     "test:docker": "node scripts/check-docker.mjs",
-    "check:docs": "node scripts/check-docs.mjs"
+    "check:docs": "node scripts/check-docs.mjs",
+    "release:prepare": "npm run build && node scripts/prepare-release.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
@@ -70,11 +71,11 @@
     "examples/freight/"
   ],
   "dependencies": {
-    "@logiparity/cli": "1.0.0",
-    "@logiparity/core": "1.0.0",
-    "@logiparity/adapters": "1.0.0",
-    "@logiparity/scenarios": "1.0.0",
-    "@logiparity/ai": "1.0.0"
+    "@logiparity/cli": "1.0.1",
+    "@logiparity/core": "1.0.1",
+    "@logiparity/adapters": "1.0.1",
+    "@logiparity/scenarios": "1.0.1",
+    "@logiparity/ai": "1.0.1"
   },
   "bundleDependencies": true,
   "publishConfig": {

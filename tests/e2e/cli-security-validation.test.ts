@@ -9,7 +9,7 @@ const cli=resolve('packages/cli/dist/main.js');const dirs:string[]=[];
 afterEach(async()=>{await Promise.all(dirs.splice(0).map(d=>rm(d,{recursive:true,force:true})));});
 async function dir(){const d=await mkdtemp(join(tmpdir(),'logiparity-cli-security-'));dirs.push(d);return d;}
 async function run(args:string[],cwd:string,env:NodeJS.ProcessEnv={}){const child=spawn(process.execPath,[cli,...args],{cwd,env:{...process.env,...env},stdio:['ignore','pipe','pipe']});let stdout='';let stderr='';child.stdout.on('data',(v:Buffer)=>{stdout+=v.toString();});child.stderr.on('data',(v:Buffer)=>{stderr+=v.toString();});const [code]=await once(child,'exit');return {code,stdout,stderr};}
-it('prints the installed version without configuration',async()=>{const result=await run(['--version'],await dir());expect(result).toEqual({code:0,stdout:'1.0.0\n',stderr:''});});
+it('prints the installed version without configuration',async()=>{const result=await run(['--version'],await dir());expect(result).toEqual({code:0,stdout:'1.0.1\n',stderr:''});});
 it('validates schema, field references and extraction syntax without reading files or contacting servers',async()=>{
   const d=await dir();let hits=0;const server=await startServer((_,res)=>{hits++;res.end('{}');});
   const config={version:1,entities:[{name:'load',key:'id',sources:{api:{type:'rest',baseUrl:server.url,path:'/',fields:{id:'$.id'}},file:{type:'csv',file:'missing.csv',fields:{id:'ID'}}}}]};

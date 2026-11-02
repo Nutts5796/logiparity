@@ -1,6 +1,6 @@
 {
   "name": "@logiparity/cli",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -11,10 +11,10 @@
     "logiparity": "bin/logiparity.js"
   },
   "dependencies": {
-    "@logiparity/core": "1.0.0",
-    "@logiparity/adapters": "1.0.0",
-    "@logiparity/scenarios": "1.0.0",
-    "@logiparity/ai": "1.0.0"
+    "@logiparity/core": "1.0.1",
+    "@logiparity/adapters": "1.0.1",
+    "@logiparity/scenarios": "1.0.1",
+    "@logiparity/ai": "1.0.1"
   },
   "files": [
     "dist/",

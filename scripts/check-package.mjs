@@ -14,9 +14,9 @@ const npm = (args, cwd = root) => run(npmCli ? process.execPath : 'npm', npmCli 
 try {
   const args = ['--ignore-scripts', '--json', '--offline', '--no-audit', '--no-fund'];
   const dry = JSON.parse((await npm(['pack', '--dry-run', ...args])).stdout)[0];
-  assert.equal(dry.name, 'logiparity'); assert.equal(dry.version, '1.0.0');
+  assert.equal(dry.name, 'logiparity'); assert.equal(dry.version, '1.0.1');
   const files = new Set(dry.files.map((file) => file.path));
-  for (const file of ['bin/logiparity.js', 'README.md', 'LICENSE', 'CODE_OF_CONDUCT.md', 'docs/ci.md', 'docs/faq.md', 'docs/development/milestones.md', 'examples/staging/driver-no-show-target.yaml', 'examples/staging/driver-no-show.yaml', 'examples/freight/parity.yaml', 'examples/freight/tms-loads.csv', 'examples/freight/carrier-settlement-lines.csv', 'templates/github-actions.yml', 'templates/gitlab-ci.yml']) assert(files.has(file), `Missing packaged ${file}`);
+  for (const file of ['bin/logiparity.js', 'README.md', 'LICENSE', 'CODE_OF_CONDUCT.md', 'docs/ci.md', 'docs/faq.md', 'docs/development/milestones.md', 'examples/staging/driver-no-show-target.yaml', 'examples/staging/driver-no-show.yaml', 'examples/freight/parity.yaml', 'examples/freight/tms-loads.csv', 'examples/freight/carrier-settlement-lines.csv', 'templates/github-actions.yml', 'templates/github-actions-container.yml', 'templates/gitlab-ci.yml']) assert(files.has(file), `Missing packaged ${file}`);
   assert(!files.has('MILESTONE_REPORT.md'));
   for (const name of ['cli', 'core', 'adapters', 'scenarios', 'ai']) {
     for (const file of ['package.json', 'LICENSE', `dist/${name === 'cli' ? 'main' : 'index'}.js`]) assert(files.has(`node_modules/@logiparity/${name}/${file}`), `Missing bundled ${name}/${file}`);
@@ -49,8 +49,8 @@ export {provider};
   const bin = join(install, 'node_modules/logiparity/bin/logiparity.js');
   const work = join(temporary, 'work'); await mkdir(work);
   const cli = (args) => run(process.execPath, [bin, ...args], { cwd: work, env: { ...process.env, LOGIPARITY_AI_BASE_URL: '', LOGIPARITY_AI_MODEL: '', LOGIPARITY_AI_API_KEY: '' }, timeout: 30000 });
-  assert.match((await cli(['--help'])).stdout, /LogiParity 1\.0\.0/);
-  assert.equal((await cli(['--version'])).stdout.trim(), '1.0.0');
+  assert.match((await cli(['--help'])).stdout, /LogiParity 1\.0\.1/);
+  assert.equal((await cli(['--version'])).stdout.trim(), '1.0.1');
   await cli(['init', '--config', 'starter.yaml']);
   await writeFile(join(work, 'a.csv'), 'ID,Payout,At\nS1,6.25,2026-11-02T13:01:00Z\n');
   await writeFile(join(work, 'b.csv'), 'ID,Payout,At\nS1,6.24,2026-11-02T13:00:00Z\n');
