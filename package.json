@@ -1,0 +1,39 @@
+{
+  "name": "logiparity-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "author": "Sergei Orekhovskii",
+  "engines": { "node": ">=20" },
+  "workspaces": ["packages/*", "apps/*"],
+  "overrides": {
+    "unzipper": "0.12.5",
+    "uuid": "11.1.1"
+  },
+  "scripts": {
+    "build": "tsc -b packages/core packages/adapters packages/cli apps/demo-delivery",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit",
+    "test": "vitest run --coverage",
+    "test:e2e": "npm run build && vitest run --config vitest.e2e.config.ts",
+    "demo": "npm run build && node apps/demo-delivery/dist/main.js",
+    "demo:bugs": "npm run build && node apps/demo-delivery/dist/main.js --bugs",
+    "demo:export": "node scripts/export-demo.mjs",
+    "check:demo": "npm run build && node packages/cli/dist/main.js check --config examples/demo/parity.yaml"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/luxon": "3.7.2",
+    "@types/node": "20.19.37",
+    "@types/unzipper": "0.10.11",
+    "@vitest/coverage-v8": "4.1.12",
+    "eslint": "9.39.5",
+    "exceljs": "4.4.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1",
+    "vite": "6.4.5",
+    "vitest": "4.1.12",
+    "yaml": "2.9.1"
+  }
+}

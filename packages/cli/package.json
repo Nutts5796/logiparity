@@ -1,0 +1,6 @@
+{
+  "name": "logiparity", "version": "0.1.0", "private": true,
+  "type": "module", "license": "MIT", "engines": { "node": ">=20" },
+  "bin": { "logiparity": "bin/logiparity.js" },
+  "dependencies": { "@logiparity/core": "0.1.0", "@logiparity/adapters": "0.1.0" }
+}

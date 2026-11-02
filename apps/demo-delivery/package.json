@@ -1,0 +1,5 @@
+{
+  "name": "@logiparity/demo-delivery", "version": "0.1.0", "private": true,
+  "type": "module", "license": "MIT", "engines": { "node": ">=20" },
+  "dependencies": { "exceljs": "4.4.0" }
+}

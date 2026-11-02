@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+logiparity-report/
+examples/demo/out/
+.env
+.env.*
+!.env.example
+.DS_Store
