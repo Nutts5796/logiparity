@@ -1,0 +1,65 @@
+name: Versioned release
+on:
+  push:
+    tags: ['v*']
+permissions: {}
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+  release:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      packages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+      IMAGE: ghcr.io/nutts5796/logiparity
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Check tag and build the tarball
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          test "$TAG" = "v$version"
+          npm run build
+          mkdir -p output/release
+          npm pack --ignore-scripts --pack-destination output/release
+          cd output/release
+          sha256sum "logiparity-$version.tgz" > "logiparity-$version.tgz.sha256"
+          sha256sum --check "logiparity-$version.tgz.sha256"
+      - name: Build and publish versioned container images
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          docker build --pull --tag "$IMAGE:$version" .
+          docker build --pull --target slim --tag "$IMAGE:$version-slim" .
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE:$version"
+          docker push "$IMAGE:$version-slim"
+          full=$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$version")
+          slim=$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$version-slim")
+          printf 'LogiParity %s\n\nContainer: `%s`\n\nSlim container: `%s`\n\nVerify the tarball with its attached .sha256 file.\n' "$version" "$full" "$slim" > output/release/notes.md
+      - name: Attach package and checksum to the GitHub release
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          gh release create "$TAG" "output/release/logiparity-$version.tgz" "output/release/logiparity-$version.tgz.sha256" --verify-tag --title "$TAG" --notes-file output/release/notes.md
+      - name: Retain prepared files
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-files
+          path: output/release/

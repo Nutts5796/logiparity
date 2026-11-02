@@ -16,7 +16,7 @@ try {
   const dry = JSON.parse((await npm(['pack', '--dry-run', ...args])).stdout)[0];
   assert.equal(dry.name, 'logiparity'); assert.equal(dry.version, '1.0.0');
   const files = new Set(dry.files.map((file) => file.path));
-  for (const file of ['bin/logiparity.js', 'README.md', 'LICENSE', 'CODE_OF_CONDUCT.md', 'docs/ci.md', 'docs/faq.md', 'docs/development/milestones.md', 'examples/staging/driver-no-show-target.yaml', 'examples/staging/driver-no-show.yaml', 'templates/github-actions.yml', 'templates/gitlab-ci.yml']) assert(files.has(file), `Missing packaged ${file}`);
+  for (const file of ['bin/logiparity.js', 'README.md', 'LICENSE', 'CODE_OF_CONDUCT.md', 'docs/ci.md', 'docs/faq.md', 'docs/development/milestones.md', 'examples/staging/driver-no-show-target.yaml', 'examples/staging/driver-no-show.yaml', 'examples/freight/parity.yaml', 'examples/freight/tms-loads.csv', 'examples/freight/carrier-settlement-lines.csv', 'templates/github-actions.yml', 'templates/gitlab-ci.yml']) assert(files.has(file), `Missing packaged ${file}`);
   assert(!files.has('MILESTONE_REPORT.md'));
   for (const name of ['cli', 'core', 'adapters', 'scenarios', 'ai']) {
     for (const file of ['package.json', 'LICENSE', `dist/${name === 'cli' ? 'main' : 'index'}.js`]) assert(files.has(`node_modules/@logiparity/${name}/${file}`), `Missing bundled ${name}/${file}`);
@@ -46,11 +46,13 @@ export {provider};
   const work = join(temporary, 'work'); await mkdir(work);
   const cli = (args) => run(process.execPath, [bin, ...args], { cwd: work, env: { ...process.env, LOGIPARITY_AI_BASE_URL: '', LOGIPARITY_AI_MODEL: '', LOGIPARITY_AI_API_KEY: '' }, timeout: 30000 });
   assert.match((await cli(['--help'])).stdout, /LogiParity 1\.0\.0/);
+  assert.equal((await cli(['--version'])).stdout.trim(), '1.0.0');
   await cli(['init', '--config', 'starter.yaml']);
   await writeFile(join(work, 'a.csv'), 'ID,Payout,At\nS1,6.25,2026-11-02T13:01:00Z\n');
   await writeFile(join(work, 'b.csv'), 'ID,Payout,At\nS1,6.24,2026-11-02T13:00:00Z\n');
   const source = (file) => ({ type: 'csv', file, fields: { id: 'ID', payout: 'Payout', at: 'At' } });
   await writeFile(join(work, 'parity.yaml'), JSON.stringify({ version: 1, entities: [{ name: 'shipment', key: 'id', sources: { api: source('a.csv'), csv: source('b.csv') }, compare: { payout: { type: 'money', currency: 'USD' }, at: { type: 'datetime' } } }], report: { outputs: ['html', 'json', 'markdown', 'junit'], dir: './report' } }));
+  assert.match((await cli(['validate', '--config', 'parity.yaml'])).stdout, /Configuration valid/);
   let exit; try { await cli(['check', '--config', 'parity.yaml']); } catch (error) { exit = error.code; } assert.equal(exit, 1);
   const report = JSON.parse(await readFile(join(work, 'report/report.json'), 'utf8'));
   assert.equal(report.findings.length, 2);

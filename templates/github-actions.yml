@@ -11,15 +11,21 @@ permissions:
 jobs:
   parity:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       STAGING_API_URL: ${{ vars.STAGING_API_URL }}
       STAGING_API_TOKEN: ${{ secrets.STAGING_API_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with: {node-version: '22'}
-      - name: Install from the versioned release asset
-        run: npm install --no-save --ignore-scripts https://github.com/Nutts5796/logiparity/releases/download/v1.0.0/logiparity-1.0.0.tgz
+        with: {node-version: '22', cache: npm, cache-dependency-path: parity.yaml}
+      - name: Download and verify the release tarball
+        run: |
+          base=https://github.com/Nutts5796/logiparity/releases/download/v1.0.0
+          curl --fail --silent --show-error --location "$base/logiparity-1.0.0.tgz" --output logiparity-1.0.0.tgz
+          curl --fail --silent --show-error --location "$base/logiparity-1.0.0.tgz.sha256" --output logiparity-1.0.0.tgz.sha256
+          sha256sum --check logiparity-1.0.0.tgz.sha256
+          npm install --no-save --ignore-scripts ./logiparity-1.0.0.tgz
       # After npm publication: npm install --no-save --ignore-scripts logiparity@1.0.0
       # For UI: node node_modules/logiparity/node_modules/playwright/cli.js install --with-deps chromium
       - name: Download the current staging export

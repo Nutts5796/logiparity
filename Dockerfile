@@ -17,24 +17,38 @@ RUN npm run build \
  && mkdir /release \
  && npm pack --ignore-scripts --pack-destination /release
 
-FROM ${NODE_IMAGE} AS runtime
+FROM ${NODE_IMAGE} AS base
 LABEL org.opencontainers.image.title="LogiParity" \
       org.opencontainers.image.description="Test/staging logistics parity and disruption checks" \
       org.opencontainers.image.version="1.0.0" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.authors="Sergei Orekhovskii"
+      org.opencontainers.image.authors="Sergei Orekhovskii" \
+      org.opencontainers.image.source="https://github.com/Nutts5796/logiparity"
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-COPY --from=dependencies /build/node_modules/playwright /tmp/browser/node_modules/playwright
-COPY --from=dependencies /build/node_modules/playwright-core /tmp/browser/node_modules/playwright-core
-RUN node /tmp/browser/node_modules/playwright/cli.js install --with-deps chromium \
- && rm -rf /tmp/browser /var/lib/apt/lists/*
-COPY --from=build /release/logiparity-1.0.0.tgz /tmp/logiparity.tgz
-RUN npm install --global --offline --ignore-scripts --no-audit --no-fund /tmp/logiparity.tgz \
- && rm /tmp/logiparity.tgz \
+WORKDIR /work
+
+FROM base AS package
+# Bind mounts keep the release archive out of every resulting image layer.
+RUN --mount=type=bind,from=build,source=/release,target=/release,ro \
+    npm install --global --offline --ignore-scripts --no-audit --no-fund /release/logiparity-1.0.0.tgz \
  && npm cache clean --force \
- && mkdir -p /work \
+ && chown node:node /work
+
+FROM package AS slim
+USER node
+ENTRYPOINT ["logiparity"]
+CMD ["--help"]
+
+FROM base AS browsers
+# The installer and its JavaScript dependencies exist only in this mount.
+RUN --mount=type=bind,from=dependencies,source=/build/node_modules,target=/tmp/browser/node_modules,ro \
+    node /tmp/browser/node_modules/playwright/cli.js install --with-deps chromium \
+ && rm -rf /var/lib/apt/lists/* /root/.cache
+
+FROM browsers AS runtime
+COPY --from=package /usr/local/lib/node_modules/logiparity /usr/local/lib/node_modules/logiparity
+RUN ln -s ../lib/node_modules/logiparity/bin/logiparity.js /usr/local/bin/logiparity \
  && chown node:node /work
 USER node
-WORKDIR /work
 ENTRYPOINT ["logiparity"]
 CMD ["--help"]

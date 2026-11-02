@@ -35,9 +35,12 @@ try {
   const report = JSON.parse(await readFile(join(temporary, 'logiparity-report/report.json'), 'utf8'));
   assert.deepEqual(report.findings, []); assert.deepEqual(report.entities[0].counts, { api: 2750, export: 2750, csv: 2750 });
   for (const file of ['report.html', 'report.md', 'junit.xml']) assert((await readFile(join(temporary, 'logiparity-report', file), 'utf8')).length > 100);
+  await run(process.execPath, ['node_modules/.bin/logiparity', 'validate', '--config', 'examples/freight/parity.yaml'], { cwd: temporary, env });
+  const freight = await run(process.execPath, ['node_modules/.bin/logiparity', 'check', '--config', 'examples/freight/parity.yaml'], { cwd: temporary, env });
+  assert.match(freight.stdout, /0 findings \(0 blocking\)/);
   const seconds = Number(((performance.now() - started) / 1000).toFixed(2)); assert(seconds < 600, `Quickstart exceeded 10 minutes: ${seconds}s`);
-  if (process.env.LOGIPARITY_QUICKSTART_OUTPUT) { const file = resolve(process.env.LOGIPARITY_QUICKSTART_OUTPUT); await mkdir(dirname(file), { recursive: true }); await writeFile(file, JSON.stringify({ node: process.version, seconds, cleanSourceCopy: true, install: 'npm ci --ignore-scripts', rowsPerSource: 2750, findings: 0, reportFormats: 4 }, null, 2) + '\n'); }
-  console.log(`Clean-source quickstart passed in ${seconds}s: npm ci, build, demo, export and 2,750-row API/XLSX/CSV check; all report files created.`);
+  if (process.env.LOGIPARITY_QUICKSTART_OUTPUT) { const file = resolve(process.env.LOGIPARITY_QUICKSTART_OUTPUT); await mkdir(dirname(file), { recursive: true }); await writeFile(file, JSON.stringify({ node: process.version, seconds, cleanSourceCopy: true, install: 'npm ci --ignore-scripts', rowsPerSource: 2750, findings: 0, freightExample: true, reportFormats: 4 }, null, 2) + '\n'); }
+  console.log(`Clean-source quickstart passed in ${seconds}s: npm ci, build, demo, export and 2,750-row API/XLSX/CSV check; all report files created; freight example validated and checked.`);
 } finally {
   if (demo && demo.exitCode === null) { const exited = once(demo, 'exit'); demo.kill('SIGTERM'); await exited; }
   await rm(temporary, { recursive: true, force: true });
