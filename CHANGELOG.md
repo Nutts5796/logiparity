@@ -6,6 +6,10 @@ This file follows Keep a Changelog. Versions are unreleased until explicitly pub
 
 ### Added
 
+- M4 scenario CLI, explicit test/staging target mappings, adapter state snapshots, six operational invariants and custom TypeScript/JSONPath checks.
+- Five healthy disruption scenarios, deterministic virtual-clock demo replanning, lost-order/double-assignment bug flags, fresh post-scenario Parity and scenario reports.
+- ISO 8601 UTC beside epoch milliseconds in HTML/Markdown datetime fields; JSON remains unchanged.
+
 - M3 Playwright table extraction with saved auth, bounded pagination, configured-origin routing and linked failure screenshots.
 - A server-rendered dispatcher with demo login, date/status filters, pagination and reproducible stale-status/timezone export bugs.
 - Streaming PostgreSQL reads, AST rejection before connecting, a read-only transaction and isolated real-database safety tests.

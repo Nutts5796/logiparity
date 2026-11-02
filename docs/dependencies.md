@@ -7,6 +7,7 @@ Direct external runtime dependencies are pinned exactly:
 | --- | --- | --- | --- |
 | csv-parse | 7.0.3 | MIT | Streaming CSV parsing |
 | exceljs | 4.4.0 | MIT | XLSX cells, metadata and streaming rows/exports |
+| jiti | 2.7.0 | MIT | Load explicitly configured TypeScript invariants on Node 20/22 |
 | luxon | 3.7.2 | MIT | Explicit IANA timezone conversion and DST validation |
 | pg | 8.23.1 | MIT | PostgreSQL client and read-only transaction lifecycle |
 | pg-query-stream | 4.17.1 | MIT | Bounded PostgreSQL row batches |
@@ -64,6 +65,7 @@ The full transitive runtime inventory follows. jszip is consumed under its MIT a
 | inflight | 1.0.6 | ISC |
 | inherits | 2.0.4 | ISC |
 | isarray | 1.0.0 | MIT |
+| jiti | 2.7.0 | MIT |
 | jsonfile | 6.2.1 | MIT |
 | jszip | 3.10.2 | (MIT OR GPL-3.0-or-later) |
 | lazystream | 1.0.1 | MIT |

@@ -37,3 +37,11 @@ JSON schema version remains 1: M2 adds optional `blocking`, `screenshot` and ent
 HTML/Markdown display configured monetary fields and sum aggregates as `682625 ($6,826.25)`: integer minor units with a major-unit currency equivalent beside them. Currency/locale come from the entity's money rule; counts and non-money fields are never formatted as currency. Formatting uses bigint arithmetic and Intl parts, retaining large amounts and negative sub-unit signs without conversion through floating-point major amounts.
 
 The CLI supplies `{entities: config.entities}` as separate presentation context. Library callers can pass that optional context to htmlReport, markdownReport or writeReports; absent metadata means minor units only, with no guessed currency. JSON data/schema/units remain unchanged, and no display/currency properties are attached to Report. Console/JUnit continue to use normalized minor units. Regression tests compare JSON byte-for-byte before/after rendering and writing the human-readable formats.
+
+## M4 UTC presentation and scenario reports
+
+Configured datetime fields in HTML/Markdown show both epoch milliseconds and ISO 8601 UTC: `1793624460000 (2026-11-02T13:01:00Z)`. Nonzero milliseconds are retained (`.123Z`); formatting does not use the machine timezone. JSON, console and JUnit comparison values remain unchanged. Renderer callers pass entity configuration as presentation context, as for currency; numeric fields are not guessed to be datetimes.
+
+Scenario runs write `scenario.html`, `scenario.md`, `scenario.json` and `junit.xml`, with one result per invariant, explanations and affected keys. Optional post-scenario Parity writes the existing formats into `parity/`, linked from the scenario summary. See [scenario reference](scenarios.md).
+
+![Datetime Parity findings with UTC equivalents and search](images/report-datetime.png)

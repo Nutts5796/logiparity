@@ -176,9 +176,9 @@ Raw screenshots/snapshots are ignored in output/playwright and .playwright-cli. 
 4. Tests now require the development tool xmllint; CI installs libxml2-utils. No new npm/runtime dependency was added. M1's recorded dependency advisories and source-format limits remain applicable and are not presented as fixed in M2.
 5. Markdown is deliberately a 50-finding comment summary; select HTML/JSON for complete details. UI/SQL adapters remain M3, scenarios remain M4, AI remains M5, and release packaging remains M6. No next milestone or release action is authorized by this report.
 
-## M3 — Implemented, awaiting owner review
+## M3 — Approved by owner
 
-Date: 2026-11-02. Version remains 0.1.0, unreleased. M2 was approved by the owner before M3 began. The owner also requested major-unit currency display beside minor units in HTML/Markdown, with JSON unchanged. **M3 acceptance checks passed; work stops before M4.** No push, release, publication, real credentials or git identity changes were performed.
+Date: 2026-11-02. Version remains 0.1.0, unreleased. M2 was approved by the owner before M3 began. The owner also requested major-unit currency display beside minor units in HTML/Markdown, with JSON unchanged. M3 acceptance checks passed and the original delivery stopped at its review gate. The owner subsequently approved M3 and explicitly authorized M4 on 2026-11-02. No push, release, publication, real credentials or git identity changes were performed.
 
 ### Delivered
 
@@ -267,3 +267,100 @@ Ten direct external runtime dependencies are pinned. The regenerated inventory r
 4. Chromium and PostgreSQL/XML development prerequisites are now required for the complete suite. CI definitions are committed, but no remote CI success or public release is claimed. Size checks are functional, not cross-machine benchmarks.
 5. Normal export timestamps carry UTC offsets. The injected timezone defect changes that serialization contract; changing fallback timezone to Chicago would reinterpret the broken output and hide this defect. Review source timezone contracts for your own systems.
 6. Scenarios, operational events/invariants and virtual-clock controls remain M4. AI remains M5 and release packaging remains M6. No next milestone or release action is authorized by this report.
+
+## M4 — Implemented, awaiting owner review
+
+Date: 2026-11-02. Version remains 0.1.0, unreleased. The owner approved M3 and explicitly authorized M4, adding ISO 8601 UTC beside epoch milliseconds in HTML/Markdown while preserving JSON. **M4 acceptance checks pass; work stops before M5.** No AI work, push, publication, release, production connection, real credentials or git identity changes were performed.
+
+### Delivered
+
+- `logiparity scenario run <scenario.yaml> --target <target.yaml> [--report-dir <dir>]`, strict YAML schemas and matching target names. Targets require explicit `environment: test|staging` and `allowMutations: true`.
+- System-agnostic event HTTP mappings for driver no-show, breakdown, traffic delay, cancellation, capacity changes and custom HTTP. Typed placeholders preserve JSON objects/arrays/numbers, embedded path values are encoded, and unknown/prototype tokens, foreign origins, embedded credentials and redirects are rejected. Mutation requests have timeouts and no automatic retries. Header secrets come from environment references.
+- Preflight of fixture/modules/request plans/Parity configuration before setup; baseline adapter snapshots and validation before event injection; unique step/name checks; ordered events, replan trigger, bounded completion polling and virtual-clock integration. Partial failures record completed event steps with exit 2.
+- Six built-in operational invariants, baseline-derived affected keys, clear explanations and sorted failing keys. Assignment rows are independent of an order's primary driver, enabling double-assignment detection. Cancellation retains records, removes assignments and requires a fresh notification. Capacity sums active units per vehicle and rejects unavailable resources.
+- Trusted custom TypeScript/JavaScript default-export invariant functions and safe JSONPath/expected-value checks. TypeScript works on both supported Node versions through pinned MIT Jiti 2.7.0; malformed results and thrown errors exit 2. Each custom function receives cloned state.
+- Five complete scenario examples, a demo target mapping and a synthetic fixture recipe: 55 drivers, 2,750 active orders, capacity 60 per vehicle. Each example resets its fixture; virtual replanning completes after two simulated seconds. The original default snapshot and M1–M3 Parity findings remain compatible.
+- Demo reset/event/replan/status/clock endpoints, independent assignment records, operational driver/vehicle flags, ETAs, cancellation state, synthetic notifications and dynamic UI/export snapshots. Added BUG_REPLAN_LOSES_ORDER and BUG_DOUBLE_ASSIGN; demo:bugs now enables all six documented flags. ETA is appended to exports; original four columns retain their positions.
+- Scenario console/HTML/Markdown/JSON/JUnit outputs. Fresh target CSV/XLSX artifacts are downloaded before optional post-scenario Parity, including after invariant failures. Nested/standalone Parity JSON keeps its existing schema. Domain and cross-surface results remain visible independently.
+- Datetime field presentation in HTML/Markdown: `1793624460000 (2026-11-02T13:01:00Z)`, with `.123Z` retained when applicable. Formatting is UTC and type-driven; counts/numeric fields are not guessed to be dates. Money currency presentation is retained. JSON values/structure/units and console/JUnit comparison values remain unchanged, with byte-for-byte JSON regression checks.
+- Scenario reference, reproduction commands, updated roadmap/security/bug documentation, real browser captures and regenerated 109-version runtime license inventory. AI remains an unchanged M5 placeholder.
+
+### Verification commands and results
+
+From the repository root, with Chromium, xmllint and local PostgreSQL test prerequisites installed:
+
+```sh
+npm run lint
+npm run typecheck
+npm test
+npm run test:e2e
+npm run build
+node scripts/dependencies.mjs
+npm ls --depth=0
+git diff --check
+npm audit --json
+npm audit --omit=dev --json
+```
+
+The complete lint/typecheck/unit/e2e pipelines ran sequentially with `PATH=/private/tmp/logiparity-node20/node_modules/.bin:$PATH` and the corresponding node22 path. E2E builds first. After those checks, a clean cached installation and build also passed: `npm ci --offline --ignore-scripts --cache /private/tmp/logiparity-npm-cache` on Node 22 followed by `npm run build`. Offline installation audit output is not treated as an online advisory result.
+
+| Check | Node 20.20.2 | Node 22.23.4 |
+| --- | --- | --- |
+| lint / strict typecheck / build | Pass | Pass |
+| unit/adapter tests | 167 pass, 15 files | 167 pass, 15 files |
+| CLI/demo e2e tests | 38 pass, 2 files | 38 pass, 2 files |
+| core line coverage | 100% (340/340) | 100% (340/340) |
+| statements / branches / functions | 98.97% / 94.72% / 98.97% | 98.97% / 94.72% / 98.97% |
+
+No test is skipped. Core retains its 85% enforced line threshold; these coverage percentages describe core, not the entire scenario/demo code. Existing 100,000-row functional size checks, real Chromium isolation/login/table checks and isolated PostgreSQL 14.16 tests remain passing. CI already runs the same suites on Node 20/22 with a PostgreSQL 16 service; no remote GitHub run is claimed.
+
+New tests cover all five healthy scenarios with all six invariants and fresh 2,750-row API/CSV/XLSX Parity; each new environment bug flag through the actual demo executable; combined bugs; exact affected IDs; ordered events/custom HTTP; TypeScript and JSONPath invariants; invalid module/results; consent/foreign request/fixture/duplicate-step preflight without target mutations; event HTTP failures; virtual and real-clock timeout; post-scenario source-error precedence; canonical scalar validation; report escaping; datetime epoch/UTC formatting, millisecond preservation, invalid epochs and unchanged JSON. Healthy scenario JUnit is validated independently against the vendored Ant XSD.
+
+### M4 acceptance and reproduction
+
+Start `npm run demo` in one terminal. In another:
+
+```sh
+export DEMO_API_URL=http://127.0.0.1:3010
+for scenario in examples/demo/scenarios/*.yaml; do
+  ./node_modules/.bin/logiparity scenario run "$scenario" --target examples/demo/target.yaml || break
+done
+```
+
+All five examples pass six invariants, report zero post-scenario findings and exit 0. Each writes its own folder under ignored logiparity-scenario-report. The virtual clock ends two seconds after the event's configured `at`; event hours do not create wall-clock-hour waits.
+
+Restart with an individual M4 flag, then rerun the breakdown scenario:
+
+```sh
+BUG_REPLAN_LOSES_ORDER=1 npm run demo
+# In another terminal:
+./node_modules/.bin/logiparity scenario run examples/demo/scenarios/02-vehicle-breakdown.yaml \
+  --target examples/demo/target.yaml
+# Repeat after restarting with BUG_DOUBLE_ASSIGN=1 npm run demo.
+```
+
+| M4 flags | Required observed failure | Exit |
+| --- | --- | --- |
+| Both off | All five examples pass; zero Parity findings. | 0 |
+| Lost order only | no_order_lost names S000801; affected ETA/notification checks also fail. | 1 |
+| Double assignment only | single_assignment names S000801. | 1 |
+| Both on | Lost S000801, duplicate S000802. | 1 |
+
+With only these M4 bugs, API/CSV/XLSX can all agree: Parity has zero findings, while the domain invariant correctly fails. With all six flags on, the manually generated breakdown result names lost S000801 and duplicate S000802; post-scenario Parity has **5,781 findings** (14 missing, 5,765 field, 2 aggregate). The original non-scenario M3 UI configuration still reports its expected 4,273 findings.
+
+Manual review artifacts are in ignored `logiparity-scenario-report/review-m4/`: scenario.html, scenario.md, scenario.json, junit.xml, fresh artifacts and parity/. Both the failing scenario JUnit and nested Parity JUnit validate with `xmllint --nonet --noout --schema tests/fixtures/junit/JUnit.xsd ...`. Open the local files to review; temporary QA servers have been stopped.
+
+### Browser QA and dependency review
+
+A dedicated logiparity-m4 Chromium session confirmed six invariant rows, exact lost/duplicate IDs, the Parity link and `1793613600000 (2026-11-02T10:00:00Z)`. Searching that ISO instant selected exactly 20 rows (matching the JSON expected/actual values). Both report pages passed the 390-pixel document-overflow check. docs/images/scenario.png and report-datetime.png are actual captures of those synthetic reports. The browser session and both loopback QA servers were closed after review.
+
+Jiti adds one pinned external runtime package with MIT metadata and no external dependency chain. The regenerated inventory records 109 runtime versions, all with declared licenses. Online audit remains **17 moderate affected-package entries overall, 7 moderate runtime entries, 0 high and 0 critical**, with unchanged affected package names. Existing ExcelJS/glob/minimatch limitations remain documented in docs/dependency-audit.md; no incompatible forced update was applied.
+
+### Known gaps and owner decisions
+
+1. Review M4 and the UTC presentation addition before authorizing M5. No optional AI provider/command implementation or release work has started.
+2. Scenario setup/events/replan mutate the explicitly configured test/staging service. There is no transaction, automatic rollback or retry. After partial failure inspect the target; rerunning a shipped demo scenario resets its synthetic fixture. Run scenarios serially on a shared demo instance.
+3. Built-ins require the documented canonical state contract. They check snapshot invariants, not route optimization, eventual customer message delivery or every possible business rule. Custom HTTP affected keys are caller-supplied. Custom modules run trusted Node code, including top-level imports, without a sandbox/execution timeout.
+4. Real-target waits use wall-clock polling; individual adapter/request timeouts also apply, so an in-flight read can finish after the polling deadline. Only the demo mapping advances virtual time. Scenario state snapshots are held in memory; no scenario throughput/memory benchmark is claimed.
+5. Post-scenario Parity reads API plus fresh CSV/XLSX in the shipped mapping. Existing UI/SQL adapters can be configured, with their documented authentication/read-only constraints. Scenarios do not provision external database fixtures or synthesize UI authentication.
+6. Report outputs contain synthetic/test business values and affected IDs. Existing dependency advisories are unchanged. Chromium/XML/PostgreSQL prerequisites remain required for the complete local suite. Publication, npm/Docker packaging and final release review remain M6.

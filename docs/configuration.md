@@ -144,3 +144,7 @@ failOn: { missing: 2, mismatch: 10, aggregate: 0 }
 Exactly two missing findings or ten field mismatches are allowed; a category fails when its count exceeds its limit. Counts span all sources within the entity and remain isolated between entities. When a category exceeds its limit, all its findings become blocking. Every finding remains in the report. Thresholds must be nonnegative safe integers; typos and unsupported categories are configuration errors.
 
 Exit 0 means no blocking ordinary findings; exit 1 means at least one blocking finding. Source errors always block and force exit 2; failOn cannot suppress them. Invalid config, startup or report write failures also return 2. Policy does not change normalization, comparison tolerances or source data. Existing files from an earlier run may remain when configuration validation fails before writing; CI must use the exit code.
+
+## Scenario configuration
+
+M4 scenarios and mutation targets have separate schemas from Parity. Use `logiparity scenario run <scenario.yaml> --target <target.yaml>`. Event templates do not use Parity's flat `variables` syntax; they use scoped typed placeholders (`params`, `fixture`, `seconds`). See the [scenario reference](scenarios.md) for target consent, state field mappings, custom checks and fresh post-scenario Parity.

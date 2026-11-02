@@ -1,6 +1,6 @@
 # Security and operational scope
 
-LogiParity is intended only for test/staging environments. The environment declaration is not a production-host detector. Supply only test/staging URLs and credentials. M3 adds browser reads and read-only PostgreSQL; later scenario mutation features must remain test/staging only.
+LogiParity is intended only for test/staging environments. The environment declaration is not a production-host detector. Supply only test/staging URLs and credentials. M4 adds scenario mutations, requiring an explicit test/staging target and allowMutations: true. Event HTTP requests stay on the target origin and reject redirects. Setup/events have no rollback or automatic retries. Custom invariant modules are trusted local code executed with Node permissions; review them before running.
 
 There is no telemetry, analytics, automatic update check or AI provider integration. Install/development tooling may access npm; normal checks access only configured source targets. REST redirects, embedded URL credentials and cross-origin pagination links are rejected. Authentication is read from environment variables, never written into the report. Reports intentionally contain compared field values and may include local file paths in errors: treat artifacts according to the sensitivity of your test data.
 

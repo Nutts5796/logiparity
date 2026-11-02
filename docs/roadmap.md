@@ -4,8 +4,8 @@
 | --- | --- | --- |
 | M1 | Scaffold, core, REST/file adapters, check CLI, console/JSON, synthetic API/exports and M1 bugs | Approved by the owner on 2026-11-02. |
 | M2 | HTML/JUnit/Markdown, aggregates, failOn, tested failure controls, init | Approved by the owner on 2026-11-02. |
-| M3 | Dispatcher UI/login, Playwright, read-only PostgreSQL, stale UI/timezone detection, currency presentation | Implemented, awaiting owner review; see MILESTONE_REPORT.md. |
-| M4 | Scenario DSL/runner, event mappings, invariants, virtual clock and five disruption examples | Planned. |
+| M3 | Dispatcher UI/login, Playwright, read-only PostgreSQL, stale UI/timezone detection, currency presentation | Approved by the owner on 2026-11-02. |
+| M4 | Scenario DSL/runner, event mappings, invariants, virtual clock and five disruption examples and ISO UTC presentation | Implemented, awaiting owner review; see MILESTONE_REPORT.md. |
 | M5 | Optional provider-agnostic AI drafts with preview/redaction and mock-provider tests | Planned. |
 | M6 | Full docs, screenshots, Contributor Covenant 2.1, templates, Docker, package/release checks | Planned. |
 
