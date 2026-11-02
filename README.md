@@ -2,9 +2,9 @@
 
 Logistics software often shows the same shipments in an API, dispatcher screen and accounting export. A missing export row or a one-cent payout difference can survive ordinary endpoint tests. LogiParity compares records by a shared key and identifies the affected records and fields.
 
-**Use only in test and staging environments.** Parity reads explicitly configured sources. Scenarios also send configured mutation requests after explicit target consent. It has no telemetry or AI integration. It does not identify whether a configured hostname is production: you are responsible for choosing a test or staging target. Never put production credentials in this project.
+**Use only in test and staging environments.** Parity reads explicitly configured sources. Scenarios also send configured mutation requests after explicit target consent. It has no telemetry. Optional AI is disabled by default and runs only through explicit AI commands with --send. It does not identify whether a configured hostname is production: you are responsible for choosing a test or staging target. Never put production credentials in this project.
 
-Current status: **M4 / 0.1.0, unreleased**. Implemented: REST, CSV, XLSX, Playwright UI and read-only PostgreSQL sources; normalized record/aggregate comparisons; `logiparity check` and `init`; failure thresholds; five report formats; a synthetic delivery demo with dispatcher UI/login and six switchable bugs; disruption scenarios, invariants and a virtual clock. Optional AI remains M5. No npm package, Docker image or hosted service has been published.
+Current status: **M5 / 0.1.0, unreleased**. Implemented: REST, CSV, XLSX, Playwright UI and read-only PostgreSQL sources; normalized record/aggregate comparisons; `logiparity check` and `init`; failure thresholds; five report formats; a synthetic delivery demo with dispatcher UI/login and six switchable bugs; disruption scenarios, invariants and a virtual clock. Optional AI can draft configs/scenarios and explain reports with local payload preview and redaction. No npm package, Docker image or hosted service has been published.
 
 ## Quickstart from this checkout
 
@@ -89,6 +89,22 @@ Configure `type: sql`, `connectionEnv`, one SELECT query, optional bound `params
 
 [examples/postgres/parity.yaml](examples/postgres/parity.yaml) is a two-record synthetic smoke example with SQL constants and a CSV reference. It requires `STAGING_DATABASE_URL` but creates no database objects. Replace the query with your own staging SELECT and mappings.
 
+## Optional AI drafts
+
+AI commands preview locally by default and do not require provider configuration:
+
+```sh
+./node_modules/.bin/logiparity ai suggest-config --openapi examples/ai/openapi.yaml --entity shipment
+./node_modules/.bin/logiparity ai scenario --from "Two vans broke down during the afternoon peak"
+./node_modules/.bin/logiparity ai explain examples/ai/report.json --ai-config examples/ai/settings.yaml
+```
+
+Review the exact prompt/request body and field masking. To generate a draft, set `LOGIPARITY_AI_BASE_URL`, `LOGIPARITY_AI_MODEL` and `LOGIPARITY_AI_API_KEY`, then add `--send`. Only that invocation calls the configured chat-completions provider; normal checks/scenario runs never use AI. API credentials come from the environment and are hidden from the preview.
+
+Every generated file starts with `# AI-generated draft: review before use`. Drafts use new files under ignored `logiparity-ai-drafts/`, or a new `--output` path, and are never executed automatically. YAML is checked against LogiParity's schema without reading its referenced files or expanding real environment values. Provider output still requires review for correct mappings, assumptions and target safety.
+
+`redactFields` supports field names and scoped paths, including finding keys and expected/actual values; known values copied into messages are masked too. Explain includes exact report totals and a disclosed bounded sample. Read the [AI reference](docs/ai.md) for settings, data selection, limits and custom provider injection. Tests use only synthetic loopback mocks, with no real AI calls in CI.
+
 ## How checks work
 
 The first source in an entity is the reference. LogiParity joins every other source to it by the configured key. It reports missing/extra records, field differences and duplicate keys. Duplicate keys keep the first record and always produce a finding. Source failures return a runtime error and suppress incomplete missing/extra comparisons for that source.
@@ -119,6 +135,7 @@ This writes a commented REST/CSV example with aggregates and all report outputs.
 
 - [Configuration reference](docs/configuration.md)
 - [Scenario reference](docs/scenarios.md)
+- [Optional AI reference](docs/ai.md)
 - [Adapter extension interface](docs/writing-adapters.md)
 - [JSON report schema](docs/report-schema.md)
 - [HTML, JUnit and Markdown output](docs/report-formats.md)
@@ -147,6 +164,6 @@ Run `node scripts/dependencies.mjs` after changing runtime dependencies and revi
 
 ## Roadmap
 
-M1–M3 were approved by the owner; M4 awaits review. M4 implements disruption scenarios, event mapping and operational invariants. M5: optional AI drafts with preview/redaction and mock-provider tests. M6: complete documentation, CI templates, Docker and release packaging. See [docs/roadmap.md](docs/roadmap.md). Each milestone requires owner review before the next begins.
+M1–M4 were approved by the owner; M5 awaits review. M5 implements optional AI drafts with preview/redaction and mock-provider tests. M6: complete documentation, CI templates, Docker and release packaging. See [docs/roadmap.md](docs/roadmap.md). Each milestone requires owner review before the next begins.
 
 MIT © Sergei Orekhovskii.

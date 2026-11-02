@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "entities": [
+    {"entity": "shipment", "reference": "api", "counts": {"api": 1, "csv": 1}}
+  ],
+  "findings": [
+    {
+      "type": "field_mismatch",
+      "entity": "shipment",
+      "source": "csv",
+      "key": "S000801",
+      "field": "customer_email",
+      "expected": "synthetic-a@example.test",
+      "actual": "synthetic-b@example.test",
+      "message": "Handwritten synthetic AI fixture: synthetic-a@example.test differs from synthetic-b@example.test.",
+      "blocking": true
+    },
+    {
+      "type": "field_mismatch",
+      "entity": "shipment",
+      "source": "csv",
+      "key": "S000801",
+      "field": "payout",
+      "expected": "625",
+      "actual": "624",
+      "message": "Handwritten synthetic AI fixture: payout differs by one minor unit; currency requires configuration context.",
+      "blocking": true
+    },
+    {
+      "type": "field_mismatch",
+      "entity": "shipment",
+      "source": "csv",
+      "key": "S000801",
+      "field": "eta",
+      "expected": 1793624460000,
+      "actual": 1793602860000,
+      "message": "Handwritten synthetic AI fixture: normalized UTC epoch milliseconds differ.",
+      "blocking": true
+    }
+  ]
+}

@@ -268,9 +268,9 @@ Ten direct external runtime dependencies are pinned. The regenerated inventory r
 5. Normal export timestamps carry UTC offsets. The injected timezone defect changes that serialization contract; changing fallback timezone to Chicago would reinterpret the broken output and hide this defect. Review source timezone contracts for your own systems.
 6. Scenarios, operational events/invariants and virtual-clock controls remain M4. AI remains M5 and release packaging remains M6. No next milestone or release action is authorized by this report.
 
-## M4 — Implemented, awaiting owner review
+## M4 — Approved by owner
 
-Date: 2026-11-02. Version remains 0.1.0, unreleased. The owner approved M3 and explicitly authorized M4, adding ISO 8601 UTC beside epoch milliseconds in HTML/Markdown while preserving JSON. **M4 acceptance checks pass; work stops before M5.** No AI work, push, publication, release, production connection, real credentials or git identity changes were performed.
+Date: 2026-11-02. Version remains 0.1.0, unreleased. The owner approved M3 and explicitly authorized M4, adding ISO 8601 UTC beside epoch milliseconds in HTML/Markdown while preserving JSON. M4 acceptance checks passed and the original delivery stopped at its review gate. The owner subsequently approved M4 and explicitly authorized M5 on 2026-11-02. No AI work, push, publication, release, production connection, real credentials or git identity changes were performed.
 
 ### Delivered
 
@@ -364,3 +364,82 @@ Jiti adds one pinned external runtime package with MIT metadata and no external 
 4. Real-target waits use wall-clock polling; individual adapter/request timeouts also apply, so an in-flight read can finish after the polling deadline. Only the demo mapping advances virtual time. Scenario state snapshots are held in memory; no scenario throughput/memory benchmark is claimed.
 5. Post-scenario Parity reads API plus fresh CSV/XLSX in the shipped mapping. Existing UI/SQL adapters can be configured, with their documented authentication/read-only constraints. Scenarios do not provision external database fixtures or synthesize UI authentication.
 6. Report outputs contain synthetic/test business values and affected IDs. Existing dependency advisories are unchanged. Chromium/XML/PostgreSQL prerequisites remain required for the complete local suite. Publication, npm/Docker packaging and final release review remain M6.
+
+## M5 — Implemented, awaiting owner review
+
+Date: 2026-11-02. Version remains 0.1.0, unreleased. The owner approved M4 and explicitly authorized M5. **M5 acceptance checks pass; work stops before M6.** No live AI provider was called, no real credentials were added, and no push, release, publication or git identity change was performed. M6 packaging/templates/release work has not started.
+
+### Delivered
+
+- `logiparity ai suggest-config --openapi <spec.yaml> --entity <name>` drafts Parity YAML; `ai scenario --from <description>` drafts scenario YAML; `ai explain <report.json>` drafts a Markdown explanation.
+- All three commands default to local preview: no provider configuration is required and no request/output file/directory is created. Normal check/scenario/init/help commands never invoke AI, even when provider environment variables are configured.
+- An explicit `--send` plus LOGIPARITY_AI_BASE_URL, LOGIPARITY_AI_MODEL and LOGIPARITY_AI_API_KEY is required for one provider call. The complete prompt/request body is flushed to stdout before sending; credentials are hidden from the preview and sent in the Bearer header. E2E compares the preview body with the captured HTTP body and verifies preview precedes the request.
+- Provider-agnostic AiProvider interface with injected mock/custom implementations and a built-in text chat-completions provider. The adapter sends the explicit model/system/user messages without provider SDKs, automatic model selection, tools, redirects or retries. URL prefixes are preserved; embedded credentials/query/fragment and invalid credential/model controls are rejected. Timeouts cover headers and body; malformed, nontext, refused, truncated, empty or tool-call responses do not produce drafts. Error bodies are omitted.
+- Separate versioned AI settings through `--ai-config`, plus repeatable/comma-separated `--redact-fields`. Plain names mask properties recursively and finding expected/actual values; scoped paths support properties/indexes/wildcards without evaluation. Default secret fields and the configured API credential are masked. Selected literal values copied into messages/keys/provider output are scrubbed, without modifying source files.
+- Explain reads Parity v1 JSON, preserves exact monetary strings and epoch values, and includes entity/aggregate summaries, the first maxFindings findings and exact full-input totals with explicit omission counts. Default maxFindings is 100, configurable 1–1000. Sampling is disclosed, not represented as complete record-level evidence.
+- Local input limits and validation: regular YAML/JSON files up to 16 MiB, duplicate-key/alias/cycle/nonfinite checks, no environment interpolation and no local/remote OpenAPI reference resolution. Provider bodies are bounded to 256 KiB; responses to 1 MiB, including bodies without Content-Length. Invalid requests fail before network access.
+- New output files always begin `# AI-generated draft: review before use`, use private permissions and never overwrite existing files/symlinks. Exclusive writes protect a file created concurrently during generation. YAML is checked against the existing Parity/scenario schema without loading referenced modules/fixtures or real environment values. Nothing executes a generated draft. Unique default filenames live under ignored logiparity-ai-drafts; --output selects a new path.
+- Handwritten synthetic OpenAPI/report/settings examples, an AI reference with limits and provider injection, updated README/security/roadmap/contributing/changelog, and mock-only unit/HTTP/CLI tests. No external dependency version was added; existing yaml/zod/workspace dependencies are reused. Money/ISO UTC human report presentation and existing Parity/scenario JSON formats remain unchanged.
+
+### Verification commands and results
+
+From the repository root, using the same Chromium/xmllint/disposable PostgreSQL prerequisites as M4:
+
+```sh
+npm run lint
+npm run typecheck
+npm test
+npm run test:e2e
+npm run build
+node scripts/dependencies.mjs
+npm ls --depth=0
+git diff --check
+npm audit --json
+npm audit --omit=dev --json
+```
+
+The complete pipelines ran sequentially with `PATH=/private/tmp/logiparity-node20/node_modules/.bin:$PATH` and the corresponding node22 path; test:e2e builds first. A clean cached lockfile installation and build also passed on Node 22: `npm ci --offline --ignore-scripts --cache /private/tmp/logiparity-npm-cache` followed by `npm run build`. Offline installation audit output is not interpreted as an online advisory result.
+
+| Check | Node 20.20.2 | Node 22.23.4 |
+| --- | --- | --- |
+| lint / strict typecheck / build | Pass | Pass |
+| unit/adapter tests | 205 pass, 18 files | 205 pass, 18 files |
+| CLI/demo e2e tests | 62 pass, 3 files | 62 pass, 3 files |
+| core line coverage | 100% (340/340) | 100% (340/340) |
+| statements / branches / functions | 98.97% / 94.72% / 98.97% | 98.97% / 94.72% / 98.97% |
+
+No test is skipped. Coverage describes core, not all AI/scenario/demo code; the existing 85% core line threshold remains enforced. All M1–M4 bug matrices, five healthy scenarios, currency/UTC presentation checks, independent JUnit validation, real Chromium tests and isolated PostgreSQL tests remain passing. CI runs these suites on its existing Node 20/22 matrix with loopback AI mocks; no live AI credentials/provider calls or remote CI success is claimed.
+
+M5 adds 38 unit/adapter and 24 CLI e2e checks. They cover injected providers, exact HTTP/auth/body contracts, all commands' offline/send behavior, missing provider variables, configured-provider isolation from normal Parity/scenario commands, complete preview/body agreement and ordering, structured finding/path/alias redaction, secret-free prompts/errors, nonmutation of inputs, no reference resolution/env expansion, size/timeout/redirect/error handling, malformed/truncated/refused/tool responses, output permissions, early existing-file rejection, symlinks, concurrent-file preservation, generated-module non-execution and invalid-draft rejection. No real API is called in these tests.
+
+### Offline acceptance and concrete review artifacts
+
+The shipped examples were run through the actual built CLI:
+
+```sh
+./node_modules/.bin/logiparity ai suggest-config --openapi examples/ai/openapi.yaml \
+  --entity shipment --ai-config examples/ai/settings.yaml
+./node_modules/.bin/logiparity ai scenario --from "Two vans broke down during the afternoon peak"
+./node_modules/.bin/logiparity ai explain examples/ai/report.json --ai-config examples/ai/settings.yaml
+```
+
+All exit 0 without a provider request or draft file. Offline previews mask one selected OpenAPI example and five selected report fields. The report preview omits the synthetic email values and S000801 key; its input files remain unchanged.
+
+For send acceptance, use the mock-provider CLI suite (no real key required):
+
+```sh
+npm run build
+npx vitest run --config vitest.e2e.config.ts tests/e2e/ai.test.ts
+```
+
+A separate manual loopback mock exercise also ran all three real CLI commands with --send, synthetic credentials and handwritten mock answers, then stopped its server. Exactly three requests went to its configured /v1/chat/completions endpoint. All resulting drafts have the required marker and mode 0600; source specs/reports were preserved and no generated file was run. The ignored `logiparity-ai-drafts/review-m5/` folder contains config.yaml, scenario.yaml, explanation.md, three request-preview text files and a README explicitly identifying them as mock artifacts. These demonstrate workflow behavior, not live model quality, and intentionally are not committed as purported model results.
+
+### Dependencies, limitations and owner decisions
+
+1. Review M5 before authorizing M6. Final CI templates, Docker/npm packaging and release checks remain M6. Nothing has been pushed or published.
+2. No real provider/model quality or account access was tested; acceptance uses synthetic injected/loopback mocks. The built-in adapter supports non-streaming text/system-message chat completions. Vendors/models outside this response contract need a custom injected provider. There is no SDK, model discovery, automatic retry or provider failover.
+3. AI output is untrusted draft content. Structural YAML validation does not establish correct field mappings, currency/timezone assumptions or safe proposed targets. It never loads referenced modules/fixtures, follows refs or executes the draft. Review before a separate manual check/scenario command.
+4. Redaction is structured-field/literal masking, not general PII detection or semantic prose anonymization. Unmatched selectors mask nothing, and conservative alias scrubbing may mask common repeated text; review the entire preview and maskedFields count. Credentials are hidden, but payload/log contents may still contain test business data you did not select for masking. Existing directory permissions are preserved; newly created draft directories/files are private.
+5. Explain includes a disclosed bounded sample in report order, not a statistically representative/full finding list. It accepts Parity v1 report.json; for M4 use parity/report.json. OpenAPI validation is lightweight and does not resolve $ref. Input/request/response limits and conventional URL-placeholder validation are documented in docs/ai.md.
+6. --send authorizes that invocation after printing its full payload; there is no interactive approval or persisted preview token. Inputs/settings can change between a preview and a send invocation. All required provider variables must be present; their presence alone never invokes AI.
+7. Runtime license inventory remains 109 package versions with declared licenses. Online audit is unchanged: 17 moderate affected-package entries overall, 7 moderate runtime entries, zero high/critical and no new affected package names. Existing ExcelJS/glob/minimatch advisory limitations remain in docs/dependency-audit.md. No incompatible forced updates were applied.

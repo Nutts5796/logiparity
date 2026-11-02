@@ -1,0 +1,8 @@
+# Applies to structured AI inputs, never to provider authentication headers.
+version: 1
+redactFields:
+  - customer_email
+  - $.report.findings[*].key
+  - $.openapi.components.schemas.Shipment.properties.customer_id.example
+timeoutMs: 30000
+maxFindings: 100

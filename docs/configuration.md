@@ -148,3 +148,7 @@ Exit 0 means no blocking ordinary findings; exit 1 means at least one blocking f
 ## Scenario configuration
 
 M4 scenarios and mutation targets have separate schemas from Parity. Use `logiparity scenario run <scenario.yaml> --target <target.yaml>`. Event templates do not use Parity's flat `variables` syntax; they use scoped typed placeholders (`params`, `fixture`, `seconds`). See the [scenario reference](scenarios.md) for target consent, state field mappings, custom checks and fresh post-scenario Parity.
+
+## AI settings
+
+M5 AI commands use a separate `--ai-config` file with version 1, redactFields, timeoutMs and maxFindings. Provider URL/model/key come only from the three LOGIPARITY_AI environment variables. Normal Parity/scenario configuration has no automatic AI hook. See [AI reference](ai.md).

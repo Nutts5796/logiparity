@@ -22,3 +22,7 @@ After adding pinned Playwright 1.64.1, pg 8.23.1, pg-query-stream 4.17.1 and pgs
 ## M4 recheck (2026-11-02)
 
 Adding Jiti 2.7.0 (MIT, no external dependencies) for explicitly configured TypeScript invariant modules leaves audit counts unchanged: 17 moderate entries overall, 7 moderate runtime entries, zero high/critical. The affected package names are unchanged from M3. The regenerated runtime inventory contains 109 package versions, all with declared licenses. Jiti's programmatic async import and disabled filesystem/module caches follow its [primary documentation](https://github.com/unjs/jiti); it is a loader for trusted local modules, not a sandbox.
+
+## M5 recheck (2026-11-02)
+
+The AI workspace reuses existing pinned yaml/zod/core/scenarios dependencies and native fetch; no external package version or SDK was added. The runtime inventory remains 109 versions. Online npm audit remains 17 moderate affected-package entries overall and 7 runtime entries, zero high/critical, with unchanged affected package names. These are observed advisory counts, not remediation claims.

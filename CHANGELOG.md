@@ -6,6 +6,9 @@ This file follows Keep a Changelog. Versions are unreleased until explicitly pub
 
 ### Added
 
+- M5 optional AI suggest-config/scenario/explain commands with local previews, explicit sends, provider-agnostic injection and a bounded chat-completions adapter.
+- Structured redaction including finding values/message aliases, disclosed report sampling, schema-checked new draft files and mock-only AI tests; normal commands stay independent of AI.
+
 - M4 scenario CLI, explicit test/staging target mappings, adapter state snapshots, six operational invariants and custom TypeScript/JSONPath checks.
 - Five healthy disruption scenarios, deterministic virtual-clock demo replanning, lost-order/double-assignment bug flags, fresh post-scenario Parity and scenario reports.
 - ISO 8601 UTC beside epoch milliseconds in HTML/Markdown datetime fields; JSON remains unchanged.

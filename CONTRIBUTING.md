@@ -8,4 +8,6 @@ Use TypeScript strict mode and ESM. Avoid `any`; if unavoidable, document the re
 
 Use Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`) and the repository's existing git identity. Work through M1–M6 in order. At each milestone, append verified results, reproduction commands, gaps and owner decisions to MILESTONE_REPORT.md and stop for owner review. Pushes, releases, npm publication and secrets require explicit owner approval.
 
-The repository is currently an unreleased M4 implementation awaiting owner review. Issue/PR templates and starter issues are planned for M6. See docs/roadmap.md for the accepted scope.
+The repository is currently an unreleased M5 implementation awaiting owner review. Issue/PR templates and starter issues are planned for M6. See docs/roadmap.md for the accepted scope.
+
+AI tests use injected mocks and isolated loopback providers only. Never use real AI credentials or providers in CI. Cover disabled behavior, the complete preview/body, redaction and non-execution when changing AI commands. See docs/ai.md.
