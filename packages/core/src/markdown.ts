@@ -1,10 +1,10 @@
 import { redactTree, secretValues } from './diagnostics.js';
-import { aggregateDisplay, rawAggregateDisplay } from './money-display.js';
+import { aggregateDisplay, rawAggregateDisplay, aggregateDifference, aggregateStatus } from './money-display.js';
 import { reportGroups, groupMembership, accountedFindingIndexes } from './groups.js';
 import { verdict } from './report-utils.js';
-import { reportLabels } from './labels.js';
+import { reportLabels, uncertainKeyText } from './labels.js';
 import { humanFinding, reportCounts, quantity, typeLabels, mergedPatternWords, markdownCell as cell } from './human.js';
-import { presentationDifference, type ReportPresentation } from './money-display.js';
+import { type ReportPresentation } from './money-display.js';
 import type { Report, Finding } from './types.js';
 const row = (finding: Finding, presentation: ReportPresentation) => {
   const item = humanFinding(finding, presentation);
@@ -66,20 +66,14 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
             : value === undefined
               ? 'Not read'
               : aggregateDisplay(aggregate, source, entity.entity, presentation);
-        const baseline = aggregate.values[entity.reference];
-        const difference =
-          source !== entity.reference && baseline !== undefined && value !== undefined
-            ? presentationDifference(baseline, value, entity.entity, aggregate.name, true, presentation)
-            : '—';
-        const accounted =
-          aggregate.reconciliation?.[source]?.remainder === 0n || aggregate.reconciliation?.[source]?.remainder === '0';
+        const difference = aggregateDifference(aggregate, source, entity.reference, entity.entity, presentation);
         const uncertain = aggregate.uncertainKeys?.[source];
         const raw = rawAggregateDisplay(aggregate, source, entity.entity, presentation);
         const retained = raw
           ? ` Raw source: ${raw}; retained/certain lines above. Excluded rows: ${(aggregate.excludedRows?.[source] ?? []).join(', ') || 'none'}.`
           : '';
         lines.push(
-          `| ${cell(labels.field(entity.entity, aggregate.name, true))} | ${cell(labels.source(entity.entity, source))} | ${cell(shown + retained)} | ${cell(difference)} | ${uncertain?.length ? cell('Uncertain lines: ' + uncertain.join(', ')) : source === entity.reference ? 'Reference' : accounted ? 'Accounted for' : value === baseline ? 'Matches' : status === 'not_mapped' ? 'Not mapped' : 'Needs review'} |`,
+          `| ${cell(labels.field(entity.entity, aggregate.name, true))} | ${cell(labels.source(entity.entity, source))} | ${cell(shown + retained)} | ${cell(difference)} | ${cell(aggregateStatus(aggregate, source, entity.reference) + (uncertain?.length ? ': ' + uncertainKeyText(uncertain) : ''))} |`,
         );
       }
     }

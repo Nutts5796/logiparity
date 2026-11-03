@@ -115,6 +115,7 @@ export function aggregateDisplay(
   const currencies = aggregate.valuesByCurrency?.[source];
   if (currencies && Object.keys(currencies).length)
     return Object.entries(currencies)
+      .sort(([a], [b]) => a.localeCompare(b))
       .map(([currency, value]) => formatMoneyMajor(BigInt(value), currency))
       .join('; ');
   return presentationValue(aggregate.values[source], entity, aggregate.name, true, presentation);
@@ -125,6 +126,7 @@ export function rawAggregateDisplay(
   entity: string,
   presentation: ReportPresentation,
 ): string {
+  if (aggregate.type === 'count') return '';
   const values = aggregate.rawValuesByCurrency?.[source],
     certain = aggregate.valuesByCurrency?.[source];
   const changed =
@@ -134,6 +136,7 @@ export function rawAggregateDisplay(
     );
   if (changed)
     return Object.entries(values)
+      .sort(([a], [b]) => a.localeCompare(b))
       .map(([currency, value]) => formatMoneyMajor(BigInt(value), currency))
       .join('; ');
   const raw = aggregate.rawValues?.[source];
@@ -174,4 +177,63 @@ export function moneyUnits(minor: bigint, currency: string): string {
   const absolute = minor < 0n ? -minor : minor;
   const cents = ['USD', 'EUR', 'CAD', 'AUD', 'NZD', 'SGD', 'HKD'].includes(currency);
   return `${absolute} ${cents ? (absolute === 1n ? 'cent' : 'cents') : `${currency} minor ${absolute === 1n ? 'unit' : 'units'}`}`;
+}
+
+export function aggregateDifference(
+  aggregate: AggregateResult,
+  source: string,
+  reference: string,
+  entity: string,
+  presentation: ReportPresentation,
+): string {
+  if (source === reference || aggregate.values[source] === undefined || aggregate.values[reference] === undefined)
+    return '—';
+  const currencies = Object.keys({
+    ...aggregate.valuesByCurrency?.[source],
+    ...aggregate.valuesByCurrency?.[reference],
+  }).sort();
+  if (currencies.length)
+    return currencies
+      .map((currency) => {
+        const delta =
+          BigInt(aggregate.valuesByCurrency?.[source]?.[currency] ?? 0) -
+          BigInt(aggregate.valuesByCurrency?.[reference]?.[currency] ?? 0);
+        return `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, currency)}`;
+      })
+      .join('; ');
+  return presentationDifference(
+    aggregate.values[reference],
+    aggregate.values[source],
+    entity,
+    aggregate.name,
+    true,
+    presentation,
+  );
+}
+export function aggregateStatus(aggregate: AggregateResult, source: string, reference: string): string {
+  if (aggregate.sourceStatus?.[source] === 'not_mapped') return 'Not mapped';
+  if (aggregate.values[source] === undefined) return 'Not read';
+  if (aggregate.uncertainKeys?.[source]?.length) return 'Uncertain lines';
+  if (source === reference) return 'Reference';
+  const currencies = Object.keys({
+    ...aggregate.valuesByCurrency?.[source],
+    ...aggregate.valuesByCurrency?.[reference],
+  });
+  const matches = currencies.length
+    ? currencies.every(
+        (currency) =>
+          BigInt(aggregate.valuesByCurrency?.[source]?.[currency] ?? 0) ===
+          BigInt(aggregate.valuesByCurrency?.[reference]?.[currency] ?? 0),
+      )
+    : aggregate.values[source] === aggregate.values[reference];
+  if (matches) return 'Matches';
+  const buckets = aggregate.reconciliationByCurrency?.[source];
+  const parts = buckets
+    ? Object.values(buckets)
+    : aggregate.reconciliation?.[source]
+      ? [aggregate.reconciliation[source]]
+      : [];
+  return parts.length && parts.every((part) => BigInt(part.remainder) === 0n && !part.uncertain?.keys.length)
+    ? 'Accounted for'
+    : 'Needs review';
 }

@@ -1,6 +1,6 @@
 import { patternWords, mergedPatternWords } from './human.js';
 import { groupMembership, reportGroups } from './groups.js';
-import { reportLabels, presentationRule, humanize } from './labels.js';
+import { reportLabels, presentationRule, humanize, ordinal } from './labels.js';
 import { durationValue, formatMoneyMajor, readableDatetime, type ReportPresentation } from './money-display.js';
 import { escapeMarkup as escape } from './report-utils.js';
 import type { FindingGroup, Report } from './types.js';
@@ -80,7 +80,7 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
         label: patternKind(group).label,
         chart: '',
         headline: group.kind.endsWith('_stride')
-          ? `Every ${group.stride}th row`
+          ? `Every ${ordinal(group.stride ?? 0)} row`
           : group.kind === 'datetime_offset'
             ? `${durationValue(delta < 0n ? -delta : delta)
                 .replace(/^\+/, '')
@@ -98,7 +98,7 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
       cards.set(key, card);
     }
     card.groups.push(index);
-    card.indexes.push(...memberships[index]!);
+    for (const member of memberships[index] ?? []) card.indexes.push(member);
   });
   for (const card of cards.values()) {
     const first = groups[card.groups[0]!]!;
@@ -124,8 +124,13 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
       const columns = Math.min(7, Math.max(1, count));
       const height = Math.max(60, Math.ceil(count / columns) * 60);
       const missing = new Map<number, number>();
-      for (const index of members) {
-        const finding = report.findings[index]!;
+      for (const finding of report.findings) {
+        if (
+          finding.entity !== first.entity ||
+          finding.source !== first.source ||
+          finding.type !== (first.kind === 'missing_stride' ? 'missing_in_source' : 'extra_in_source')
+        )
+          continue;
         const match = finding.key.match(/(\d+)$/);
         const position = finding.referencePosition ?? (match ? Number(match[1]) : undefined);
         if (position !== undefined) {
@@ -137,14 +142,14 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
       for (let page = 0; page < count; page++) {
         const total = Math.min(size, rows - page * size);
         const lost = missing.get(page) ?? 0;
-        const x = (page % columns) * 38 + 2,
+        const x = (page % columns) * 52 + 2,
           y = Math.floor(page / columns) * 60 + 2;
-        shapes += `<rect x="${x}" y="${y}" width="30" height="36" rx="4" fill="var(--panel)" stroke="var(--line)"/><path d="M${x + 6} ${y + 9}h18m-18 7h18m-18 7h18" stroke="var(--line)"/><rect x="${x + 5}" y="${y + 28}" width="20" height="4" rx="2" fill="${lost ? 'var(--c)' : 'var(--line)'}"/><text x="${x + 15}" y="${y + 49}" fill="var(--muted)" text-anchor="middle" font-size="8">${total - lost}/${total}</text>`;
+        shapes += `<rect x="${x}" y="${y}" width="44" height="36" rx="4" fill="var(--panel)" stroke="var(--line)"/><path d="M${x + 6} ${y + 9}h18m-18 7h18m-18 7h18" stroke="var(--line)"/><rect x="${x + 5}" y="${y + 28}" width="20" height="4" rx="2" fill="${lost ? 'var(--c)' : 'var(--line)'}"/><text x="${x + 22}" y="${y + 49}" fill="var(--muted)" text-anchor="middle" font-size="11">${total - lost}/${total}</text>`;
       }
       card.chart =
-        svg(columns * 38, height, `${sources}: ${count} reference pages; highlighted rows are missing.`, shapes) +
+        svg(columns * 52, height, `${sources}: ${count} reference pages; highlighted rows are missing.`, shapes) +
         caption(
-          `1 row lost at the end of each ${fmt(size)}-row page. ${sources}: rows kept per page${card.groups.length > 1 ? ` in ${labels.source(first.entity, first.source)}` : ''}.`,
+          `Rows kept per ${fmt(size)}-row reference page in ${labels.source(first.entity, first.source)}. Highlighted pages include all missing rows.`,
         );
     } else if (first.kind === 'datetime_offset') {
       const zone = presentation.displayTimezone ?? 'UTC';

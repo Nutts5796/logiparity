@@ -6,7 +6,7 @@ export function humanize(name: string): string {
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/[_.-]+/g, ' ')
     .trim()
-    .replace(/\b(id|eta|api|csv|sql|tms|po|edi|utc|usd)\b/gi, (word) => word.toUpperCase());
+    .replace(/\b(id|eta|api|csv|sql|tms|po|edi|utc|usd|tonu|fsc|stp)\b/gi, (word) => word.toUpperCase());
   return words ? words[0]!.toUpperCase() + words.slice(1) : 'Whole row';
 }
 
@@ -38,4 +38,20 @@ export function presentationRule(entity: EntityConfig | undefined, field: string
   return aggregate && definition?.type !== 'sum'
     ? undefined
     : entity?.compare[definition?.type === 'sum' ? definition.field : field];
+}
+
+export function ordinal(value: number | bigint | string): string {
+  const number = BigInt(value),
+    last = number % 100n;
+  const suffix = last >= 11n && last <= 13n ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[Number(number % 10n)] ?? 'th');
+  return `${value}${suffix}`;
+}
+export function displayKeyParts(parts: readonly string[]): string {
+  return parts.join(' · ');
+}
+export function uncertainKeyText(keys: readonly string[][]): string {
+  return [...keys]
+    .sort((a, b) => a.join(' · ').localeCompare(b.join(' · '), 'en', { numeric: true }))
+    .map(displayKeyParts)
+    .join(', ');
 }

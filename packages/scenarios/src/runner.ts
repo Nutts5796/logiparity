@@ -137,6 +137,7 @@ export async function runScenario(
               ? cancelledBy(canonicalFor(before, ['single_assignment']).orders, scenario.events)
               : [],
           };
+      report.affectedOrderCount = affected.affectedKeys.length;
       for (const [index, { plan }] of events.entries()) {
         await send(plan);
         report.events[index]!.completed = true;

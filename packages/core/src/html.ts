@@ -1,14 +1,9 @@
 import { redactTree, secretValues } from './diagnostics.js';
-import { aggregateDisplay, rawAggregateDisplay } from './money-display.js';
+import { aggregateDisplay, rawAggregateDisplay, aggregateDifference, aggregateStatus } from './money-display.js';
 import { createHash } from 'node:crypto';
 import { groupMembership, reportGroups, accountedFindingIndexes } from './groups.js';
-import { reportLabels, humanize } from './labels.js';
-import {
-  presentationDifference,
-  formatMoneyMajor,
-  readableDatetime,
-  type ReportPresentation,
-} from './money-display.js';
+import { reportLabels, humanize, uncertainKeyText } from './labels.js';
+import { formatMoneyMajor, readableDatetime, type ReportPresentation } from './money-display.js';
 import { escapeMarkup as escape } from './report-utils.js';
 import { humanFinding, reportCounts, quantity, numberText, typeLabels, patternWords } from './human.js';
 import { patternCards, kindInfo, icon } from './html-patterns.js';
@@ -131,21 +126,15 @@ function totals(report: Report, presentation: ReportPresentation): string {
         .map((aggregate) => {
           const values = sources
             .map((source) => {
-              const value = aggregate.values[source],
-                reference = aggregate.values[entity.reference];
               const difference =
-                source !== entity.reference && value !== undefined && reference !== undefined && value !== reference
-                  ? presentationDifference(reference, value, entity.entity, aggregate.name, true, presentation)
-                  : '';
-              const parts = aggregate.reconciliation?.[source];
-              const follows =
-                parts && BigInt(parts.remainder) === 0n
-                  ? `Follows from: ${parts.causes?.join(', ') || 'matching values'}`
-                  : '';
+                source === entity.reference
+                  ? ''
+                  : aggregateDifference(aggregate, source, entity.reference, entity.entity, presentation);
+              const follows = aggregateStatus(aggregate, source, entity.reference);
               const uncertain = aggregate.uncertainKeys?.[source];
               const raw = rawAggregateDisplay(aggregate, source, entity.entity, presentation);
               const excluded = aggregate.excludedRows?.[source] ?? [];
-              return `<td class="num" data-l="${escape(labels.source(entity.entity, source))}">${span(aggregateValue(aggregate, entity, source, presentation))}${raw ? `<span class="sub-l">Raw source: ${escape(raw)}; retained/certain lines above.${excluded.length ? ` Excluded rows: ${excluded.join(', ')}` : ''}</span>` : ''}${difference ? `<span class="sub-l neg">${escape(difference)}</span>` : ''}${follows && difference ? `<span class="sub-l">${escape(follows)}</span>` : ''}${uncertain?.length ? `<span class="sub-l">Uncertain lines: ${escape(uncertain.join(', '))}</span>` : ''}</td>`;
+              return `<td class="num" data-l="${escape(labels.source(entity.entity, source))}">${span(aggregateValue(aggregate, entity, source, presentation))}${raw ? `<span class="sub-l">Raw source: ${escape(raw)}; retained/certain lines above.${excluded.length ? ` Excluded rows: ${excluded.join(', ')}` : ''}</span>` : ''}${difference ? `<span class="sub-l neg">${escape(difference)}</span>` : ''}${follows && difference ? `<span class="sub-l">${escape(follows)}</span>` : ''}${uncertain?.length ? `<span class="sub-l">Uncertain lines: ${escape(uncertainKeyText(uncertain))}</span>` : ''}</td>`;
             })
             .join('');
           return `<tr><td>${span(labels.field(entity.entity, aggregate.name, true), aggregate.name)}</td>${values}</tr>`;
@@ -160,64 +149,79 @@ function reconciliationCards(report: Report, presentation: ReportPresentation): 
   return report.entities
     .flatMap((entity) =>
       (entity.aggregates ?? []).flatMap((aggregate) =>
-        Object.entries(aggregate.reconciliation ?? {}).flatMap(([source, parts]) => {
-          const actual = aggregate.values[source],
-            reference = aggregate.values[entity.reference];
-          if (actual === undefined || reference === undefined || actual === reference) return [];
-          const definition = labels.entity(entity.entity)?.aggregates.find((item) => item.name === aggregate.name);
-          const rule = definition?.type === 'sum' ? labels.entity(entity.entity)?.compare[definition.field] : undefined;
-          const difference = BigInt(actual) - BigInt(reference);
-          const amount = (value: bigint) =>
-            `${value > 0n ? '+' : ''}${rule?.currency ? formatMoneyMajor(value, rule.currency) : numberText(value)}`;
-          const buckets = [
-            {
-              label: `Missing rows (${numberText(parts.missingRows.count)})`,
-              value: BigInt(parts.missingRows.amount),
-              color: 'page',
-              show: BigInt(parts.missingRows.amount) !== 0n,
-            },
-            ...[
-              { label: 'Extra rows', part: parts.extraRows },
-              { label: 'Value differences', part: parts.valueDifferences },
-            ].map(({ label, part }) => ({
-              label: `${label} (${numberText(part?.count ?? 0)})`,
-              value: BigInt(part?.amount ?? 0),
-              color: 'round',
-              show: !!part?.count,
-            })),
-            ...parts.patterns.map((part) => ({
-              label: `${BigInt(report.groups?.[part.group]?.delta ?? 0) >= -3n && BigInt(report.groups?.[part.group]?.delta ?? 0) <= 3n ? 'Rounding' : 'Fixed differences'} (${numberText(part.count)})`,
-              value: BigInt(part.amount),
-              color: 'round',
-              show: BigInt(part.amount) !== 0n,
-            })),
-            {
-              label: `Uncertain lines${parts.uncertain?.keys.length ? ': ' + parts.uncertain.keys.join(', ') : ''}`,
-              value: BigInt(parts.uncertain?.amount ?? 0),
-              color: 'tz',
-              show: !!parts.uncertain?.keys.length,
-            },
-            { label: 'Unexplained remainder', value: BigInt(parts.remainder), color: 'review', show: true },
-          ].filter((part) => part.show);
-          const total = buckets.reduce((sum, part) => sum + (part.value < 0n ? -part.value : part.value), 0n);
-          const accounted = BigInt(parts.remainder) === 0n;
-          const bars = buckets
-            .filter((part) => part.value)
-            .map(
-              (part) =>
-                `<i style="width:${total ? Number(((part.value < 0n ? -part.value : part.value) * 10000n) / total) / 100 : 0}%;background:var(--c-${part.color})"></i>`,
-            )
-            .join('');
-          const rows = buckets
-            .map(
-              (part) =>
-                `<div><span><i style="background:var(--c-${part.color})"></i>${escape(part.label)}</span><b>${escape(amount(part.value))}${part.label === 'Unexplained remainder' && accounted ? ' · accounted for' : ''}</b></div>`,
-            )
-            .join('');
-          return [
-            `<article class="card"><h4>${span(labels.field(entity.entity, aggregate.name, true), aggregate.name)}: ${span(labels.source(entity.entity, source), source)} vs ${span(labels.source(entity.entity, entity.reference), entity.reference)}</h4><div class="sum">${escape(amount(difference))}</div><div class="bar" role="img" aria-label="${escape(buckets.map((part) => `${part.label}: ${amount(part.value)}`).join(', '))}">${bars}</div><div class="rows">${rows}</div></article>`,
-          ];
-        }),
+        Object.entries(aggregate.reconciliationByCurrency ?? aggregate.reconciliation ?? {}).flatMap(
+          ([source, value]) => {
+            const partitions = aggregate.reconciliationByCurrency
+              ? Object.entries(value).map(([currency, parts]) => ({
+                  currency,
+                  parts: parts as import('./types.js').AggregateReconciliation,
+                }))
+              : [{ currency: undefined, parts: value as import('./types.js').AggregateReconciliation }];
+            return partitions.flatMap(({ currency, parts }) => {
+              const actual = currency
+                  ? (aggregate.valuesByCurrency?.[source]?.[currency] ?? 0n)
+                  : aggregate.values[source],
+                reference = currency
+                  ? (aggregate.valuesByCurrency?.[entity.reference]?.[currency] ?? 0n)
+                  : aggregate.values[entity.reference];
+              if (actual === undefined || reference === undefined || actual === reference) return [];
+              const definition = labels.entity(entity.entity)?.aggregates.find((item) => item.name === aggregate.name);
+              const rule =
+                definition?.type === 'sum' ? labels.entity(entity.entity)?.compare[definition.field] : undefined;
+              const difference = BigInt(actual) - BigInt(reference);
+              const amount = (value: bigint) =>
+                `${value > 0n ? '+' : ''}${(currency ?? rule?.currency) ? formatMoneyMajor(value, currency ?? rule?.currency ?? 'USD') : numberText(value)}`;
+              const buckets = [
+                {
+                  label: `Missing rows (${numberText(parts.missingRows.count)})`,
+                  value: BigInt(parts.missingRows.amount),
+                  color: 'page',
+                  show: BigInt(parts.missingRows.amount) !== 0n,
+                },
+                ...[
+                  { label: 'Extra rows', part: parts.extraRows },
+                  { label: 'Value differences', part: parts.valueDifferences },
+                ].map(({ label, part }) => ({
+                  label: `${label} (${numberText(part?.count ?? 0)})`,
+                  value: BigInt(part?.amount ?? 0),
+                  color: 'round',
+                  show: !!part?.count,
+                })),
+                ...parts.patterns.map((part) => ({
+                  label: `${BigInt(report.groups?.[part.group]?.delta ?? 0) >= -3n && BigInt(report.groups?.[part.group]?.delta ?? 0) <= 3n ? 'Rounding' : 'Fixed differences'} (${numberText(part.count)})`,
+                  value: BigInt(part.amount),
+                  color: 'round',
+                  show: BigInt(part.amount) !== 0n,
+                })),
+                {
+                  label: `Uncertain lines${parts.uncertain?.keys.length ? ': ' + uncertainKeyText(parts.uncertain.keys) : ''}`,
+                  value: BigInt(parts.uncertain?.amount ?? 0),
+                  color: 'tz',
+                  show: !!parts.uncertain?.keys.length,
+                },
+                { label: 'Unexplained remainder', value: BigInt(parts.remainder), color: 'review', show: true },
+              ].filter((part) => part.show);
+              const total = buckets.reduce((sum, part) => sum + (part.value < 0n ? -part.value : part.value), 0n);
+              const accounted = BigInt(parts.remainder) === 0n && !parts.uncertain?.keys.length;
+              const bars = buckets
+                .filter((part) => part.value)
+                .map(
+                  (part) =>
+                    `<i style="width:${total ? Number(((part.value < 0n ? -part.value : part.value) * 10000n) / total) / 100 : 0}%;background:var(--c-${part.color})"></i>`,
+                )
+                .join('');
+              const rows = buckets
+                .map(
+                  (part) =>
+                    `<div><span><i style="background:var(--c-${part.color})"></i>${escape(part.label)}</span><b>${escape(amount(part.value))}${part.label === 'Unexplained remainder' && accounted ? ' · accounted for' : ''}</b></div>`,
+                )
+                .join('');
+              return [
+                `<article class="card"><h4>${span(labels.field(entity.entity, aggregate.name, true), aggregate.name)}: ${span(labels.source(entity.entity, source), source)} vs ${span(labels.source(entity.entity, entity.reference), entity.reference)}</h4><div class="sum">${escape(amount(difference))}${currency ? ` · ${escape(currency)}` : ''}</div><div class="bar" role="img" aria-label="${escape(buckets.map((part) => `${part.label}: ${amount(part.value)}`).join(', '))}">${bars}</div><div class="rows">${rows}</div></article>`,
+              ];
+            });
+          },
+        ),
       ),
     )
     .join('');

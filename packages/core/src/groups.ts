@@ -1,3 +1,4 @@
+import { ordinal } from './labels.js';
 import type { EntityConfig } from './config.js';
 import type { Finding, FindingGroup, Report } from './types.js';
 import { durationValue, formatMoneyMajor, integerValue, type ReportPresentation } from './money-display.js';
@@ -95,13 +96,22 @@ export function strideGroups(bucket: readonly Finding[], minCount: number, final
           : {}),
         summary: (bucket.every((item) => item.evidence?.paginated || item.evidence?.pageSizes?.includes(Number(stride)))
           ? summary
-          : `${keys.length} rows in ${first.source}: every ${stride}th row is missing (stride of ${stride}), from ${begin.key} to ${last.key}${includeFinal ? `; final reference key ${finalKey} is also missing` : ''}.`
+          : `${keys.length} rows in ${first.source}: every ${ordinal(stride)} row is missing (stride of ${stride}), from ${begin.key} to ${last.key}${includeFinal ? `; final reference key ${finalKey} is also missing` : ''}.`
         ).replace('missing', first.type === 'extra_in_source' ? 'extra' : 'missing'),
       });
       start = end;
     }
   }
-  return groups;
+  const merged = new Map<string, FindingGroup>();
+  for (const group of groups) {
+    const id = JSON.stringify([group.source, group.kind, group.stride, group.cause]);
+    const previous = merged.get(id);
+    if (previous) {
+      previous.keys = [...new Set([...(previous.keys ?? []), ...(group.keys ?? [])])];
+      previous.count = previous.keys.length;
+    } else merged.set(id, group);
+  }
+  return [...merged.values()];
 }
 function deltaSummary(first: Finding, count: number, delta: bigint, rule: EntityConfig['compare'][string]): string {
   const difference =
@@ -113,7 +123,7 @@ function deltaSummary(first: Finding, count: number, delta: bigint, rule: Entity
       ? delta >= -3n && delta <= 3n
         ? 'likely rounding'
         : 'consistent fixed difference'
-      : first.evidence?.offsetFree && delta % 900000n === 0n
+      : first.evidence?.offsetFree && delta % 900000n === 0n && delta >= -50400000n && delta <= 50400000n
         ? 'possible timezone difference'
         : 'repeated datetime offset';
   return `${count.toLocaleString('en-US')} ${first.field} values in ${first.source} differ by exactly ${difference} (${hint}).`;
@@ -147,6 +157,8 @@ export function deltaGroups(
             delta,
             ...(rule.type === 'datetime' &&
             BigInt(delta) % 900000n === 0n &&
+            BigInt(delta) >= -50400000n &&
+            BigInt(delta) <= 50400000n &&
             values.every((value) => value.evidence?.offsetFree)
               ? { cause: 'timezone' as const }
               : {}),
@@ -164,6 +176,7 @@ export function deltaGroups(
 export function mappingGroups(bucket: readonly Finding[], minCount: number): FindingGroup[] {
   const pairs = new Map<string, Finding[]>();
   for (const finding of bucket) {
+    if (finding.reason === 'currency_mismatch') continue;
     if (finding.expected == null || finding.actual == null || finding.expected === '' || finding.actual === '')
       continue;
     const key = JSON.stringify([finding.expected, finding.actual], (_, value: unknown) =>

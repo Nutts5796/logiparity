@@ -3,6 +3,7 @@ import { safeConsole, redactTree, secretValues } from './diagnostics.js';
 import { atomicReportFile } from './atomic-file.js';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { reportLabels } from './labels.js';
 import { errorText, type Config } from './config.js';
 import type { Report } from './types.js';
 import { reportGroups, presentationFindings } from './groups.js';
@@ -33,6 +34,7 @@ export function consoleReport(report: Report, presentation: ReportPresentation =
   report = redactTree(report, secrets);
   presentation = redactTree(presentation, secrets);
   const counts = reportCounts(report);
+  const labels = reportLabels(presentation);
   const lines = [
     `LogiParity: ${quantity(counts.findings, 'finding')} (${quantity(counts.blocking, 'blocking finding')}), ${quantity(counts.errors, 'source error')}, ${quantity(counts.warnings, 'warning')}`,
   ];
@@ -50,7 +52,7 @@ export function consoleReport(report: Report, presentation: ReportPresentation =
         const raw = rawAggregateDisplay(aggregate, source, entity.entity, presentation);
         if (raw)
           lines.push(
-            `  ${aggregate.name} · ${source}: raw source ${raw}; retained/certain lines ${aggregateDisplay(aggregate, source, entity.entity, presentation)}; excluded rows ${(aggregate.excludedRows?.[source] ?? []).join(', ') || 'none'}.`,
+            `  ${labels.field(entity.entity, aggregate.name, true)} · ${labels.source(entity.entity, source)}: raw source ${raw}; retained/certain lines ${aggregateDisplay(aggregate, source, entity.entity, presentation)}; excluded rows ${(aggregate.excludedRows?.[source] ?? []).join(', ') || 'none'}.`,
           );
       }
   for (const finding of presentationFindings(report, presentation).slice(0, 10)) {
@@ -69,7 +71,9 @@ export function consoleReport(report: Report, presentation: ReportPresentation =
     );
   }
   if (report.findings.length > 10)
-    lines.push(`  ${quantity(report.findings.length - 10, 'additional result')} in the complete report.`);
+    lines.push(
+      `  ${quantity(report.findings.length - 10, 'additional result')} not shown. Write the complete report with report.outputs: [console, html, json].`,
+    );
   return safeConsole(lines.join('\n') + '\n');
 }
 

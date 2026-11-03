@@ -6,6 +6,7 @@ import {
   withSourceRow,
   sourceIssue,
   fieldPath,
+  humanize,
   type FieldMapping,
   type AdapterContext,
   type DataRow,
@@ -23,7 +24,7 @@ function headerIndexes(headers: unknown[], fields: Record<string, FieldMapping>)
     const index = names.indexOf(column);
     if (index < 0)
       throw new Error(
-        `Column "${column}" for field ${field} is missing. Available headers: ${names.map((name) => JSON.stringify(name)).join(', ') || '(none)'}. Correct fields or headerRow.`,
+        `Column "${column}" for field ${typeof mapping === 'object' && mapping.label ? mapping.label : humanize(field)} is missing. Available headers: ${names.map((name) => JSON.stringify(name)).join(', ') || '(none)'}. Correct fields or headerRow.`,
       );
     return [field, index];
   });

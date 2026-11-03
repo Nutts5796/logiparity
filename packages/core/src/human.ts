@@ -1,4 +1,4 @@
-import { reportLabels, humanize } from './labels.js';
+import { reportLabels, humanize, ordinal } from './labels.js';
 import { findingKey } from './keys.js';
 import {
   durationValue,
@@ -39,20 +39,8 @@ function findingDetails(finding: Finding, presentation: ReportPresentation): str
   if (finding.accounting) return `Follows from: ${finding.accounting.causes.join(', ')}.`;
   if (finding.type === 'missing_in_source')
     return `Missing from ${labels.source(finding.entity, finding.source)}${finding.amounts?.length ? ': ' + finding.amounts.map((item) => (item.currency ? formatMoneyMajor(BigInt(item.amount), item.currency) : presentationValue(item.amount, finding.entity, item.field, false, presentation))).join(', ') : ''}.`;
-  if (finding.type === 'extra_in_source') {
-    const key =
-      finding.keyParts?.length === 2 && Array.isArray(entity?.key) && entity.key[1] === 'charge'
-        ? `${humanize(finding.keyParts[1] ?? '')} on ${finding.keyParts[0]}`
-        : findingKey(finding);
-    const money = finding.amounts
-      ?.map((item) =>
-        item.currency
-          ? formatMoneyMajor(BigInt(item.amount), item.currency)
-          : presentationValue(item.amount, finding.entity, item.field, false, presentation),
-      )
-      .join(', ');
-    return `${key}: not on ${labels.source(finding.entity, reference)}${money ? ', ' + money : ''}.`;
-  }
+  if (finding.type === 'extra_in_source')
+    return `Extra on ${labels.source(finding.entity, finding.source)}${finding.amounts?.length ? ': ' + finding.amounts.map((item) => (item.currency ? formatMoneyMajor(BigInt(item.amount), item.currency) : presentationValue(item.amount, finding.entity, item.field, false, presentation))).join(', ') : ''}.`;
   if (finding.type === 'aggregate_mismatch')
     return `${field} differs from ${labels.source(finding.entity, reference)}.`;
   if (finding.type === 'duplicate_value') {
@@ -65,11 +53,9 @@ function findingDetails(finding: Finding, presentation: ReportPresentation): str
       .join(', ');
     return `${field} ${String(finding.actual)} appears on ${(finding.relatedKeys ?? []).join(' and ')}${amounts ? '; amounts on additional records: ' + amounts : ''}.`;
   }
-  if (finding.type === 'field_mismatch' && !finding.reason) return '';
-  let message = finding.message;
-  for (const name of Object.keys(entity?.compare ?? {}))
-    message = message.replaceAll(name, labels.field(finding.entity, name));
-  return message;
+  if (finding.type === 'field_mismatch' && !finding.reason)
+    return `${field} differs from ${labels.source(finding.entity, reference)}.`;
+  return finding.message;
 }
 export function humanFinding(finding: Finding, presentation: ReportPresentation = {}) {
   const labels = reportLabels(presentation),
@@ -93,7 +79,7 @@ export function humanFinding(finding: Finding, presentation: ReportPresentation 
   return {
     key: finding.key
       ? finding.keyParts?.length
-        ? finding.keyParts.map((part, index) => (index ? humanize(part) : part)).join(' · ')
+        ? finding.keyParts.join(' · ')
         : findingKey(finding)
       : aggregate
         ? labels.all(finding.entity)
@@ -113,7 +99,7 @@ export function humanFinding(finding: Finding, presentation: ReportPresentation 
             aggregate,
             presentation,
           ),
-    type: typeLabels[finding.type],
+    type: finding.reason === 'currency_mismatch' ? 'Currency difference' : typeLabels[finding.type],
     details:
       finding.values
         ?.map(
@@ -133,7 +119,7 @@ export function patternWords(group: FindingGroup, presentation: ReportPresentati
     return group.cause !== 'pagination'
       ? {
           label: 'Repeated missing rows',
-          sentence: `${quantity(group.count, group.kind === 'missing_stride' ? 'missing row' : 'extra row')} in ${source}: every ${group.stride}th row.`,
+          sentence: `${quantity(group.count, group.kind === 'missing_stride' ? 'missing row' : 'extra row')} in ${source}: every ${ordinal(group.stride ?? 0)} row.`,
           nextStep: `Compare the export selection and missing keys in ${source}.`,
           hint: 'A regular sequence of rows is absent; check the source export.',
         }
@@ -147,14 +133,16 @@ export function patternWords(group: FindingGroup, presentation: ReportPresentati
     return group.cause !== 'timezone'
       ? {
           label: 'Datetime offset',
-          sentence: `${numberText(group.count)} ${field.toLowerCase()} values in ${source} differ by ${durationValue(delta)}.`,
+          sentence: `${numberText(group.count)} ${field} values in ${source} differ by ${durationValue(delta)}.`,
           nextStep: `Compare the original timestamps and clock settings in ${source}.`,
-          hint: 'Repeated datetime offset; check the original timestamps.',
+          hint: 'Repeated datetime offset.',
         }
       : {
           label: 'Timezone',
-          sentence: `${numberText(group.count)} ${field.toLowerCase()} values in ${source} differ by ${durationValue(delta)}.`,
-          nextStep: `Set sourceTimezones.${group.source} to the zone the export writes in.`,
+          sentence: `${numberText(group.count)} ${field} values in ${source} differ by ${durationValue(delta)}.`,
+          nextStep: labels.entity(group.entity)?.compare[group.field]?.sourceTimezones[group.source]
+            ? `Check facility-local timestamps or supply a per-row time zone in ${source}.`
+            : `Set sourceTimezones.${group.source} to the zone the export writes in.`,
           hint: 'Likely local time written without an offset.',
         };
   if (group.kind === 'money_delta') {
@@ -164,19 +152,19 @@ export function patternWords(group: FindingGroup, presentation: ReportPresentati
     const small = delta >= -3n && delta <= 3n;
     return {
       label: small ? 'Rounding' : 'Fixed difference',
-      sentence: `${numberText(group.count)} ${field.toLowerCase()} values in ${source} differ by ${difference}.`,
+      sentence: `${numberText(group.count)} ${field} values in ${source} differ by ${difference}.`,
       nextStep: small
-        ? `Compare the rounding rules for ${field.toLowerCase()} across the sources.`
-        : `Review the charge rules and fixed adjustments for ${field.toLowerCase()}.`,
+        ? `Compare the rounding rules for ${field} across the sources.`
+        : `Review the charge rules and fixed adjustments for ${field}.`,
       hint: small
         ? 'Likely a different rounding rule than the reference.'
-        : 'Likely a fixed adjustment. These repeated values have a consistent fixed difference.',
+        : 'These repeated values have a consistent fixed difference.',
     };
   }
   return {
     label: 'Value mapping',
-    sentence: `${numberText(group.count)} ${field.toLowerCase()} values in ${source} map ${humanize(String(group.expected))} to ${humanize(String(group.actual))}.`,
-    nextStep: `Check the ${field.toLowerCase()} mapping for ${source}.`,
+    sentence: `${numberText(group.count)} ${field} values in ${source} map ${humanize(String(group.expected))} to ${humanize(String(group.actual))}.`,
+    nextStep: `Check the ${field} mapping for ${source}.`,
     hint: 'Likely a different vocabulary for the same field.',
   };
 }
@@ -220,14 +208,14 @@ export function mergedPatternWords(groups: readonly FindingGroup[], presentation
         values
           .map(
             (group) =>
-              `${numberText(group.count)} ${labels.field(group.entity, group.field || 'rows').toLowerCase()} values in ${labels.source(group.entity, group.source)}`,
+              `${numberText(group.count)} ${group.kind.endsWith('_stride') ? (group.kind === 'missing_stride' ? 'missing rows' : 'extra rows') : labels.field(group.entity, group.field) + ' values'} in ${labels.source(group.entity, group.source)}`,
           )
           .join(' and ') +
-        `. ${words.label}: ${first.delta ? durationOrMoney(first, presentation) : `every ${first.stride}th row`}.`,
+        ` ${first.kind.endsWith('_stride') ? `follow ${first.cause === 'pagination' ? 'page boundaries' : `every ${ordinal(first.stride ?? 0)} row`}` : `differ by ${durationOrMoney(first, presentation)}`}.`,
       nextStep:
         first.kind === 'datetime_offset'
           ? first.cause === 'timezone'
-            ? `Set sourceTimezones for ${values.map((group) => labels.source(group.entity, group.source)).join(' and ')} to the zones each export writes in.`
+            ? `Check facility-local timestamps and the configured source time zones in ${values.map((group) => labels.source(group.entity, group.source)).join(' and ')}.`
             : `Compare original timestamps and clock settings in ${values.map((group) => labels.source(group.entity, group.source)).join(' and ')}.`
           : [...new Set(values.map((group) => patternWords(group, presentation).nextStep))].join(' '),
     };
