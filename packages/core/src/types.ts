@@ -1,3 +1,4 @@
+import type { RowFilter } from './config.js';
 import type { SourceConfig } from './config.js';
 
 export const sourceRow = Symbol.for('logiparity.sourceRow');
@@ -69,7 +70,7 @@ export interface EntitySummary {
   reference: string;
   counts: Record<string, number>;
   uniqueCounts?: Record<string, number>;
-  filters?: Record<string, unknown>;
+  filters?: Record<string, { source: RowFilter; rollup: RowFilter }>;
   rollupSources?: string[];
   pluralLabel?: string;
   aggregates?: AggregateResult[];

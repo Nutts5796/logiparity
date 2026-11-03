@@ -36,7 +36,7 @@ export function junitReport(report: Report, timestamp = new Date(), presentation
         if (tag === 'error') errors++;
         else if (tag === 'failure') failures++;
         else skipped++;
-        result = `<${tag}${tag === 'skipped' ? '' : ` type="${type}"`} message="${quantity(findings.length, 'finding')}${blocking ? '' : ' allowed by failOn'}">${xml(
+        result = `<${tag}${tag === 'skipped' ? '' : ` type="${type}"`} message="${quantity(findings.length, type === 'source_error' ? 'source error' : 'finding')}${blocking ? '' : ' allowed by failOn'}">${xml(
           findings
             .map((finding) => {
               const item = humanFinding(finding, presentation);

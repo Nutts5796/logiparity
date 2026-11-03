@@ -31,6 +31,33 @@ export function reportCounts(report: Report) {
     warnings: report.warnings?.length ?? 0,
   };
 }
+function findingDetails(finding: Finding, presentation: ReportPresentation): string {
+  const labels = reportLabels(presentation);
+  const entity = labels.entity(finding.entity);
+  const field = labels.field(finding.entity, finding.field, finding.type === 'aggregate_mismatch');
+  const reference = Object.keys(entity?.sources ?? {})[0] ?? 'reference';
+  if (finding.accounting) return `Follows from: ${finding.accounting.causes.join(', ')}.`;
+  if (finding.type === 'missing_in_source') return `Missing from ${labels.source(finding.entity, finding.source)}.`;
+  if (finding.type === 'extra_in_source') {
+    const key =
+      finding.keyParts?.length === 2 && Array.isArray(entity?.key) && entity.key[1] === 'charge'
+        ? `${humanize(finding.keyParts[1] ?? '')} on ${finding.keyParts[0]}`
+        : findingKey(finding);
+    const money = finding.amounts
+      ?.map((item) => presentationValue(item.amount, finding.entity, item.field, false, presentation))
+      .join(', ');
+    return `${key}: not on ${labels.source(finding.entity, reference)}${money ? ', ' + money : ''}.`;
+  }
+  if (finding.type === 'aggregate_mismatch')
+    return `${field} differs from ${labels.source(finding.entity, reference)}.`;
+  if (finding.type === 'duplicate_value') {
+    const amounts = finding.amounts
+      ?.map((item) => presentationValue(item.amount, finding.entity, item.field, false, presentation))
+      .join(', ');
+    return `${field} ${String(finding.actual)} appears on ${(finding.relatedKeys ?? []).join(' and ')}${amounts ? '; paid more than once: ' + amounts : ''}.`;
+  }
+  return finding.type !== 'field_mismatch' || finding.reason ? finding.message : '';
+}
 export function humanFinding(finding: Finding, presentation: ReportPresentation = {}) {
   const labels = reportLabels(presentation),
     aggregate = finding.type === 'aggregate_mismatch';
@@ -67,7 +94,7 @@ export function humanFinding(finding: Finding, presentation: ReportPresentation 
           (item) =>
             `Row ${numberText(item.line)}: ${presentationValue(item.value, finding.entity, finding.field, false, presentation)}`,
         )
-        .join('; ') ?? (finding.type !== 'field_mismatch' || finding.reason ? finding.message : ''),
+        .join('; ') ?? findingDetails(finding, presentation),
   };
 }
 export function patternWords(group: FindingGroup, presentation: ReportPresentation = {}) {

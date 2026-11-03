@@ -205,6 +205,19 @@ function reconciliationCards(report: Report, presentation: ReportPresentation): 
 }
 function sourceChips(report: Report, presentation: ReportPresentation): string {
   const labels = reportLabels(presentation);
+  const describeFilter = (entity: string, filter: EntitySummary['filters']) =>
+    Object.values(filter ?? {})
+      .flatMap((parts) =>
+        [...Object.entries(parts.source), ...Object.entries(parts.rollup)].map(([field, condition]) => {
+          const inverse = condition !== null && typeof condition === 'object' && !Array.isArray(condition);
+          const values = inverse ? condition.not : condition;
+          const choices = (Array.isArray(values) ? values : [values])
+            .map((value) => (value === null ? '(blank)' : humanize(String(value))))
+            .join(', ');
+          return `${labels.field(entity, field)} ${inverse ? 'is not' : 'is'} ${choices}`;
+        }),
+      )
+      .join('; ');
   return report.entities
     .flatMap((entity) =>
       sourceNames(entity, presentation).map((source) => {
@@ -219,7 +232,7 @@ function sourceChips(report: Report, presentation: ReportPresentation): string {
             : rollup
               ? `${quantity(entity.counts[source] ?? 0, 'line')} → ${quantity(count, count === 1 ? (labels.entity(entity.entity)?.label ?? 'record').toLowerCase() : (entity.pluralLabel ?? 'records'), entity.pluralLabel ?? 'records')}`
               : numberText(count);
-        return `<div class="src"><small>${span(labels.source(entity.entity, source), source)}${source === entity.reference ? ' · reference' : ''}</small><b>${escape(value)}</b>${difference && !rollup ? `<span class="bad">${difference > 0 ? '+' : ''}${numberText(difference)} ${Math.abs(difference) === 1 ? 'row' : 'rows'}</span>` : ''}${filter ? `<span class="details">Filter: ${escape(JSON.stringify(filter))}</span>` : ''}</div>`;
+        return `<div class="src"><small>${span(labels.source(entity.entity, source), source)}${source === entity.reference ? ' · reference' : ''}</small><b>${escape(value)}</b>${difference && !rollup ? `<span class="bad">${difference > 0 ? '+' : ''}${numberText(difference)} ${Math.abs(difference) === 1 ? 'row' : 'rows'}</span>` : ''}${filter ? `<span class="details">Filter: ${escape(describeFilter(entity.entity, { [source]: filter }))}</span>` : ''}</div>`;
       }),
     )
     .join('');
@@ -319,7 +332,7 @@ export function htmlReport(report: Report, presentation: ReportPresentation = {}
       const info = kindInfo[card.kind],
         group = groups[card.groups[0] ?? -1],
         words = group ? patternWords(group, presentation) : undefined;
-      return `<article class="card pat" style="--c:var(--c-${info.color});--soft:var(--c-${info.color}-soft)"><div class="ic">${icon(info.path)}</div><div class="kind">${escape(card.label)}</div><div class="delta">${escape(card.headline)}</div><p>${escape(card.hint)}</p><div class="viz" title="${escape(words?.sentence ?? '')}">${card.chart}</div><p class="next-step"><b>Next step:</b> ${escape(card.groups.map((index) => (groups[index] ? patternWords(groups[index], presentation).nextStep : '')).join(' ') || 'Review source values.')}</p><button class="btn btn-soft" data-card="${index}" type="button">Show these findings</button></article>`;
+      return `<article class="card pat" style="--c:var(--c-${info.color});--soft:var(--c-${info.color}-soft)"><div class="ic">${icon(info.path)}</div><div class="kind">${escape(card.label)}</div><div class="delta">${escape(card.headline)}</div><p>${escape(card.hint)}</p><div class="viz" title="${escape(words?.sentence ?? '')}">${card.chart}</div><p class="next-step"><b>Next step:</b> ${escape([...new Set(card.groups.map((index) => (groups[index] ? patternWords(groups[index], presentation).nextStep : '')))].join(' ') || 'Review source values.')}</p><button class="btn btn-soft" data-card="${index}" type="button">Show these findings</button></article>`;
     })
     .join('');
   const options = (values: [string, string][]) =>

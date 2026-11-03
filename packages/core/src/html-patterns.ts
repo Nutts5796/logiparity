@@ -44,7 +44,7 @@ const fmt = (value: number) => value.toLocaleString('en-US');
 const svg = (width: number, height: number, label: string, contents: string) =>
   `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escape(label)}">${contents}</svg>`;
 const caption = (text: string) => `<div class="cap">${escape(text)}</div>`;
-const hourLabel = (hour: number) => `${hour % 12 || 12} ${hour < 12 ? 'AM' : 'PM'} UTC`;
+const hourLabel = (hour: number, zone = 'UTC') => `${hour % 12 || 12} ${hour < 12 ? 'AM' : 'PM'} ${zone}`;
 
 export function patternCards(report: Report, presentation: ReportPresentation): PatternCard[] {
   const groups = reportGroups(report, presentation);
@@ -144,10 +144,20 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
         const hours = Array.from({ length: 24 }, () => 0);
         for (const index of members) {
           const value = report.findings[index]![field];
-          if (typeof value === 'number') hours[new Date(value).getUTCHours()]!++;
+          if (typeof value === 'number') {
+            const hour = Number(
+              new Intl.DateTimeFormat('en-US', {
+                timeZone: presentation.displayTimezone ?? 'UTC',
+                hour: 'numeric',
+                hourCycle: 'h23',
+              }).format(new Date(value)),
+            );
+            hours[hour] = (hours[hour] ?? 0) + 1;
+          }
         }
         return hours.indexOf(Math.max(...hours));
       };
+      const zone = presentation.displayTimezone ?? 'UTC';
       const ref = typical('expected'),
         src = typical('actual');
       const point = (hour: number, radius: number): [number, number] => {
@@ -169,11 +179,11 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
         svg(
           160,
           160,
-          `24-hour UTC dial: ${labels.source(first.entity, reference)} around ${hourLabel(ref)}, ${sources} around ${hourLabel(src)}. Shift ${card.headline}.`,
+          `24-hour ${zone} dial: ${labels.source(first.entity, reference)} around ${hourLabel(ref, zone)}, ${sources} around ${hourLabel(src, zone)}. Shift ${card.headline}.`,
           shapes,
         ) +
         caption(
-          `${labels.source(first.entity, reference)}: around ${hourLabel(ref)}. ${sources}: around ${hourLabel(src)}. ${labels.field(first.entity, first.field)}.`,
+          `${labels.source(first.entity, reference)}: around ${hourLabel(ref, zone)}. ${sources}: around ${hourLabel(src, zone)}. ${labels.field(first.entity, first.field)}.`,
         );
     } else if (first.kind === 'money_delta') {
       const total = summary?.uniqueCounts?.[first.source] ?? summary?.counts[first.source] ?? rows;

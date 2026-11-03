@@ -23,7 +23,9 @@ let configuredSecrets = secretValues(undefined);
 const output = (text: string) => process.stdout.write(safeConsole(redactSecrets(text, configuredSecrets)));
 const help = `LogiParity ${version} — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
 
-Usage: logiparity check --config <parity.yaml>
+Usage: logiparity demo [--bugs]
+       logiparity install-browser
+       logiparity check --config <parity.yaml>
        logiparity scenario run <scenario.yaml> --target <target.yaml> [--report-dir <dir>] [--allow-modules]
        logiparity ai suggest-config --openapi <spec.yaml> --entity <name>
        logiparity ai scenario --from <description>
