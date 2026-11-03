@@ -50,3 +50,26 @@ it('keeps a valid first duplicate certain even if a later duplicate has invalid 
   expect(report.entities[0]?.aggregates?.[0]?.values.b).toBe(1000n);
   expect(report.entities[0]?.aggregates?.[0]?.uncertainKeys?.b).toEqual([]);
 });
+it('keeps monetary pattern hints and duplicate-value amounts partitioned by currency', async () => {
+  const source = {
+    type: 'csv',
+    file: 'unused',
+    currencyField: 'currency',
+    unique: ['tender'],
+    fields: { id: 'id', amount: 'amount', currency: 'currency', tender: 'tender' },
+  };
+  const config = entitySchema.parse({
+    name: 'o',
+    key: 'id',
+    sources: { a: source, b: source },
+    compare: { amount: { type: 'money', currency: 'USD' } },
+  });
+  const report = await compareEntities([config], async function* (name) {
+    for (let i = 0; i < 4; i++)
+      yield { id: `O${i}`, amount: name === 'a' ? '10.00' : '10.15', currency: i === 0 ? 'USD' : 'CAD', tender: 'T1' };
+  });
+  const repeated = report.findings.find((f) => f.type === 'duplicate_value' && f.source === 'b');
+  expect(repeated?.amounts).toEqual([{ field: 'amount', amount: 3045n, currency: 'CAD' }]);
+  const markdown = markdownReport(report, { entities: [config] });
+  expect(markdown).toContain('CA$0.15');
+});

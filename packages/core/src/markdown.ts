@@ -3,8 +3,8 @@ import { aggregateDisplay, rawAggregateDisplay } from './money-display.js';
 import { reportGroups, groupMembership, accountedFindingIndexes } from './groups.js';
 import { verdict } from './report-utils.js';
 import { reportLabels } from './labels.js';
-import { humanFinding, reportCounts, quantity, typeLabels, patternWords, markdownCell as cell } from './human.js';
-import { type ReportPresentation } from './money-display.js';
+import { humanFinding, reportCounts, quantity, typeLabels, mergedPatternWords, markdownCell as cell } from './human.js';
+import { presentationDifference, type ReportPresentation } from './money-display.js';
 import type { Report, Finding } from './types.js';
 const row = (finding: Finding, presentation: ReportPresentation) => {
   const item = humanFinding(finding, presentation);
@@ -25,9 +25,8 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
       (presentation.displayTimezone ?? 'UTC') +
       '. Amounts use their configured currency. JSON retains normalized values.',
     '',
-    '| Finding | Count |',
-    '| --- | ---: |',
   ];
+  if (report.findings.length) lines.push('| Finding | Count |', '| --- | ---: |');
   for (const [type, label] of Object.entries(typeLabels)) {
     const count = report.findings.filter((finding) => finding.type === type).length;
     if (count) lines.push(`| ${label} | ${count.toLocaleString('en-US')} |`);
@@ -41,8 +40,7 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
     accounted = accountedFindingIndexes(report, presentation);
   if (groups.length) {
     lines.push('', '## Causes to investigate', '');
-    for (const group of groups) {
-      const words = patternWords(group, presentation);
+    for (const words of mergedPatternWords(groups, presentation)) {
       lines.push(`- ${cell(words.sentence)} ${cell(words.hint)}`, `  Next step: ${cell(words.nextStep)}`);
     }
   }
@@ -50,7 +48,13 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
     (entity.aggregates ?? []).map((aggregate) => ({ entity, ...aggregate })),
   );
   if (totals.length) {
-    lines.push('', '## Totals', '', '| Total | Source | Value | Status |', '| --- | --- | ---: | --- |');
+    lines.push(
+      '',
+      '## Totals',
+      '',
+      '| Total | Source | Value | Difference | Status |',
+      '| --- | --- | ---: | ---: | --- |',
+    );
     for (const { entity, ...aggregate } of totals) {
       const sources = Object.keys(labels.entity(entity.entity)?.sources ?? entity.counts);
       for (const source of sources) {
@@ -62,13 +66,20 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
             : value === undefined
               ? 'Not read'
               : aggregateDisplay(aggregate, source, entity.entity, presentation);
+        const baseline = aggregate.values[entity.reference];
+        const difference =
+          source !== entity.reference && baseline !== undefined && value !== undefined
+            ? presentationDifference(baseline, value, entity.entity, aggregate.name, true, presentation)
+            : '—';
+        const accounted =
+          aggregate.reconciliation?.[source]?.remainder === 0n || aggregate.reconciliation?.[source]?.remainder === '0';
         const uncertain = aggregate.uncertainKeys?.[source];
         const raw = rawAggregateDisplay(aggregate, source, entity.entity, presentation);
         const retained = raw
           ? ` Raw source: ${raw}; retained/certain lines above. Excluded rows: ${(aggregate.excludedRows?.[source] ?? []).join(', ') || 'none'}.`
           : '';
         lines.push(
-          `| ${cell(labels.field(entity.entity, aggregate.name, true))} | ${cell(labels.source(entity.entity, source))} | ${cell(shown + retained)} | ${uncertain?.length ? cell('Uncertain lines: ' + uncertain.join(', ')) : source === entity.reference ? 'Reference' : ''} |`,
+          `| ${cell(labels.field(entity.entity, aggregate.name, true))} | ${cell(labels.source(entity.entity, source))} | ${cell(shown + retained)} | ${cell(difference)} | ${uncertain?.length ? cell('Uncertain lines: ' + uncertain.join(', ')) : source === entity.reference ? 'Reference' : accounted ? 'Accounted for' : value === baseline ? 'Matches' : status === 'not_mapped' ? 'Not mapped' : 'Needs review'} |`,
         );
       }
     }
@@ -97,7 +108,25 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
       '| Key | Source | Field | Reference | Source value | Difference | Details |',
       '| --- | --- | --- | --- | --- | --- | --- |',
     );
-    for (const indexes of members) {
+    const shownCauses = new Set<string>();
+    for (const [index, indexes] of members.entries()) {
+      const group = groups[index];
+      const identity = JSON.stringify(
+        group && [
+          group.entity,
+          group.kind,
+          group.field,
+          group.delta,
+          group.stride,
+          group.currency,
+          group.expected,
+          group.actual,
+          group.cause,
+        ],
+        (_, value: unknown) => (typeof value === 'bigint' ? String(value) : value),
+      );
+      if (shownCauses.has(identity)) continue;
+      shownCauses.add(identity);
       const finding = report.findings[indexes[0] ?? -1];
       if (finding) lines.push(row(finding, presentation));
     }
@@ -107,7 +136,7 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
     lines.push('', '## Accounted for totals', '');
     for (const finding of follows)
       lines.push(
-        `- ${cell(labels.field(finding.entity, finding.field, true))}, ${cell(labels.source(finding.entity, finding.source))}: Follows from: ${cell(finding.accounting?.causes.join(', ') ?? '')}.`,
+        `- ${cell(labels.field(finding.entity, finding.field, true))}, ${cell(labels.source(finding.entity, finding.source))}: ${cell(humanFinding(finding, presentation).difference)}. Follows from: ${cell(finding.accounting?.causes.join(', ') ?? '')}.`,
       );
     lines.push('', 'Accounted for means each difference is traced to a cause above. Each cause still needs a fix.');
   }

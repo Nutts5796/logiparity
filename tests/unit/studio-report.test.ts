@@ -216,3 +216,24 @@ it('does not call a large fixed money difference rounding in cards or legends', 
   expect(html.includes('>Rounding<')).toBe(false);
   expect(html.includes('consistent fixed difference')).toBe(true);
 });
+it('uses meaningful passing and individual-review headlines when there are no cause groups', () => {
+  const clean = {
+    schemaVersion: 1 as const,
+    findings: [],
+    groups: [],
+    entities: [{ entity: 'shipment', reference: 'api', counts: { api: 2750, export: 2750 }, pluralLabel: 'orders' }],
+  };
+  expect(htmlReport(clean)).toContain('All 2,750 orders match');
+  expect(markdownReport(clean)).not.toContain('| Finding | Count |');
+  const finding = {
+    type: 'field_mismatch' as const,
+    entity: 'shipment',
+    source: 'export',
+    key: 'O1',
+    field: 'status',
+    expected: 'delivered',
+    actual: null,
+    message: 'Status differs.',
+  };
+  expect(htmlReport({ ...clean, findings: [finding] })).toContain('1 finding needs review');
+});

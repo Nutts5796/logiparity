@@ -1,6 +1,6 @@
 # Freight settlement reconciliation
 
-This is a synthetic closed day of 40 loads: 149 rate confirmation charge lines and 151 posted settlement lines. One additional void row is filtered out. No production data is included.
+This static synthetic carrier-settlement fixture has 120 loads, 377 confirmed charge lines and 380 settlement rows including a filtered void row. It includes multiple U.S. zones and both explicit offsets of the 2026 fall-back overlap. No production data is included.
 
 From a project with LogiParity installed:
 
@@ -21,7 +21,7 @@ node packages/cli/dist/main.js check --config examples/freight/parity.yaml
 
 Expected: validation exits 0; the check exits 1 because the fixture includes intentional defects. Open `freight-example/logiparity-report/report.html` (or `examples/freight/logiparity-report/report.html` in a checkout).
 
-The load comparison sums 151 settlement rows into 40 load keys, against 40 TMS totals. Its non-key uniqueness check finds tender T9006 on L106 and L107 and reports the amount paid more than once. The charge comparison uses `[load_id, charge]` to distinguish each accessorial. L102's $15 detention is absent from its rate confirmation and stays an individual finding. It must not become a rounding pattern.
+The load comparison rolls up settlement charge lines against TMS totals. Tender T9006 appears on L106 and L107 because L107 has a tender typo; that alone is not evidence of a duplicate payment. The charge comparison uses composite load/charge keys. The individual $15 L102 detention difference remains a listed value difference, with its contribution traced into totals. L155 has a missing $250 TONU; L150 has an extra $35 stop charge. Accessorials also include lumper fees, layovers and claim deductions.
 
 Other intentional defects are a repeated fuel row on L103, a blank fuel amount on L104 and a conflicting status on L105. Duplicate identities are excluded before summing. Uncertain loads are listed separately while certain loads still reconcile. Source `where` excludes void rows; rollup `where` accepts only the listed charge types. Row numbers count the CSV header.
 

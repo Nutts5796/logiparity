@@ -22,7 +22,7 @@ export function escapeMarkup(input: string): string {
     .replaceAll("'", '&#39;');
 }
 export const displayValue = (value: NormalizedValue | undefined): string =>
-  value === undefined ? '—' : value === null ? '(blank)' : String(value);
+  value === undefined ? '—' : value === null || value === '' ? '(blank)' : String(value);
 export function findingDetail(f: Finding): string {
   return `${f.source} | key=${f.key || '—'} | field=${f.field || '—'} | ${isBlocking(f) ? 'blocking' : 'allowed'}\n${f.message}${f.expected !== undefined ? `\nExpected: ${displayValue(f.expected)}\nActual: ${displayValue(f.actual)}` : ''}${f.values ? `\nObserved: ${f.values.map((item) => `row ${item.row}: ${displayValue(item.value)}`).join('; ')}` : ''}`;
 }

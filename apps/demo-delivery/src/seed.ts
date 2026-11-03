@@ -1,3 +1,4 @@
+import { DateTime } from 'luxon';
 export const DEMO_DATE = '2026-11-02';
 export interface Shipment {
   id: string;
@@ -51,15 +52,19 @@ export function seedData(date = DEMO_DATE): DemoData {
     available: true,
   }));
   const vehicles = drivers.map((d) => ({ id: d.vehicle_id, capacity: 50, operational: true }));
+  const day = DateTime.fromISO(date, { zone: 'America/Chicago' });
+  const start = day.set({ hour: 8 }).toUTC().toMillis(),
+    end = day.set({ hour: 18 }).toUTC().toISO({ suppressMilliseconds: true }) ?? '';
+  const snapshotAt = day.set({ hour: 12 }).toUTC().toMillis();
   const shipments: Shipment[] = Array.from({ length: 2750 }, (_, i) => {
     const driver = drivers[Math.floor(i / 50)];
     if (!driver) throw new Error('Synthetic seed driver index is invalid.');
     const zone = (i * 7 + Math.floor(i / 11)) % 5;
     const distanceTenths = 20 + ((i * 37) % 170);
     const milli = 16500 + zone * 2250 + distanceTenths * 80 + (i % 5 === 0 ? 5 : 0);
-    const snapshot = Date.parse(`${date}T14:00:00Z`);
-    const arrivalEstimate = Date.parse(`${date}T10:00:00Z`) + ((i * 13) % 240) * 60000;
-    const deliveredTime = Math.min(snapshot - 60000, arrivalEstimate + (((i * 7) % 15) - 6) * 60000);
+    const snapshot = snapshotAt;
+    const arrivalEstimate = start + ((i * 13) % 240) * 60000;
+    const deliveredTime = Math.min(snapshot - 60000, Math.max(start, arrivalEstimate + (((i * 7) % 15) - 6) * 60000));
     const etaTime = i % 3 === 0 ? snapshot + (20 + ((i * 17) % 300)) * 60000 : arrivalEstimate;
     const delivered = i % 3 !== 0;
     return {
@@ -73,8 +78,8 @@ export function seedData(date = DEMO_DATE): DemoData {
       delivered_at: delivered ? new Date(deliveredTime).toISOString().replace('.000Z', 'Z') : null,
       units: 1,
       zone: `Z${zone + 1}`,
-      eta: new Date(etaTime).toISOString(),
-      delivery_window: { start: `${date}T08:00:00Z`, end: `${date}T20:00:00Z` },
+      eta: new Date(etaTime).toISOString().replace('.000Z', 'Z'),
+      delivery_window: { start: new Date(start).toISOString().replace('.000Z', 'Z'), end },
     };
   });
   return {
@@ -83,7 +88,7 @@ export function seedData(date = DEMO_DATE): DemoData {
     drivers,
     vehicles,
     shipments,
-    clock: `${date}T14:00:00Z`,
+    clock: new Date(snapshotAt).toISOString().replace('.000Z', 'Z'),
     replan_status: 'idle',
     assignments: shipments.map((s) => ({ id: `A${s.id}`, order_id: s.id, driver_id: s.driver_id })),
     routes: drivers.map((d) => ({

@@ -5,7 +5,8 @@ export function humanize(name: string): string {
   const words = name
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/[_.-]+/g, ' ')
-    .trim();
+    .trim()
+    .replace(/\b(id|eta|api|csv|sql|tms|po|edi|utc|usd)\b/gi, (word) => word.toUpperCase());
   return words ? words[0]!.toUpperCase() + words.slice(1) : 'Whole row';
 }
 
@@ -15,6 +16,11 @@ export function reportLabels(presentation: ReportPresentation) {
     entity,
     source: (name: string, source: string) => entity(name)?.sources[source]?.label ?? humanize(source),
     field(name: string, field: string, aggregate = false): string {
+      if (field.includes(', '))
+        return field
+          .split(', ')
+          .map((part) => reportLabels(presentation).field(name, part, aggregate))
+          .join(', ');
       const definition = entity(name);
       if (aggregate) return definition?.aggregates.find((item) => item.name === field)?.label ?? humanize(field);
       for (const source of Object.values(definition?.sources ?? {})) {

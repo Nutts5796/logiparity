@@ -156,7 +156,7 @@ const sun = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke=
 const moon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10Z"/></svg>';
 try { const saved = localStorage.getItem('logiparity-theme'); if (saved === 'dark' || saved === 'light') root.dataset.theme = saved; } catch { /* Storage may be unavailable for a local file. */ }
 const isDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : preference.matches;
-const paintTheme = () => { themeButton.innerHTML = isDark() ? sun : moon; themeButton.setAttribute('aria-pressed', String(isDark())); };
+const paintTheme = () => { themeButton.innerHTML = isDark() ? sun : moon; themeButton.setAttribute('aria-pressed', String(isDark())); themeButton.setAttribute('aria-label', isDark() ? 'Switch to light theme' : 'Switch to dark theme'); };
 themeButton.addEventListener('click', () => {
   root.dataset.theme = isDark() ? 'light' : 'dark';
   try { localStorage.setItem('logiparity-theme', root.dataset.theme); } catch { /* The toggle still works without storage. */ }

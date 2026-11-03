@@ -242,14 +242,14 @@ it('persists the theme and shows visible Chicago times, UTC toggle, KPIs and mob
     expect(await page.getByRole('heading', { name: "Today's deliveries" }).isVisible()).toBe(true);
     expect(await page.locator('.kpis .card').count()).toBe(4);
     const second = page.locator('#shipments tbody tr').nth(1);
-    expect(await second.locator('[data-col=delivered_at]').innerText()).toContain('4:14 AM');
+    expect(await second.locator('[data-col=delivered_at]').innerText()).toContain('8:14 AM');
     expect(await second.locator('[data-col=delivered_at]').innerText()).toContain('CST');
-    expect(await second.locator('.parity-time').last().innerText()).toBe('4:14 AM\nNov 2, 2026');
+    expect(await second.locator('.parity-time').last().innerText()).toBe('8:14 AM\nNov 2, 2026');
     await page.locator('#theme').click();
     await page.reload();
     expect(await page.locator('html').getAttribute('data-theme')).toBe('dark');
     await page.getByRole('button', { name: 'UTC', exact: true }).click();
-    expect(await second.locator('[data-col=delivered_at]').innerText()).toContain('10:14 AM');
+    expect(await second.locator('[data-col=delivered_at]').innerText()).toContain('2:14 PM');
     await page.setViewportSize({ width: 375, height: 900 });
     expect(await page.locator('#shipments thead').isVisible()).toBe(false);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -258,4 +258,29 @@ it('persists the theme and shows visible Chicago times, UTC toggle, KPIs and mob
   } finally {
     await context.close();
   }
+});
+it('shows an empty review state, selects the all tab for a cause and offers a clear filter', async () => {
+  const page = await browser.newPage();
+  try {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.setContent(html);
+    expect(await page.locator('#no-matches').innerText()).toContain('Nothing needs individual review. See All (3,741)');
+    expect(await page.locator('#next').isHidden()).toBe(true);
+    expect(await page.locator('#theme').getAttribute('aria-label')).toBe('Switch to dark theme');
+    await page.locator('.pat').filter({ hasText: 'Rounding' }).getByRole('button').click();
+    expect(await page.locator('[data-mode=all]').getAttribute('aria-pressed')).toBe('true');
+    expect(await page.getByRole('button', { name: 'Clear filter' }).isVisible()).toBe(true);
+    await page.getByRole('button', { name: 'Clear filter' }).click();
+    expect(await page.locator('#active-pattern').innerText()).toBe('');
+    expect(await page.locator('#visible-count').innerText()).toContain('3,741');
+    await page.locator('#theme').click();
+    expect(await page.locator('#theme').getAttribute('aria-label')).toBe('Switch to light theme');
+  } finally {
+    await page.close();
+  }
+});
+it('redirects the demo root to its dispatcher', async () => {
+  const response = await fetch(url + '/', { redirect: 'manual' });
+  expect(response.status).toBe(302);
+  expect(response.headers.get('location')).toBe('/dispatcher');
 });

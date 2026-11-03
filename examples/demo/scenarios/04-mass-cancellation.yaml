@@ -111,7 +111,7 @@ events:
             S000099,
             S000100,
           ],
-        at: '15:00',
+        at: '2026-11-02T21:00:00Z',
       }
 wait:
   until: { replan_status: completed }

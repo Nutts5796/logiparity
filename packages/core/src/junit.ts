@@ -1,4 +1,6 @@
 import { redactTree, secretValues } from './diagnostics.js';
+import { reportGroups } from './groups.js';
+import { mergedPatternWords } from './human.js';
 import { isBlocking } from './policy.js';
 import { entityNames, escapeMarkup, findingTypes } from './report-utils.js';
 import { humanFinding, quantity, typeLabels } from './human.js';
@@ -50,6 +52,7 @@ export function junitReport(report: Report, timestamp = new Date(), presentation
         else skipped++;
         result = `<${tag}${tag === 'skipped' ? '' : ` type="${type}"`} message="${quantity(findings.length, type === 'source_error' ? 'source error' : 'finding')}${blocking ? '' : ' allowed by failOn'}">${xml(
           findings
+            .slice(0, 10)
             .map((finding) => {
               const item = humanFinding(finding, presentation);
               return `${item.key} | ${item.source} | ${item.field} | Reference: ${item.reference} | Source value: ${item.sourceValue} | Difference: ${item.difference}${item.details ? ` | ${item.details}` : ''}`;
@@ -62,7 +65,15 @@ export function junitReport(report: Report, timestamp = new Date(), presentation
     return `  <testsuite name="${xml(reportLabels(presentation).entity(entity)?.label ?? entity)}" package="logiparity" id="${index}" timestamp="${timestamp.toISOString().slice(0, 19)}" hostname="localhost" tests="${findingTypes.length}" failures="${failures}" errors="${errors}" skipped="${skipped}" time="0">
     <properties><property name="warnings" value="${report.warnings?.length ?? 0}"/><property name="timestamp.timezone" value="UTC"/><property name="timing" value="not measured; time=0 is the schema-required placeholder"/></properties>
 ${cases.join('\n')}
-    <system-out>${xml((report.warnings ?? []).map((warning) => `Warning: ${warning.message}`).join('\n'))}</system-out>
+    <system-out>${xml(
+      [
+        ...mergedPatternWords(
+          reportGroups(report, presentation).filter((group) => group.entity === entity),
+          presentation,
+        ).map((words) => `${words.label}: ${words.sentence} Next step: ${words.nextStep}`),
+        ...(report.warnings ?? []).map((warning) => `Warning: ${warning.message}`),
+      ].join('\n'),
+    )}</system-out>
     <system-err/>
   </testsuite>`;
   });

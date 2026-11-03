@@ -6,7 +6,7 @@ setup:
 events:
   - step: 1
     type: traffic_delay
-    params: { zone: Z2, minutes: 30, at: '14:00' }
+    params: { zone: Z2, minutes: 30, at: '2026-11-02T20:00:00Z' }
 wait:
   until: { replan_status: completed }
   timeoutSeconds: 60

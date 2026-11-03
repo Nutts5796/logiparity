@@ -3,6 +3,7 @@ import { finished } from 'node:stream/promises';
 import type QueryStreamType from 'pg-query-stream';
 import {
   assertAllowedHost,
+  connectionCause,
   fieldPath,
   SourceError,
   type AdapterContext,
@@ -83,8 +84,9 @@ export async function* readSql(config: SqlConfig, context: AdapterContext): Asyn
       /^[A-Z0-9_]+$/.test(error.code)
         ? ` (${error.code})`
         : '';
+    const failure = stage === 'connect' ? connectionCause(error) : `failed to ${stage}${code}`;
     throw new SourceError(
-      `SQL ${config.connectionEnv}: failed to ${stage}${code}; check target availability, SELECT columns/permissions and timeoutMs. Credentials and server error text are not printed.`,
+      `SQL ${config.connectionEnv}: ${failure}; check target availability, SELECT columns/permissions and timeoutMs. Credentials and server error text are not printed.`,
     );
   } finally {
     if (stream) {

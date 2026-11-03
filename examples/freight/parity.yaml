@@ -37,7 +37,7 @@ entities:
           by: load_id
           sum: [carrier_pay]
           first: [tender_id, status, delivered_at]
-          where: { charge: [linehaul, fuel, detention, stop] }
+          where: { charge: [linehaul, fuel, detention, stop, lumper, layover, tonu, claim_deduction] }
           duplicates: { by: [load_id, charge] }
     compare:
       carrier_pay: { type: money, currency: USD }

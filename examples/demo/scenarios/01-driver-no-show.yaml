@@ -6,7 +6,7 @@ setup:
 events:
   - step: 1
     type: driver_no_show
-    params: { driver: D03, at: '08:00' }
+    params: { driver: D03, at: '2026-11-02T14:00:00Z' }
 wait:
   until: { replan_status: completed }
   timeoutSeconds: 60

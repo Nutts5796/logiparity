@@ -1,7 +1,7 @@
-import { patternWords } from './human.js';
+import { patternWords, mergedPatternWords } from './human.js';
 import { groupMembership, reportGroups } from './groups.js';
-import { reportLabels, presentationRule } from './labels.js';
-import { durationValue, formatMoneyMajor, presentationValue, type ReportPresentation } from './money-display.js';
+import { reportLabels, presentationRule, humanize } from './labels.js';
+import { durationValue, formatMoneyMajor, readableDatetime, type ReportPresentation } from './money-display.js';
 import { escapeMarkup as escape } from './report-utils.js';
 import type { FindingGroup, Report } from './types.js';
 
@@ -64,7 +64,8 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
         group.field,
         group.delta,
         group.stride,
-        rule?.currency,
+        group.cause,
+        group.currency ?? rule?.currency,
         group.kind === 'value_mapping' ? [group.expected, group.actual] : [],
       ],
       (_, value: unknown) => (typeof value === 'bigint' ? String(value) : value),
@@ -81,14 +82,15 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
         headline: group.kind.endsWith('_stride')
           ? `Every ${group.stride}th row`
           : group.kind === 'datetime_offset'
-            ? durationValue(delta)
+            ? `${durationValue(delta < 0n ? -delta : delta)
+                .replace(/^\+/, '')
                 .replace(
-                  /(ms|h|m|s)$/,
-                  (unit) => ` ${{ ms: 'milliseconds', h: 'hours', m: 'minutes', s: 'seconds' }[unit]}`,
-                )
-                .replace('-', '−')
+                  / (ms|s|m|h|d)$/,
+                  (_, unit: string) =>
+                    ` ${{ ms: 'milliseconds', s: 'seconds', m: 'minutes', h: 'hours', d: 'days' }[unit]}`,
+                )} ${delta < 0n ? 'earlier' : 'later'}`
             : group.kind === 'money_delta' && rule?.currency
-              ? `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, rule.currency)}`.replace('-', '−')
+              ? `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, group.currency ?? rule.currency)}`.replace('-', '−')
               : 'Consistent mapping',
         hint: patternWords(group, presentation).hint,
       };
@@ -99,6 +101,11 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
   });
   for (const card of cards.values()) {
     const first = groups[card.groups[0]!]!;
+    const words = mergedPatternWords(
+      card.groups.flatMap((index) => (groups[index] ? [groups[index]] : [])),
+      presentation,
+    )[0];
+    if (words) card.hint = `${words.sentence} ${words.hint}`;
     const summary = report.entities.find((entity) => entity.entity === first.entity);
     const reference = summary?.reference ?? '';
     const sources = [...new Set(card.groups.map((index) => labels.source(first.entity, groups[index]!.source)))].join(
@@ -170,7 +177,7 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
         const [x, y] = point(hour, 73);
         shapes += `<text x="${x}" y="${y + 4}" text-anchor="middle" font-size="10" fill="var(--muted)">${hour}</text>`;
       }
-      shapes += `<path d="M${rx} ${ry} A56 56 0 ${large} ${clockwise} ${sx} ${sy}" fill="none" stroke="var(--c)" stroke-width="9" stroke-linecap="round"/><circle cx="${rx}" cy="${ry}" r="6" fill="var(--ink)"/><circle cx="${sx}" cy="${sy}" r="6" fill="var(--c)" stroke="var(--panel)" stroke-width="2"/><text x="80" y="85" text-anchor="middle" font-size="21" font-weight="800" fill="var(--ink)">${escape(card.headline)}</text>`;
+      shapes += `<path d="M${rx} ${ry} A56 56 0 ${large} ${clockwise} ${sx} ${sy}" fill="none" stroke="var(--c)" stroke-width="9" stroke-linecap="round"/><circle cx="${rx}" cy="${ry}" r="6" fill="var(--ink)"/><circle cx="${sx}" cy="${sy}" r="6" fill="var(--c)" stroke="var(--panel)" stroke-width="2"/><text x="80" y="85" text-anchor="middle" font-size="21" font-weight="800" fill="var(--ink)">${escape(durationValue(BigInt(first.delta ?? 0)))}</text>`;
       card.chart =
         svg(
           160,
@@ -179,7 +186,13 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
           shapes,
         ) +
         caption(
-          `${labels.source(first.entity, reference)}: around ${hourLabel(ref, zone)}. ${sources}: around ${hourLabel(src, zone)}. ${labels.field(first.entity, first.field)}.`,
+          card.groups
+            .map((groupIndex) => {
+              const member = report.findings[memberships[groupIndex]?.[0] ?? -1];
+              if (!member || typeof member.expected !== 'number' || typeof member.actual !== 'number') return '';
+              return `${labels.source(first.entity, reference)}: ${readableDatetime(member.expected, zone)}. ${labels.source(first.entity, groups[groupIndex]?.source ?? first.source)}: ${readableDatetime(member.actual, zone)}.`;
+            })
+            .join(' '),
         );
     } else if (first.kind === 'money_delta') {
       const total = summary?.uniqueCounts?.[first.source] ?? summary?.counts[first.source] ?? rows;
@@ -189,11 +202,13 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
       for (let i = 0; i < 100; i++)
         shapes += `<rect x="${(i % 10) * 14}" y="${Math.floor(i / 10) * 14}" width="11" height="11" rx="2" fill="${i < highlighted ? 'var(--c)' : 'var(--line)'}"/>`;
       const example = report.findings[members[0]!];
+      const currency =
+        first.currency ?? presentationRule(labels.entity(first.entity), first.field, false)?.currency ?? 'USD';
       const extra = example
-        ? ` Example: ${example.key} is ${presentationValue(example.expected, first.entity, first.field, false, presentation)} in ${labels.source(first.entity, reference)} and ${presentationValue(example.actual, first.entity, first.field, false, presentation)} in ${labels.source(first.entity, first.source)}.`
+        ? ` Example: ${example.keyParts?.map((part, index) => (index ? humanize(part) : part)).join(' · ') ?? example.key} is ${formatMoneyMajor(BigInt(String(example.expected)), currency)} in ${labels.source(first.entity, reference)} and ${formatMoneyMajor(BigInt(String(example.actual)), currency)} in ${labels.source(first.entity, first.source)}.`
         : '';
       card.chart =
-        caption(`Waffle: ${labels.source(first.entity, first.source)}. 1 square = 1%.`) +
+        caption(`Share of rows: ${labels.source(first.entity, first.source)}. 1 square = 1% of rows.`) +
         svg(
           137,
           137,

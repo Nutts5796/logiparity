@@ -99,7 +99,7 @@ it.each([
   const state = (await fetch(`${url}/api/state`).then((r) => r.json())) as {
     data: { clock: string; replan_status: string }[];
   };
-  expect(state.data[0]?.clock).toMatch(/:02\.000Z$/);
+  expect(state.data[0]?.clock).toMatch(/:02Z$/);
   expect(state.data[0]?.replan_status).toBe('completed');
   expect(await readFile(join(directory, 'report/scenario.html'), 'utf8')).toContain('parity/report.html');
   await promisify(execFile)('/usr/bin/xmllint', [
@@ -179,7 +179,7 @@ it('runs sorted steps, configured custom HTTP, JSONPath and TypeScript invariant
         type: 'http',
         params: { event: 'traffic-delay', body: { zone: 'Z2', minutes: 15, at: '14:00' } },
       },
-      { step: 1, type: 'driver_no_show', params: { driver: 'D03', at: '08:00' } },
+      { step: 1, type: 'driver_no_show', params: { driver: 'D03', at: '2026-11-02T14:00:00Z' } },
     ];
     (s.invariants as unknown[]).push(
       { name: 'completed', jsonPath: '$.after.meta[0].replan_status', expected: 'completed' },
@@ -205,7 +205,7 @@ it.each(['consent', 'foreign request', 'bad module', 'missing fixture', 'duplica
     const state = (await fetch(`${url}/api/state`).then((r) => r.json())) as {
       data: { clock: string; replan_status: string }[];
     };
-    expect(state.data[0]).toMatchObject({ clock: '2026-11-02T14:00:00Z', replan_status: 'idle' });
+    expect(state.data[0]).toMatchObject({ clock: '2026-11-02T18:00:00Z', replan_status: 'idle' });
   },
 );
 it('returns 2 on virtual timeout and writes a runtime error report without parity', async () => {

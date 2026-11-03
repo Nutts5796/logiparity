@@ -11,9 +11,9 @@ import type { Finding, FindingGroup, FindingType, Report } from './types.js';
 import { isBlocking } from './policy.js';
 export const typeLabels: Record<FindingType, string> = {
   missing_in_source: 'Missing',
-  extra_in_source: 'Extra',
   field_mismatch: 'Value differences',
   aggregate_mismatch: 'Total differences',
+  extra_in_source: 'Extra',
   duplicate_key: 'Duplicate keys',
   duplicate_value: 'Repeated values',
   invalid_value: 'Invalid values',
@@ -65,7 +65,11 @@ function findingDetails(finding: Finding, presentation: ReportPresentation): str
       .join(', ');
     return `${field} ${String(finding.actual)} appears on ${(finding.relatedKeys ?? []).join(' and ')}${amounts ? '; amounts on additional records: ' + amounts : ''}.`;
   }
-  return finding.type !== 'field_mismatch' || finding.reason ? finding.message : '';
+  if (finding.type === 'field_mismatch' && !finding.reason) return '';
+  let message = finding.message;
+  for (const name of Object.keys(entity?.compare ?? {}))
+    message = message.replaceAll(name, labels.field(finding.entity, name));
+  return message;
 }
 export function humanFinding(finding: Finding, presentation: ReportPresentation = {}) {
   const labels = reportLabels(presentation),
@@ -87,14 +91,20 @@ export function humanFinding(finding: Finding, presentation: ReportPresentation 
         ? 'Present'
         : shown(finding.actual);
   return {
-    key: finding.key ? findingKey(finding) : aggregate ? labels.all(finding.entity) : 'Source',
+    key: finding.key
+      ? finding.keyParts?.length
+        ? finding.keyParts.map((part, index) => (index ? humanize(part) : part)).join(' · ')
+        : findingKey(finding)
+      : aggregate
+        ? labels.all(finding.entity)
+        : 'Source',
     source: labels.source(finding.entity, finding.source),
-    field: finding.type === 'source_error' ? 'Source' : labels.field(finding.entity, finding.field, aggregate),
+    field: finding.type === 'source_error' ? 'Connection' : labels.field(finding.entity, finding.field, aggregate),
     reference,
     sourceValue,
     difference:
       finding.currency && typeof finding.actual === 'bigint' && typeof finding.expected === 'bigint'
-        ? formatMoneyMajor(finding.actual - finding.expected, finding.currency)
+        ? `${finding.actual > finding.expected ? '+' : ''}${formatMoneyMajor(finding.actual - finding.expected, finding.currency)}`
         : presentationDifference(
             finding.expected,
             finding.actual,
@@ -110,6 +120,7 @@ export function humanFinding(finding: Finding, presentation: ReportPresentation 
           (item) =>
             `Row ${numberText(item.row)}: ${presentationValue(item.value, finding.entity, finding.field, false, presentation)}`,
         )
+        .map((value, index) => (index === 0 ? `${findingDetails(finding, presentation)} ${value}` : value))
         .join('; ') ?? findingDetails(finding, presentation),
   };
 }
@@ -122,7 +133,7 @@ export function patternWords(group: FindingGroup, presentation: ReportPresentati
     return group.cause !== 'pagination'
       ? {
           label: 'Repeated missing rows',
-          sentence: group.summary,
+          sentence: `${quantity(group.count, group.kind === 'missing_stride' ? 'missing row' : 'extra row')} in ${source}: every ${group.stride}th row.`,
           nextStep: `Compare the export selection and missing keys in ${source}.`,
           hint: 'A regular sequence of rows is absent; check the source export.',
         }
@@ -130,13 +141,13 @@ export function patternWords(group: FindingGroup, presentation: ReportPresentati
           label: 'Page boundary',
           sentence: `${quantity(group.count, group.kind === 'missing_stride' ? 'missing row' : 'extra row')} in ${source} follow page boundaries.`,
           nextStep: `Check pagination in ${source}, including the last partial page.`,
-          hint: 'Likely a pagination bug. Check page boundaries and the last page.',
+          hint: 'Likely a pagination boundary defect.',
         };
   if (group.kind === 'datetime_offset')
     return group.cause !== 'timezone'
       ? {
           label: 'Datetime offset',
-          sentence: group.summary,
+          sentence: `${numberText(group.count)} ${field.toLowerCase()} values in ${source} differ by ${durationValue(delta)}.`,
           nextStep: `Compare the original timestamps and clock settings in ${source}.`,
           hint: 'Repeated datetime offset; check the original timestamps.',
         }
@@ -148,7 +159,8 @@ export function patternWords(group: FindingGroup, presentation: ReportPresentati
         };
   if (group.kind === 'money_delta') {
     const rule = labels.entity(group.entity)?.compare[group.field];
-    const difference = rule?.currency ? formatMoneyMajor(delta, rule.currency) : `${delta} minor units`;
+    const currency = group.currency ?? rule?.currency;
+    const difference = currency ? formatMoneyMajor(delta, currency) : `${delta} minor units`;
     const small = delta >= -3n && delta <= 3n;
     return {
       label: small ? 'Rounding' : 'Fixed difference',
@@ -173,4 +185,52 @@ export function markdownCell(text: string): string {
     .replaceAll('@', '&#64;')
     .replace(/[\\`*_{}[\]<>|]/g, '\\$&')
     .replace(/\r\n|\r|\n/g, ' ');
+}
+
+export function mergedPatternWords(groups: readonly FindingGroup[], presentation: ReportPresentation = {}) {
+  const buckets = new Map<string, FindingGroup[]>();
+  for (const group of groups) {
+    const key = JSON.stringify(
+      [
+        group.entity,
+        group.kind,
+        group.field,
+        group.delta,
+        group.stride,
+        group.expected,
+        group.actual,
+        group.currency,
+        group.cause,
+      ],
+      (_, value: unknown) => (typeof value === 'bigint' ? String(value) : value),
+    );
+    const values = buckets.get(key) ?? [];
+    values.push(group);
+    buckets.set(key, values);
+  }
+  return [...buckets.values()].map((values) => {
+    const first = values[0];
+    if (!first) throw new Error('Empty pattern bucket');
+    const words = patternWords(first, presentation);
+    if (values.length === 1) return words;
+    const labels = reportLabels(presentation);
+    return {
+      ...words,
+      sentence:
+        values
+          .map(
+            (group) =>
+              `${numberText(group.count)} ${labels.field(group.entity, group.field || 'rows').toLowerCase()} values in ${labels.source(group.entity, group.source)}`,
+          )
+          .join(' and ') +
+        `. ${words.label}: ${first.delta ? durationOrMoney(first, presentation) : `every ${first.stride}th row`}.`,
+      nextStep: [...new Set(values.map((group) => patternWords(group, presentation).nextStep))].join(' '),
+    };
+  });
+}
+function durationOrMoney(group: FindingGroup, presentation: ReportPresentation): string {
+  const rule = reportLabels(presentation).entity(group.entity)?.compare[group.field];
+  return group.kind === 'money_delta'
+    ? formatMoneyMajor(BigInt(group.delta ?? 0), group.currency ?? rule?.currency ?? 'USD')
+    : durationValue(BigInt(group.delta ?? 0));
 }

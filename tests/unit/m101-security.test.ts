@@ -159,3 +159,12 @@ it('scans a long non-credential token without repeated suffix scans', () => {
   const value = 'a'.repeat(256 * 1024);
   expect(redactInput({ message: value }).data).toEqual({ message: value });
 });
+it('keeps explicit Basic username secrets available as an opt-in and masks invisible key names', () => {
+  expect(
+    secretValues(
+      { secretEnv: ['API_USER'], auth: { type: 'basic', usernameEnv: 'API_USER', passwordEnv: 'API_PASS' } },
+      { API_USER: 'private-user', API_PASS: 'private-password' },
+    ),
+  ).toContain('private-user');
+  expect(redactInput({ ['pa\u200bssword']: 'hidden-password' }).data).toEqual({ password: '[REDACTED]' });
+});

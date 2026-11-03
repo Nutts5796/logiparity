@@ -85,6 +85,11 @@ export function createDemoServer(options: { bugs?: Partial<DemoBugs>; date?: str
   const server = createServer((request, response) => {
     void (async () => {
       const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+      if (request.method === 'GET' && url.pathname === '/') {
+        response.writeHead(302, { location: '/dispatcher' });
+        response.end();
+        return;
+      }
       if (await dispatcher(request, response, url)) return;
       if (await operations(request, url.pathname)) {
         json(response, 200, { synthetic: true, replan_status: data.replan_status, clock: data.clock });

@@ -63,7 +63,9 @@ export function createOperations(data: DemoData, bugs: DemoBugs) {
     for (const order of data.shipments)
       if (affected.has(order.id)) {
         if (order.status !== 'cancelled' && order.status !== 'delivered')
-          order.eta = new Date(Math.max(Date.parse(order.eta), Date.parse(data.clock)) + delay * 60000).toISOString();
+          order.eta = new Date(Math.max(Date.parse(order.eta), Date.parse(data.clock)) + delay * 60000)
+            .toISOString()
+            .replace('.000Z', 'Z');
         data.notifications.push({
           id: `N${revision}-${order.id}`,
           order_id: order.id,
@@ -123,7 +125,7 @@ export function createOperations(data: DemoData, bugs: DemoBugs) {
     if (path === '/api/clock/advance') {
       if (typeof p.seconds !== 'number' || !Number.isFinite(p.seconds) || p.seconds <= 0 || p.seconds > 3600)
         throw new Error('Clock seconds must be >0 and <=3600');
-      data.clock = new Date(Date.parse(data.clock) + p.seconds * 1000).toISOString();
+      data.clock = new Date(Date.parse(data.clock) + p.seconds * 1000).toISOString().replace('.000Z', 'Z');
       if (completeAt !== undefined && Date.parse(data.clock) >= completeAt) replan();
       return true;
     }

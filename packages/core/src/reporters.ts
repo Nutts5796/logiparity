@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { errorText, type Config } from './config.js';
 import type { Report } from './types.js';
 import { reportGroups, presentationFindings } from './groups.js';
-import { humanFinding, reportCounts, quantity, patternWords, typeLabels } from './human.js';
+import { humanFinding, reportCounts, quantity, mergedPatternWords, typeLabels } from './human.js';
 import { isBlocking } from './policy.js';
 import { htmlReport } from './html.js';
 import { junitReport } from './junit.js';
@@ -41,8 +41,7 @@ export function consoleReport(report: Report, presentation: ReportPresentation =
     const count = report.findings.filter((finding) => finding.type === type).length;
     if (count) lines.push(`  ${label}: ${count.toLocaleString('en-US')}`);
   }
-  for (const group of reportGroups(report, presentation)) {
-    const words = patternWords(group, presentation);
+  for (const words of mergedPatternWords(reportGroups(report, presentation), presentation)) {
     lines.push(`  ${words.sentence} ${words.hint}`, `  Next step: ${words.nextStep}`);
   }
   for (const entity of report.entities)
@@ -60,7 +59,14 @@ export function consoleReport(report: Report, presentation: ReportPresentation =
       finding.type === 'source_error'
         ? item.details
         : `Reference: ${item.reference}; Source value: ${item.sourceValue}; Difference: ${item.difference}${item.details ? `; ${item.details}` : ''}`;
-    lines.push(`  ${item.key} · ${item.source} · ${item.field}: ${detail}`.replace(/\r/g, '\\r').replace(/\n/g, '\\n'));
+    lines.push(
+      (finding.type === 'source_error'
+        ? `  ${item.source}: ${detail}`
+        : `  ${item.key} · ${item.source} · ${item.field}: ${detail}`
+      )
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n'),
+    );
   }
   if (report.findings.length > 10)
     lines.push(`  ${quantity(report.findings.length - 10, 'additional result')} in the complete report.`);

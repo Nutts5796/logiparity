@@ -277,14 +277,18 @@ function checkUniqueness(entity: EntityConfig, source: string, config: SourceCon
       if (keys.length > 1) {
         const amounts = Object.entries(entity.compare).flatMap(([moneyField, rule]) => {
           if (rule.type !== 'money' || !Object.hasOwn(config.fields, moneyField)) return [];
-          const total = keys.slice(1).reduce((sum, key) => {
+          const totals = new Map<string, bigint>();
+          for (const key of keys.slice(1)) {
             const amount = state.rows.get(key)?.[moneyField];
-            return sum + (typeof amount === 'bigint' ? amount : 0n);
-          }, 0n);
-          return [{ field: moneyField, amount: total }];
+            const currency = state.currencies.get(key)?.get(moneyField) ?? rule.currency ?? 'USD';
+            if (typeof amount === 'bigint') totals.set(currency, (totals.get(currency) ?? 0n) + amount);
+          }
+          return [...totals].map(([currency, amount]) => ({ field: moneyField, amount, currency }));
         });
         const paid = amounts
-          .map((amount) => formatMoneyMajor(BigInt(amount.amount), entity.compare[amount.field]?.currency ?? 'USD'))
+          .map((amount) =>
+            formatMoneyMajor(BigInt(amount.amount), amount.currency ?? entity.compare[amount.field]?.currency ?? 'USD'),
+          )
           .join(', ');
         state.issues.push({
           type: 'duplicate_value',
@@ -466,13 +470,18 @@ export async function readSource(
     measureCurrencies(entity, source, config, state);
     return state;
   } catch (error) {
+    const diagnostic = redactSecrets(errorText(error), secrets);
     report.findings.push(...state.issues, {
       type: 'source_error',
       entity: entity.name,
       source,
       key: '',
       field: '',
-      message: redactSecrets(errorText(error), secrets),
+      message:
+        diagnostic +
+        (diagnostic.includes('[REDACTED]') && /connection|refused|GET|timed/.test(diagnostic)
+          ? ' For a public service URL, list its environment variable in publicEnv.'
+          : ''),
       ...(error instanceof SourceError && error.screenshot ? { screenshot: error.screenshot } : {}),
     });
     return undefined;

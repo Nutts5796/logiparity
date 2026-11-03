@@ -39,3 +39,14 @@ it('keeps in-transit ETAs after the snapshot and varies delivery times around ET
   expect(offsets.size).toBeGreaterThan(5);
   expect(data.shipments.every((order) => !order.delivered_at || Date.parse(order.delivered_at) <= snapshot)).toBe(true);
 });
+it('keeps delivery times within the local workday and before the displayed snapshot', () => {
+  const data = seedData();
+  const start = Date.parse('2026-11-02T14:00:00Z'),
+    end = Date.parse('2026-11-03T00:00:00Z');
+  for (const row of data.shipments) {
+    expect(Date.parse(row.eta)).toBeGreaterThanOrEqual(start);
+    expect(Date.parse(row.eta)).toBeLessThanOrEqual(end);
+    if (row.delivered_at) expect(Date.parse(row.delivered_at)).toBeGreaterThanOrEqual(start);
+    if (row.delivered_at) expect(Date.parse(row.delivered_at)).toBeLessThan(Date.parse(data.clock));
+  }
+});

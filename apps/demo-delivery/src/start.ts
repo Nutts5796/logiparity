@@ -43,7 +43,7 @@ export async function startDemo(options: { allBugs?: boolean; writeExample?: boo
           server.close();
         });
       process.stdout.write(
-        `LogiParity synthetic demo (TEST/STAGING ONLY): http://127.0.0.1:${address.port}\n${data.drivers.length} drivers, ${data.shipments.length} orders, date ${data.date}. ${enabled.length ? `Enabled demo bugs: ${enabled.join('; ')}.` : 'No demo bugs are enabled.'}\n`,
+        `LogiParity demo: http://127.0.0.1:${address.port}/dispatcher (TEST/STAGING ONLY)\n${data.drivers.length} drivers, ${data.shipments.length.toLocaleString('en-US')} orders, date ${data.date}. ${enabled.length ? `Enabled demo bugs: ${enabled.join('; ')}.` : 'No demo bugs are enabled.'}\n`,
       );
     }
   });

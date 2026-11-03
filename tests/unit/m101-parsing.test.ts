@@ -139,3 +139,14 @@ it('flags blank numeric rollup sums instead of silently treating them as zero', 
   });
   expect(report.findings.some((finding) => finding.type === 'invalid_value' && finding.field === 'amount')).toBe(true);
 });
+it('reports a misspelled key without a second required-key error', async () => {
+  const { configSchema, formatConfigIssues } = await import('@logiparity/core');
+  const raw = { version: 1, entities: [{ name: 'o', kee: 'id', sources: { a: csv, b: csv } }] };
+  const result = configSchema.safeParse(raw);
+  expect(result.success).toBe(false);
+  if (!result.success) {
+    const message = formatConfigIssues(configSchema, raw, result.error);
+    expect(message).toContain('kee');
+    expect(message).not.toContain('entities[0].key:');
+  }
+});
