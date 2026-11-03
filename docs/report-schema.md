@@ -13,3 +13,11 @@ Reconciliation is keyed by source. Its identity is source total minus reference 
 Patterns describe observations. Timezone hints require offset-free source values and a quarter-hour delta; page-boundary hints require pagination or matching configured page-size evidence. Blank values never form mapping or delta patterns. Groups retain every underlying finding and blocking status.
 
 Object properties follow configuration order; findings sort naturally by entity, key, field, source and type. There are no generated clocks or random identifiers in normalized comparison reports. Source errors can include input paths and observed locations, so diagnostics can vary by environment. Human labels and formatted values are supplied separately from configuration.
+
+## Package exports and scenario reports
+
+Import `logiparity/report-schema.json` and `logiparity/scenario-report-schema.json` (JSON import attributes depend on your runtime), or read the files under docs/ in the installed package. Their versioned raw `$id` URLs identify the 1.1.0 tag; they resolve publicly after publication. Validators can register both local schemas without network access.
+
+The [scenario schema](scenario-report-schema.json) describes `kind: scenario`, events, invariants, affectedOrderCount, runtime errors and optional nested Parity. Both wire schemas use version 1: consumers must tolerate additive optional fields; required meanings or money/time units cannot change without a schema version change. Runtime error reports may contain only the state collected before failure.
+
+Parity finding extensions include accounting, referencePosition, amounts, evidence, relatedKeys and optional review hint. Aggregate extensions include uncertainKeys and independent reconciliationByCurrency; group extensions include cause, stride and exact keys. A truncated report explicitly sets truncated and includes a source error. Every generated/parsed report in the automated test suite goes through the shared schema validator, including nested scenario parity.

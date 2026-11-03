@@ -3,7 +3,6 @@
 Run `npx logiparity demo` first to start the synthetic service and write the demo scenarios, fixtures and target into `logiparity-demo/`. Keep it running, then use a second terminal in the same project directory:
 
 ```sh
-export DEMO_API_URL=http://127.0.0.1:3010
 npx logiparity scenario run logiparity-demo/scenarios/02-vehicle-breakdown.yaml \
   --target logiparity-demo/target.yaml
 ```
@@ -19,7 +18,7 @@ version: 1
 name: Vehicle breakdown with orders on board
 target: demo
 setup:
-  fixture: ../fixtures/day-55-drivers.json
+  fixture: ./fixtures/day-55-drivers.json
 events:
   - step: 1
     type: vehicle_breakdown
@@ -162,7 +161,7 @@ export default function check(state: InvariantState): InvariantResult {
 
 ## Fresh post-scenario Parity
 
-Optional target `artifacts` are GET requests with safe basename filenames ending in `.csv`/`.xlsx`. They are downloaded after invariant evaluation, including when an invariant fails, and before Parity. The runner exposes the absolute artifact directory to that Parity config as `${LOGIPARITY_SCENARIO_ARTIFACT_DIR}` without changing process environment. Downloads use target headers, same-origin/redirect restrictions and the target timeout. Repeated runs replace artifacts in the chosen report directory; all outputs should be treated as sensitive test data.
+Optional target `artifacts` are GET requests with safe basename filenames ending in `.csv`/`.xlsx`. They are downloaded after invariant evaluation, including when an invariant fails, and before Parity. The runner exposes the absolute artifact directory to that Parity config as `${LOGIPARITY_SCENARIO_ARTIFACT_DIR}` without changing process environment. Downloads use target headers, same-origin restrictions and the target timeout; redirects are refused. Each artifact has `maxBytes` (default 64 MiB) and is written atomically without following symlinks. Scenario `report.fileMode` defaults to 0600; set an octal string such as `'0640'` when sharing with a host group. Repeated runs replace artifacts in the chosen report directory; all outputs should be treated as sensitive test data.
 
 The existing comparison engine supplies normalization, aggregates and `failOn`. A consistent API/export can pass Parity while an operational invariant fails: losing an order from every surface is still a loss. The five shipped scenarios exercise 55 drivers/2,750 orders with spare capacity and a deterministic synthetic planner. `BUG_REPLAN_LOSES_ORDER` and `BUG_DOUBLE_ASSIGN` reproduce the independent domain failures; see [bug switches](https://github.com/Nutts5796/logiparity/blob/main/apps/demo-delivery/BUGS.md).
 

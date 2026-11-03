@@ -10,7 +10,7 @@
 
 **Why can all sources agree while a scenario fails?** An order can disappear from every surface or be assigned twice in independent assignment records. Domain invariants compare baseline and final state; post-scenario Parity independently checks the final surfaces. Both results remain visible.
 
-**Why do UI reads fail after restarting the demo?** Restarting invalidates synthetic login sessions. Repeat demo:login and export again. Configure storageState, table/rows/field selectors, readiness, pagination and allowed origins. Virtualized tables, service workers and WebSockets are unsupported by the snapshot adapter. Failure screenshots can contain visible test data.
+**Why do UI reads fail after restarting the demo?** Restarting invalidates synthetic login sessions. Repeat `npm run demo:login` in a source checkout only, or `npx logiparity demo login` for an installed demo, then export again. Configure storageState, table/rows/field selectors, readiness, pagination and allowed origins. Virtualized tables, service workers and WebSockets are unsupported by the snapshot adapter. Failure screenshots can contain visible test data.
 
 **Can SQL modify data?** The adapter validates a restricted SELECT grammar before connecting and uses a READ ONLY transaction. Use a dedicated read-only staging role; privileged side effects hidden in database objects are outside a universal sandbox guarantee. Development fixture setup is restricted to disposable loopback databases and is not packaged as the read adapter.
 

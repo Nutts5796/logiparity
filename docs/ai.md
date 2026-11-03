@@ -12,7 +12,7 @@ After `npm run build`, these commands work without provider configuration:
 ./node_modules/.bin/logiparity ai explain examples/ai/report.json --ai-config examples/ai/settings.yaml
 ```
 
-The CLI prints the destination endpoint/model (or environment placeholders), a masked Authorization header and the exact JSON request body. This includes all system instructions and the redacted user data. Without `--send`, it makes no request, creates no draft/directory and exits 0. The shipped inputs are [static synthetic fixtures (not provider output)](../examples/ai/README.md), not live requests or provider-generated examples.
+The CLI prints the destination endpoint/model (or environment placeholders), a masked Authorization header and the exact JSON request body. This includes all system instructions and the redacted user data. Without `--send`, it makes no request, creates no draft/directory and exits 0. The shipped inputs are [static synthetic preview fixtures](../examples/ai/README.md), created with coding agents rather than captured from external provider requests.
 
 ## Generate a draft
 

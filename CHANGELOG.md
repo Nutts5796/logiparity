@@ -4,30 +4,33 @@
 
 ### Added
 
-- Composite entity and rollup keys, source and rollup row filters, non-key uniqueness checks and a synthetic 40-load freight day.
-- Reassignment invariants, scenario validation, a host allowlist, configurable pattern support and display timezone, per-row invalid values and an invalid-row limit.
-- Installed demo and browser-install commands, release provenance verification and version bump tooling.
-- Optional browser and PostgreSQL peers, patchable exact runtime dependencies and a verified offline installation kit.
+- Composite keys and rollups, scalar/list/negated filters, non-key uniqueness, reassignment invariants and scenario validation; a synthetic 120-load freight settlement fixture with facility zones and cancelled TONU loads.
+- Optional browser/PostgreSQL peers, installed demo and optional `demo login`, exact patchable runtime dependencies, offline kits and public JSON Schema exports for parity and scenario reports.
+- Per-source locale/number/datetime formatting, currencyField partitions, opt-in half-up/half-even money rounding, caseSensitive filters, configurable maxRows/maxFindings/maxResponseBytes, report.fileMode and datetime displayTimezoneField.
+- Per-row invalid findings, invalid-row limits, invalid failure selection, configurable pattern support and display timezone; provenance verification and constrained version-bump tooling.
 
 ### Changed
 
-- Reports group supported causes, reconcile money and count totals, identify uncertain keys and open with findings requiring individual review.
-- Console, Markdown, HTML and JUnit share readable labels, currency amounts, dates and consistent counts; compact report data reduces file size.
-- The synthetic demo uses zone and distance payouts, varied delivery times and future in-transit ETAs.
-- Release jobs use minimal permissions, draft releases, exact version pins and reusable verified assets; CI covers Node 20, 22 and 24.
+- Reports group supported causes, reconcile each currency separately, trace filter changes, list uncertain keys and accurate excluded rows, and share labels/counts across console, Markdown, HTML, JSON and JUnit.
+- Clean runs say that all records match; uncertain totals stay in review. Charts use complete page-loss evidence, local facility time, readable labels and contained scrolling. Dispatcher mobile pages contain 50 orders.
+- Playwright range is >=1.63.0 <2.0.0 with runtime validation. Node 22+ is required; CI tests 22, 24 and 26. New commits use Conventional Commits.
 
 ### Fixed
 
-- Consumer installation, clean-lock installation and audit failures caused by the former ExcelJS runtime chain.
-- One-off differences incorrectly classified as patterns, incorrect chart denominators and aggregate accounting with filtered or uncertain data.
-- Runtime diagnostics, blank money and row locations, duplicate identities, command help and repeated warnings.
-- Installed example paths, CI templates, dependency notices and package contents.
+- Corrupted diagnostic text from field-label substitution; untyped CSV/XLSX/REST equality; explicit offsets in XLSX date cells; duplicated currency findings and mixed-currency reconciliation; duplicate totals and tolerated changes across filters.
+- Interrupted page-boundary patterns, missing post-scenario parity counts, invalid-reference details, bounded timezone advice and scenario/fixture realism.
+- Configuration diagnostics, invalid failOn starters, stale demo ports, installed browser checks, CLI argument handling, report layout and documentation consistency.
+- Release jobs isolate write authority from npm builds, verify reused artifact/image provenance, attest only artifacts built by the current run, guard refs before checkout, normalize gzip headers and avoid historical version rewrites.
 
 ### Security
 
-- Scenario paths enforce encoded placeholders and the configured base path; fixture realpaths stay inside the scenario directory.
-- Environment credentials, Basic auth and file-report values use consistent redaction, including short secrets and credentials copied into AI text previews.
-- Streaming XLSX parsing bounds XML tokens, attributes, shared-string disk use and decompression ratios and cleans temporary files on exit and signals.
+- SQL URL host-override rejection and effective-port host guards; atomic no-follow bounded report/artifact writers; REST row scanning before array materialization and bounded findings.
+- Normalized URL/credential redaction, AI credential tokenization, invisible/control-character removal and redirect refusal.
+- Bounded XLSX XML/shared-string/decompression resources and cleanup on exit, SIGINT, SIGTERM and SIGHUP. Scenario fixtures stay inside their directory tree.
+
+### Upgrading from 1.0.x
+
+Install UI/SQL optional peers when needed. Use Node 22+. Text `where` is now case-insensitive by default (`caseSensitive: true` restores exact matching); the first duplicate row counts once in totals. Include the new `invalid` category in explicit failOn lists. Move `../fixtures` beneath the scenario directory; realpaths must stay inside it. Mutation targets require allowedHosts; interpolated environment values are secret unless listed in publicEnv. Money rounding remains explicit. The 21 restored core helpers and AI/scenario compatibility helpers are deprecated until 2.0; see [public API notes](docs/public-api.md#deprecated-compatibility-exports).
 
 ## [1.0.0] - 2026-11-02
 
@@ -39,7 +42,3 @@
 
 [1.1.0]: https://github.com/Nutts5796/logiparity/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/Nutts5796/logiparity/releases/tag/v1.0.0
-
-### Upgrading from 1.0.x
-
-UI/SQL adapters use optional peers. Mutation targets require allowedHosts. Invalid cells are invalid_value findings in the default invalid failOn category. Every interpolated environment value is secret unless listed in publicEnv. Review explicit failOn category lists when upgrading.

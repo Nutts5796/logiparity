@@ -1,7 +1,7 @@
 # Runtime dependencies and licenses
 
 Generated from the committed lockfile by `node scripts/dependencies.mjs`.
-Direct external runtime dependencies and optional peers are pinned exactly. Playwright, pg, pg-query-stream and pgsql-ast-parser are optional peers; the other entries are ordinary runtime dependencies:
+Direct external runtime dependencies are pinned exactly. Optional peers use compatible ranges: Playwright >=1.63.0 <2.0.0, pg >=8.16.0 <9, pg-query-stream >=4.17.1 <5, pgsql-ast-parser >=12.0.2 <13. The table records tested lockfile versions. Playwright, pg, pg-query-stream and pgsql-ast-parser are optional peers; the other entries are ordinary runtime dependencies:
 
 | Package          | Version | License    | Purpose                                                                     |
 | ---------------- | ------- | ---------- | --------------------------------------------------------------------------- |
@@ -23,7 +23,7 @@ The full transitive runtime inventory follows. Development-only jszip and pako r
 
 ## Installation size
 
-The first-party archive is about 250 KB compressed and under 1 MB unpacked. Its code, embedded Latin fonts, documentation and synthetic fixtures account for that size; report screenshots, design previews, development history and generated reports are excluded. The default runtime graph adds CSV/XML/ZIP parsing, validation, timezones and trusted custom-module loading. Optional browser/database peers add their own code. Chromium binaries are a separate download and dominate the full Docker image; the slim image omits both browser and database peers.
+The first-party archive is about 280 KB compressed and about 1 MiB unpacked. Its code, embedded Latin fonts, documentation and synthetic fixtures account for that size; report screenshots, design previews, development history and generated reports are excluded. The default runtime graph adds CSV/XML/ZIP parsing, validation, timezones and trusted custom-module loading. Optional browser/database peers add their own code. Chromium binaries are a separate download and dominate the full Docker image; the slim image omits both browser and database peers.
 
 Exact sizes depend on the release and platform. Package checks record compressed and unpacked bytes; use npm pack metadata and npm ls to inspect an installed graph. The offline kit is larger because it includes verified archives for both profiles and integrity lockfiles. A standalone CLI tarball needs registry access or a populated dependency cache; use the offline kit for a truly empty-cache offline install. See [release procedure](release.md#offline-installation).
 

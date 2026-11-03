@@ -30,7 +30,7 @@ One configuration compares records across browser tables, APIs, files and SQL. S
 
 ## Install
 
-Use Node.js 20 or later. CI tests Node 20, 22 and 24. Node 20 is [end-of-life](https://nodejs.org/en/about/eol); support ends in LogiParity 2.0.
+Use Node.js 22 or later. CI tests Node 22, 24 and 26.
 
 ```sh
 npm install --save-dev --save-exact logiparity
@@ -71,6 +71,18 @@ npx logiparity check --config parity.yaml
 
 Expected: zero findings, exit 0. Open `logiparity-demo/report/report.html` from the project directory. Stop the service, run `npx logiparity demo --bugs`, and repeat both downloads and the check. The report finds page-boundary losses, rounding differences and shifted datetimes. The three cause cards account for the money and count differences; each cause still needs a fix. JSON retains every normalized finding.
 
+To include the dispatcher UI (optional), keep the demo running and use a second terminal from the project directory:
+
+```sh
+npm install --save-dev --save-exact playwright@1.64.1
+npx logiparity install-browser
+npx logiparity demo login
+cd logiparity-demo
+npx logiparity check --config parity-ui.yaml
+```
+
+The login command records a private synthetic session in `logiparity-demo/auth/state.json`; restart invalidates it. The generated directory ignores auth and reports. Download CSV/XLSX as above before the UI check. With `--bugs`, the UI adds the stale-status cause to the API/export checks. `demo login` uses the generated service marker, including its actual port.
+
 For a source checkout:
 
 ```sh
@@ -89,7 +101,7 @@ npx logiparity validate --config examples/demo/parity.yaml
 npx logiparity check --config examples/demo/parity.yaml
 ```
 
-The checkout report is `logiparity-report/report.html`. Use `npm run demo:bugs` after stopping the service to enable the six synthetic defects. `DEMO_PORT` and `DEMO_API_URL` must agree. A source checkout currently reports moderate development-dependency advisories; see [dependency audit notes](docs/dependency-audit.md). Those development tools are excluded from the installed CLI.
+The checkout report is `logiparity-report/report.html`. Use `npm run demo:bugs` after stopping the service to enable the six synthetic defects. `DEMO_API_URL` configures checkout export/login scripts and the static checkout parity files. Installed scenario targets use the port recorded at generation time; restarting on a different port warns about each stale generated configuration. Move the generated demo directory aside to regenerate it, or edit the warned URLs explicitly. A source checkout currently reports moderate development-dependency advisories; see [dependency audit notes](docs/dependency-audit.md). Those development tools are excluded from the installed CLI.
 
 ![Light parity report](https://github.com/Nutts5796/logiparity/blob/main/docs/images/report.png)
 
@@ -172,13 +184,13 @@ The [GitHub Actions template](templates/github-actions.yml) installs a pinned CL
 
 ## Disruption scenarios
 
-Run a disruption against the demo after starting it and setting `DEMO_API_URL`:
+Run a disruption against the installed demo after starting it:
 
 ```sh
 npx logiparity scenario run logiparity-demo/scenarios/02-vehicle-breakdown.yaml --target logiparity-demo/target.yaml
 ```
 
-Five examples cover no-show, breakdown, traffic delay, cancellation and capacity reduction. Run `logiparity scenario validate <scenario.yaml> --target <target.yaml>` before injecting events. `affected_reassigned` verifies that each affected active order acquired a different driver, including when a replan never ran. Select the state needed by each check:
+Five examples cover no-show, breakdown, traffic delay, cancellation and capacity reduction. Run `logiparity scenario validate <scenario.yaml> --target <target.yaml>` before injecting events. `affected_reassigned` verifies that each affected active order acquired a different driver, and fails when a replan never ran. Select the state needed by each check:
 
 - The lost-order check reads the order list. The single-assignment check also reads assignments.
 - Capacity checks add drivers and vehicles.
@@ -190,27 +202,21 @@ For asynchronous replanning, configure a completion signal before reading the fi
 
 ## U.S. freight and delivery
 
-The [synthetic freight day](examples/freight/README.md) covers carrier settlement, accessorials such as detention, duplicate tenders and charge-line reconciliation. Compare a closed day at one cutoff, configure explicit zones for DST and multi-timezone fleets, and map EDI 210/214 data exported as CSV to the same load keys. LogiParity reads the exported tables; it does not decode EDI messages.
+The [synthetic freight day](examples/freight/README.md) covers carrier settlement, accessorials such as detention, duplicate tenders and charge-line reconciliation. Compare a closed day at one cutoff, configure explicit zones for DST and multi-timezone fleets, and map EDI 210/214 data exported as CSV to the same load keys. This is a CSV mapping approach, not a tested EDI example; LogiParity does not decode EDI messages.
 
 ![Synthetic freight reconciliation](https://github.com/Nutts5796/logiparity/blob/main/docs/images/freight.png)
 
 ## How it is tested
 
-The current review runs passed 455 unit and adapter tests and 113 end-to-end tests with real Chromium, local PostgreSQL and synthetic HTTP services. Line coverage across core, adapters, scenarios and the CLI was 88.12% (2678/3039), with an 80% gate. Coverage measures these source modules; subprocess e2e activity is verified separately.
+The M10.2 review passed 528 [unit](https://github.com/Nutts5796/logiparity/tree/main/tests/unit) and [adapter](https://github.com/Nutts5796/logiparity/tree/main/tests/adapters) tests. The 113 passing [end-to-end tests](https://github.com/Nutts5796/logiparity/tree/main/tests/e2e) exercise real Chromium, disposable PostgreSQL and synthetic HTTP services. Unit/adapter line coverage is 91.22% (3,109/3,408), above the 80% gate: core 97.13%, adapters 91.10%, scenarios 82.39% and CLI 49.39%. Scenario runner.ts and CLI subprocess behavior are exercised by e2e and installed-package checks and do not increase unit-process coverage.
 
 Installed-package checks cover both optional-peer profiles, public imports and declarations, installed demo/scenario commands and empty-cache offline installation. Six clean consumer profiles on npm 10.9.9 and 11.6.0 passed plain npm install, npm ci, npm audit and npm audit signatures, including coexistence with Playwright 1.63.0 and pg 8.16.0. The clean-source quickstart executed the README commands, including plain npm ci, and checked all report formats.
 
-Regression cases include one-off differences that never become patterns, DST gaps and overlaps, capped pages, duplicate keys, source filters and currency partitions, XLSX amplification, temporary-file cleanup, path escape, redirect refusal and report symlinks. Tests and fixtures are synthetic; these results are not claims about production use. Detailed commands and review limits are in the [milestone report](https://github.com/Nutts5796/logiparity/blob/main/docs/development/MILESTONE_REPORT.md).
+The seeded property-based test [filter-contributions.test.ts](https://github.com/Nutts5796/logiparity/blob/main/tests/unit/filter-contributions.test.ts) checks reconciliation while amounts and filter fields change independently. Regression cases include one-off differences that never become patterns, DST gaps and overlaps, capped pages, duplicate keys, source filters and currency partitions, XLSX amplification, temporary-file cleanup, path escape, redirect refusal and report symlinks. Tests and fixtures are synthetic; these results are not claims about production use. Live publication, Docker builds/image execution and real staging APIs are not tested by this review. Detailed commands and review limits are in the [milestone report](https://github.com/Nutts5796/logiparity/blob/main/docs/development/MILESTONE_REPORT.md).
 
 ## How it was built
 
-The code, tests and documentation were generated by AI coding agents. Commits are made under the maintainer's account. The maintainer wrote the milestone specifications and acceptance criteria, triaged the review rounds, and verified fixes. The first-person origin stories in the design decisions are the maintainer's own accounts.
-
-The author defined the problem and design rules from his own work. The [origin stories](docs/design-decisions.md) cover waybill reconciliation, money in minor units after a FinTech rounding issue, and never guessing timezones.
-
-AI coding assistants wrote the implementation in milestones, with each milestone reviewed before the next. Repeated rounds with AI-simulated users found real defects that were fixed: redaction hiding ordinary values such as the version number; dependency audit failures that led to replacing ExcelJS (the separately reported install crash was not reproduced); one-off differences labelled as patterns; and base-path and secret-redaction gaps.
-
-The author chose the report design from several design prototypes; the chosen design is in docs/design, rejected decorative tick-mark charts, and required readable labels, dates and a money reconciliation.
+AI coding agents generated the code, tests and documentation under the maintainer’s commit account. The maintainer wrote milestone specifications and acceptance criteria, triaged review rounds, verified fixes and chose the report design, including readable labels, dates and reconciliation instead of decorative charts. The first-person [origin stories](docs/design-decisions.md) are the maintainer’s own accounts. See the [build history](https://github.com/Nutts5796/logiparity/blob/main/docs/development/milestones.md) and the selected [variant E design reference](https://github.com/Nutts5796/logiparity/tree/main/docs/design), which is excluded from the npm package.
 
 ## Verify
 
@@ -229,7 +235,7 @@ gh attestation verify "oci://$LOGIPARITY_IMAGE" --repo Nutts5796/logiparity
 docker run --rm "$LOGIPARITY_IMAGE" --version
 ```
 
-A 1.1.0 digest will exist only after publication. Use a CI variable for the reference, then commit the verified digest from the release notes in a small follow-up change. Do not combine a 1.0.0 image with a 1.1.0 CLI.
+A 1.1.0 digest will exist only after publication. Use a CI variable for the reference, then set the CI variable to the verified digest from the release notes; no source commit is required for variable-based templates. Do not combine a 1.0.0 image with a 1.1.0 CLI.
 
 ## Safety
 
@@ -237,13 +243,13 @@ Test and staging only. Read-only except scenario events you map yourself. No tel
 
 ## Status
 
-1.0.0 is published; 1.1.0 is under review. Maintained by one author.
+1.0.0 is published; 1.1.0 is under review. Maintained by Sergei Orekhovskii.
 
 Pilots and feedback: share a sanitized use case or defect through [Issues](https://github.com/Nutts5796/logiparity/issues).
 
 ## About
 
-Created by Sergei Orekhovskii with AI coding assistants (see How it was built), a QA engineer who previously ran transport logistics for a delivery service. Read the [technical design decisions](docs/design-decisions.md).
+Sergei Orekhovskii, the maintainer, is a QA engineer who previously ran transport logistics for a delivery service. AI authorship is described above. Read the [technical design decisions](docs/design-decisions.md).
 
 ## Reference
 
@@ -253,10 +259,12 @@ Created by Sergei Orekhovskii with AI coding assistants (see How it was built), 
 - [Dependencies](docs/dependencies.md), [audit notes](docs/dependency-audit.md) and [build history](https://github.com/Nutts5796/logiparity/blob/main/docs/development/milestones.md)
 - [Contributing](CONTRIBUTING.md), [code of conduct](CODE_OF_CONDUCT.md), [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md)
 
-MIT © Sergei Orekhovskii.
-
 ## Upgrading from 1.0.x
 
-UI and SQL sources now require optional peers; install the adapters you use, or choose the full container image. Mutation targets require allowedHosts. Invalid cells produce invalid_value findings, selected by the new invalid failOn category (enabled by default). A pipeline that selects failOn categories explicitly must include invalid to block bad cells. Every interpolated environment value is redacted by default, including values passed through variables; list only non-secret names in publicEnv. Existing strict money rules remain strict; rounding requires explicit opt-in.
+Node 22+ is required. UI/SQL adapters now use optional peers; install the adapters you need or use the matching full image. Playwright supports `>=1.63.0 <2.0.0` with a runtime check; tests cover 1.63.0 and 1.64.1. PostgreSQL peer ranges are listed in [dependencies](docs/dependencies.md).
 
-Optional peer compatibility is checked at load time: Playwright 1.63–1.64, pg 8.16–8.x, pg-query-stream 4.17.1–4.x and pgsql-ast-parser 12.0.2–12.x. For a project with its own pg dependency, an npm overrides entry such as `{"pg":"$pg"}` keeps that direct version; keep it within the supported range. Use `npx logiparity install-browser --with-deps` on Linux containers or GitLab runners missing browser system libraries. The slim image supports CSV/XLSX/REST; select the matching full image for UI or SQL.
+Text `where` filters are case-insensitive by default; set source `caseSensitive: true` to retain exact matching. The first row of a duplicate key now counts once in totals. Invalid cells produce `invalid_value` findings in the new default `invalid` failOn category: add it to explicit lists to block bad cells. Fixtures must remain within the scenario directory tree, including symlinks; move a 1.0 `../fixtures` directory under the scenario directory. Mutation targets require `allowedHosts`. Every interpolated environment value is secret unless its name is in `publicEnv`. Money still rejects excess precision unless rounding is explicitly enabled.
+
+The 21 former core helper exports are restored as deprecated aliases until 2.0, including SourceError, ConfigError and policy helpers; the complete list and retained type aliases are in [public API notes](docs/public-api.md#deprecated-compatibility-exports). Use the supported entry points when updating integrations.
+
+MIT © Sergei Orekhovskii.
