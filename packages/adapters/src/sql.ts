@@ -1,7 +1,7 @@
 import { finished } from 'node:stream/promises';
 import pg from 'pg';
 import QueryStream from 'pg-query-stream';
-import { SourceError, type AdapterContext, type DataRow, type SqlConfig } from '@logiparity/core';
+import { fieldPath, SourceError, type AdapterContext, type DataRow, type SqlConfig } from '@logiparity/core';
 import { validateReadOnlySql } from './sql-guard.js';
 
 export async function* readSql(config: SqlConfig, context: AdapterContext): AsyncIterable<DataRow> {
@@ -49,7 +49,8 @@ export async function* readSql(config: SqlConfig, context: AdapterContext): Asyn
     for await (const record of stream as AsyncIterable<DataRow>) {
       row++;
       const values: DataRow = Object.create(null) as DataRow;
-      for (const [field, column] of Object.entries(config.fields)) {
+      for (const [field, mapping] of Object.entries(config.fields)) {
+        const column = fieldPath(mapping);
         if (!Object.hasOwn(record, column))
           throw new SourceError(
             `SQL ${config.connectionEnv}, row ${row}: column ${column} for field ${field} is missing; correct SELECT aliases or fields.`,

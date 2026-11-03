@@ -1,4 +1,4 @@
-import { safeConsole } from '@logiparity/core';
+import { safeConsole, fieldPath } from '@logiparity/core';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { AdapterContext, DataRow, RestConfig } from '@logiparity/core';
 import { selectJson, selectOne } from './jsonpath.js';
@@ -137,7 +137,7 @@ export async function* readRest(config: RestConfig, context: AdapterContext): As
     for (let index = 0; index < items.length; index++) {
       try {
         yield Object.fromEntries(
-          Object.entries(config.fields).map(([field, path]) => [field, selectOne(items[index], path)]),
+          Object.entries(config.fields).map(([field, path]) => [field, selectOne(items[index], fieldPath(path))]),
         );
       } catch (error) {
         throw new Error(

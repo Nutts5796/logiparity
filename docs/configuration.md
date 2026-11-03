@@ -6,6 +6,35 @@ Required root fields: `version: 1` and a nonempty `entities` array. Optional `en
 
 An entity requires `name`, `key` and at least two named `sources`. The first is the reference; missing/extra findings describe subsequent sources relative to it. Every source must map the key in `fields`. Shared mapped fields are compared, allowing partial UI tables. Empty sources with valid structure are valid; malformed input is a source error.
 
+## Human-readable labels
+
+Every source accepts an optional `label`. Each `fields` value can remain a path string or become `{path: ..., label: ...}`; `path` keeps its existing meaning for that adapter (JSONPath, column name, CSS selector or SQL result column). Aggregate definitions also accept `label`. Entity `label` supplies its singular heading and `pluralLabel` supplies aggregate key text, such as `All orders`. Without it the report says `All records`.
+
+```yaml
+- name: shipment
+  label: Order
+  pluralLabel: orders
+  key: id
+  sources:
+    api:
+      label: API
+      type: rest
+      baseUrl: ${STAGING_API_URL}
+      path: /shipments
+      fields: {id: $.id, delivered_at: {path: $.delivered_at, label: Delivery time}}
+    export:
+      label: Excel export
+      type: xlsx
+      file: ./shipments.xlsx
+      sheet: Shipments
+      fields: {id: ID, delivered_at: 'Delivered at'}
+  compare: {delivered_at: {type: datetime}}
+```
+
+HTML uses the first configured field label for that logical field, so name a field consistently across its sources. Missing labels are humanized (`delivered_count` → `Delivered count`). Missing-row findings use `Whole row`. Raw names remain in title tooltips, JSON and JUnit. Labels do not affect comparisons, extraction or grouping.
+
+The dispatcher example reads visible Chicago clock and date text from `.parity-time`, excluding the adjacent CST/CDT abbreviation. Its per-source format is `format: {ui: "h:mm a'\n'LLL d, yyyy"}` with `sourceTimezones: {ui: America/Chicago}`. The quoted newline is part of the visible two-line value. API timestamps continue to use ISO parsing. Use [parity-ui.yaml](../examples/demo/parity-ui.yaml) after `npm run demo:login`; the main [parity.yaml](../examples/demo/parity.yaml) keeps the browser-free first report.
+
 ## REST source
 
 ```yaml
@@ -70,7 +99,7 @@ storageState: ./auth/state.json
 table: "table#shipments"
 rows: "tbody tr"
 nextPage: "button[aria-label='Next page']"
-fields: { id: "td[data-col=id]", status: "td[data-col=status]" }
+fields: { id: "[data-col=id]", status: "[data-col=status]" }
 timeoutMs: 10000
 maxPages: 1000
 ```

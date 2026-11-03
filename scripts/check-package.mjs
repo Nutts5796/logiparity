@@ -25,6 +25,10 @@ try {
   const files = new Set(dry.files.map((file) => file.path));
   for (const file of [
     'bin/logiparity.js',
+    'node_modules/@logiparity/core/assets/fonts/manrope-latin.woff2',
+    'node_modules/@logiparity/core/assets/fonts/jetbrainsmono-latin.woff2',
+    'node_modules/@logiparity/core/assets/fonts/manrope-OFL.txt',
+    'node_modules/@logiparity/core/assets/fonts/jetbrainsmono-OFL.txt',
     'README.md',
     'LICENSE',
     'CODE_OF_CONDUCT.md',
@@ -151,8 +155,13 @@ export {provider};
     ['datetime_offset', 'money_delta'],
   );
   const html = await readFile(join(work, 'report/report.html'), 'utf8');
-  assert(html.includes('625 ($6.25)'));
-  assert(html.includes('1793624460000 (2026-11-02T13:01:00Z)'));
+  assert(html.includes('$6.25'));
+  assert(html.includes('data:font/woff2;base64,'));
+  assert(html.includes('font-src data:'));
+  assert(!html.includes('fonts.googleapis.com'));
+  assert.equal(report.coverage.explained, 2);
+  assert(html.includes('Nov 2, 2026, 1:01 PM UTC'));
+  assert(html.includes('1793624460000'));
   await cp(join(install, 'node_modules/logiparity/examples/freight'), join(work, 'freight-example'), {
     recursive: true,
   });

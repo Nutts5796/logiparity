@@ -1,32 +1,49 @@
 import { createHash } from 'node:crypto';
-import { reportGroups } from './groups.js';
+import { groupMembership, reportGroups } from './groups.js';
+import { reportLabels, humanize } from './labels.js';
+import {
+  presentationDifference,
+  presentationValue,
+  formatMoneyMajor,
+  type ReportPresentation,
+} from './money-display.js';
+import { displayValue, escapeMarkup as escape, verdict } from './report-utils.js';
 import { isBlocking } from './policy.js';
-import { entityNames, escapeMarkup as escape, findingTypes, verdict } from './report-utils.js';
-import { presentationValue, type ReportPresentation } from './money-display.js';
+import { patternCards, kindInfo, patternKind, icon } from './html-patterns.js';
+import { brandMark, studioStyle, themeButton, themeScript } from './studio.js';
 import type { Finding, Report } from './types.js';
 
-const filterScript = `(() => {
-  const entity = document.getElementById('entity-filter');
-  const type = document.getElementById('type-filter');
-  const search = document.getElementById('search');
-  const rows = Array.from(document.querySelectorAll('#findings tbody tr[data-entity]'));
-  const count = document.getElementById('visible-count');
-  const empty = document.getElementById('no-matches');
-  function filter() {
-    const query = search.value.trim().toLowerCase();
-    let visible = 0;
-    for (const row of rows) {
-      row.hidden = (entity.value !== '' && row.dataset.entity !== entity.value) || (type.value !== '' && row.dataset.type !== type.value) || (query !== '' && !row.textContent.toLowerCase().includes(query));
-      if (!row.hidden) visible++;
-    }
-    count.textContent = 'Showing ' + visible + ' of ' + rows.length + (rows.length === 1 ? ' finding' : ' findings');
-    empty.hidden = visible !== 0 || rows.length === 0;
-  }
-  entity.addEventListener('change', filter);
-  type.addEventListener('change', filter);
-  search.addEventListener('input', filter);
-  filter();
-})();`;
+const filterScript = `
+const rows = DATA.rows;
+let mode = 'review', card = null, page = 0;
+const pageSize = 50;
+const search = document.getElementById('search');
+const entity = document.getElementById('entity-filter');
+const type = document.getElementById('type-filter');
+const tbody = document.querySelector('#findings tbody');
+function render() {
+  const query = search.value.trim().toLowerCase();
+  const matches = rows.filter(row => (card !== null ? row.cards.includes(card) : mode === 'all' || !row.explained) && (!entity.value || row.entity === entity.value) && (!type.value || row.type === type.value) && (!query || row.search.includes(query)));
+  const pages = Math.max(1, Math.ceil(matches.length / pageSize));
+  page = Math.min(page, pages - 1);
+  tbody.innerHTML = matches.slice(page * pageSize, (page + 1) * pageSize).map(row => row.html).join('');
+  document.getElementById('visible-count').textContent = 'Showing ' + (matches.length ? page * pageSize + 1 : 0) + '–' + Math.min(matches.length, (page + 1) * pageSize) + ' of ' + matches.length.toLocaleString('en-US') + ' findings';
+  document.getElementById('no-matches').hidden = matches.length !== 0;
+  document.getElementById('previous').disabled = page === 0;
+  document.getElementById('next').disabled = page + 1 >= pages;
+  document.getElementById('page-number').textContent = 'Page ' + (page + 1) + ' of ' + pages;
+  document.querySelectorAll('[data-mode]').forEach(button => button.setAttribute('aria-pressed', String(card === null && button.dataset.mode === mode)));
+  document.getElementById('active-pattern').textContent = card === null ? '' : DATA.cards[card] + ' findings';
+}
+for (const input of [search, entity, type]) input.addEventListener(input === search ? 'input' : 'change', () => { page = 0; render(); });
+document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => { mode = button.dataset.mode; card = null; page = 0; render(); }));
+document.querySelectorAll('[data-card]').forEach(button => button.addEventListener('click', () => { card = Number(button.dataset.card); entity.value = ''; type.value = ''; search.value = ''; page = 0; render(); document.getElementById('findings-title').scrollIntoView({block:'start'}); search.focus({preventScroll:true}); }));
+document.getElementById('previous').addEventListener('click', () => { page--; render(); });
+document.getElementById('next').addEventListener('click', () => { page++; render(); });
+render();
+`;
+const fmt = (value: number) => value.toLocaleString('en-US');
+const labelSpan = (label: string, raw: string) => `<span title="${escape(raw)}">${escape(label)}</span>`;
 
 function screenshotLink(path: string | undefined): string {
   if (
@@ -40,55 +57,217 @@ function screenshotLink(path: string | undefined): string {
     return '';
   return `<a href="${escape(path.split('/').map(encodeURIComponent).join('/'))}" target="_blank" rel="noopener noreferrer">View screenshot</a>`;
 }
+function findingRow(f: Finding, pattern: string | undefined, presentation: ReportPresentation): string {
+  const labels = reportLabels(presentation);
+  const aggregate = f.type === 'aggregate_mismatch';
+  const value = (side: 'expected' | 'actual') => {
+    if (f.type === 'missing_in_source') return side === 'expected' ? 'Present' : 'Missing';
+    if (f.type === 'extra_in_source') return side === 'expected' ? 'Absent' : 'Present';
+    return labelSpan(presentationValue(f[side], f.entity, f.field, aggregate, presentation), displayValue(f[side]));
+  };
+  const observed = f.values
+    ?.map((item) => `Line ${item.line}: ${presentationValue(item.value, f.entity, f.field, false, presentation)}`)
+    .join(' · ');
+  const detail = [observed, f.type === 'source_error' || f.reason || f.type === 'duplicate_key' ? f.message : undefined]
+    .filter(Boolean)
+    .join(' ');
+  return `<tr title="${escape(f.message)}" data-entity="${escape(f.entity)}" data-type="${f.type}"><td data-l="Key">${f.key ? `<code>${escape(f.key)}</code>` : labelSpan(aggregate ? labels.all(f.entity) : 'Source', f.entity)}${detail ? `<span class="details">${escape(detail)}</span>` : ''}${screenshotLink(f.screenshot)}</td><td data-l="Source">${labelSpan(labels.source(f.entity, f.source), f.source)}</td><td data-l="Field">${labelSpan(labels.field(f.entity, f.field, aggregate), f.field || 'Whole row')}</td><td class="num" data-l="Reference">${value('expected')}</td><td class="num" data-l="Source value">${value('actual')}</td><td class="num neg" data-l="Difference">${escape(presentationDifference(f.expected, f.actual, f.entity, f.field, aggregate, presentation))}</td><td data-l="Pattern"><span class="tag ${pattern ? 't-info' : 't-rev'}">${escape(pattern ?? 'Needs review')}</span>${!isBlocking(f) ? '<span class="details">Allowed by failOn</span>' : ''}</td></tr>`;
+}
 
-function findingRow(f: Finding, presentation: ReportPresentation): string {
-  return `<tr data-entity="${escape(f.entity)}" data-type="${f.type}"><td><strong>${escape(f.entity)}</strong><small>${escape(f.source)}</small></td><td class="mono">${escape(f.key || '—')}</td><td>${escape(f.field || '—')}</td><td><span class="tag">${f.type.replaceAll('_', ' ')}</span><small>${isBlocking(f) ? 'Blocking' : 'Allowed by failOn'}</small></td><td class="mono">${escape(presentationValue(f.expected, f.entity, f.field, f.type === 'aggregate_mismatch', presentation))}</td><td class="mono">${escape(presentationValue(f.actual, f.entity, f.field, f.type === 'aggregate_mismatch', presentation))}</td><td class="explanation">${escape(f.message)}${f.values ? `<small>${f.values.map((item) => `Line ${item.line}: ${escape(presentationValue(item.value, f.entity, f.field, false, presentation))}`).join(' · ')}</small>` : ''}${screenshotLink(f.screenshot) ? `<small>${screenshotLink(f.screenshot)}</small>` : ''}</td></tr>`;
+function totals(report: Report, presentation: ReportPresentation): string {
+  const labels = reportLabels(presentation);
+  return report.entities
+    .map((entity) => {
+      const sources = Object.keys(entity.counts);
+      return `<div class="totals"><table><thead><tr><th>${labelSpan(labels.entity(entity.entity)?.label ?? humanize(entity.entity), entity.entity)} totals</th>${sources.map((source) => `<th class="num">${labelSpan(labels.source(entity.entity, source), source)}${source === entity.reference ? '<span class="sub-l">Reference</span>' : ''}</th>`).join('')}</tr></thead><tbody>${(
+        entity.aggregates ?? []
+      )
+        .map(
+          (aggregate) =>
+            `<tr><td>${labelSpan(labels.field(entity.entity, aggregate.name, true), aggregate.name)}</td>${sources
+              .map((source) => {
+                const value = aggregate.values[source];
+                const difference =
+                  source === entity.reference || value === undefined
+                    ? ''
+                    : presentationDifference(
+                        aggregate.values[entity.reference],
+                        value,
+                        entity.entity,
+                        aggregate.name,
+                        true,
+                        presentation,
+                      );
+                return `<td class="num" data-l="${escape(labels.source(entity.entity, source))}">${labelSpan(presentationValue(value, entity.entity, aggregate.name, true, presentation), displayValue(value))}${difference ? `<span class="sub-l neg">${escape(difference)}</span>` : ''}${aggregate.skippedSources.includes(source) ? '<span class="sub-l">Skipped: incomplete or ambiguous input</span>' : ''}</td>`;
+              })
+              .join('')}</tr>`,
+        )
+        .join('')}</tbody></table></div>`;
+    })
+    .join('');
+}
+function reconciliationCards(report: Report, presentation: ReportPresentation): string {
+  const labels = reportLabels(presentation);
+  return report.entities
+    .flatMap((entity) =>
+      (entity.aggregates ?? []).flatMap((aggregate) =>
+        Object.entries(aggregate.reconciliation ?? {}).flatMap(([source, reconciliation]) => {
+          const definition = labels.entity(entity.entity)?.aggregates.find((item) => item.name === aggregate.name);
+          const rule = definition?.type === 'sum' ? labels.entity(entity.entity)?.compare[definition.field] : undefined;
+          if (
+            rule?.type !== 'money' ||
+            aggregate.values[source] === undefined ||
+            aggregate.values[entity.reference] === undefined
+          )
+            return [];
+          const difference = BigInt(aggregate.values[source]!) - BigInt(aggregate.values[entity.reference]!);
+          if (!difference) return [];
+          const parts = [
+            {
+              label: `Missing rows (${reconciliation.missingRows.count})`,
+              amount: BigInt(reconciliation.missingRows.amount),
+              color: 'page',
+            },
+            ...reconciliation.patterns.map((part) => ({
+              label: `${BigInt(report.groups?.[part.group]?.delta ?? 0) >= -3n && BigInt(report.groups?.[part.group]?.delta ?? 0) <= 3n ? 'Rounding' : 'Fixed difference'} (${part.count})`,
+              amount: BigInt(part.amount),
+              color: 'round',
+            })),
+            { label: 'Unexplained remainder', amount: BigInt(reconciliation.remainder), color: 'review' },
+          ];
+          const total = parts.reduce((sum, part) => sum + (part.amount < 0n ? -part.amount : part.amount), 0n);
+          const money = (amount: bigint) => formatMoneyMajor(amount, rule.currency!);
+          const bars = parts
+            .filter((part) => part.amount)
+            .map(
+              (part) =>
+                `<i style="width:${total ? Number(((part.amount < 0n ? -part.amount : part.amount) * 10000n) / total) / 100 : 0}%;background:var(--c-${part.color})"></i>`,
+            )
+            .join('');
+          return [
+            `<article class="card"><h4>${labelSpan(labels.field(entity.entity, aggregate.name, true), aggregate.name)}: ${labelSpan(labels.source(entity.entity, source), source)} vs ${labelSpan(labels.source(entity.entity, entity.reference), entity.reference)}</h4><div class="sum" title="${difference}">${escape(money(difference))}</div><div class="bar" role="img" aria-label="${escape(parts.map((part) => `${part.label}: ${money(part.amount)}`).join(', '))}">${bars}</div><div class="rows">${parts.map((part) => `<div><span><i style="background:var(--c-${part.color})"></i>${escape(part.label)}</span><b title="${part.amount}"${part.label === 'Unexplained remainder' && !part.amount ? ' class="ok"' : ''}>${escape(money(part.amount))}${part.label === 'Unexplained remainder' && !part.amount ? ' · fully explained' : ''}</b></div>`).join('')}</div></article>`,
+          ];
+        }),
+      ),
+    )
+    .join('');
 }
 
 export function htmlReport(report: Report, presentation: ReportPresentation = {}): string {
+  const labels = reportLabels(presentation);
   const groups = reportGroups(report, presentation);
-  const countRows = findingTypes
-    .map((type) => {
-      const found = report.findings.filter((f) => f.type === type);
-      return `<tr><td>${type}</td><td>${found.length}</td><td>${found.filter(isBlocking).length}</td></tr>`;
+  const cards = patternCards(report, presentation);
+  const memberships = groupMembership(report, presentation);
+  const covered = new Set(memberships.flat());
+  const explained = covered.size;
+  const review = report.findings.length - explained;
+  const data = {
+    cards: cards.map((card) => card.label),
+    rows: report.findings.map((finding, index) => {
+      const matching = cards.flatMap((card, cardIndex) => (card.indexes.includes(index) ? [cardIndex] : []));
+      const pattern = matching.length ? cards[matching[0]!]!.label : undefined;
+      return {
+        entity: finding.entity,
+        type: finding.type,
+        cards: matching,
+        explained: covered.has(index),
+        html: findingRow(finding, pattern, presentation),
+        search: [
+          finding.key,
+          finding.source,
+          finding.field,
+          finding.entity,
+          labels.all(finding.entity),
+          labels.source(finding.entity, finding.source),
+          labels.field(finding.entity, finding.field, finding.type === 'aggregate_mismatch'),
+          presentationValue(
+            finding.expected,
+            finding.entity,
+            finding.field,
+            finding.type === 'aggregate_mismatch',
+            presentation,
+          ),
+          presentationValue(
+            finding.actual,
+            finding.entity,
+            finding.field,
+            finding.type === 'aggregate_mismatch',
+            presentation,
+          ),
+          finding.message,
+        ]
+          .join(' ')
+          .toLowerCase(),
+      };
+    }),
+  };
+  // Escape script delimiters before hashing. Every table cell is escaped before it reaches innerHTML.
+  const serialized = JSON.stringify(data).replace(
+    /[<>&\u2028\u2029]/g,
+    (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+  const script = `(() => {${themeScript}\nconst DATA = ${serialized};\n${filterScript}})();`;
+  const hash = createHash('sha256').update(script).digest('base64');
+  const code = report.findings.some((finding) => finding.type === 'source_error')
+    ? 2
+    : report.findings.some(isBlocking)
+      ? 1
+      : 0;
+  const percent = report.findings.length ? Math.floor((explained / report.findings.length) * 100) : 100;
+  const counts = new Map<string, { count: number; color: string }>();
+  groups.forEach((group, index) => {
+    const kind = patternKind(group);
+    const old = counts.get(kind.label);
+    counts.set(kind.label, { count: (old?.count ?? 0) + memberships[index]!.length, color: kind.color });
+  });
+  counts.set('Needs review', { count: review, color: 'review' });
+  let offset = 0;
+  const segments = [...counts.values()]
+    .map(({ count, color }) => {
+      const length = report.findings.length ? (count / report.findings.length) * 100 : 0;
+      const part = `<circle cx="75" cy="75" r="59" fill="none" stroke="var(--c-${color})" stroke-width="15" pathLength="100" stroke-dasharray="${length} ${100 - length}" stroke-dashoffset="${-offset}" transform="rotate(-90 75 75)"/>`;
+      offset += length;
+      return part;
     })
     .join('');
-  const status = verdict(report);
-  const blocking = report.findings.filter(isBlocking).length;
-  const hash = createHash('sha256').update(filterScript).digest('base64');
-  const options = (values: readonly string[]) =>
-    values.map((value) => `<option value="${escape(value)}">${escape(value.replaceAll('_', ' '))}</option>`).join('');
-  const aggregateRows = report.entities.flatMap((e) =>
-    (e.aggregates ?? []).map(
-      (a) =>
-        `<tr><td><strong>${escape(e.entity)}</strong></td><td>${escape(a.name)}<small>${a.type}</small></td><td class="mono">${Object.entries(
-          a.values,
-        )
-          .map(
-            ([source, value]) =>
-              `${escape(source)}: ${escape(presentationValue(value, e.entity, a.name, true, presentation))}`,
-          )
-          .join(' · ')}</td><td>${escape(a.skippedSources.join(', ') || '—')}</td></tr>`,
-    ),
-  );
-  return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; img-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'">
-<title>LogiParity · Parity report</title>
-<style>
-:root{font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172f2a;background:#f4f6f2;color-scheme:light;line-height:1.5}*{box-sizing:border-box}body{margin:0}main{max-width:1600px;margin:auto;padding:38px 40px 56px}header{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid #d8e1d8;padding-bottom:22px}.brand{font-size:20px;font-weight:750;letter-spacing:-.6px}.brand b{color:#087552}.safety{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#50635c}.eyebrow{margin:35px 0 8px;color:#557067;font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:.13em}h1{font-size:42px;letter-spacing:-1.8px;line-height:1.15;margin:0 0 12px}h2{font-size:19px;letter-spacing:-.4px;margin:0}.intro{margin:0;color:#52675d;max-width:850px}.cards{display:grid;grid-template-columns:1.5fr repeat(${report.warnings?.length ? 4 : 3},1fr);gap:14px;margin:28px 0 30px}.card{background:white;border:1px solid #d9e2d9;border-radius:12px;padding:20px 24px}.card.status{background:${blocking ? '#fff0e9' : '#e7f3e8'};border-color:${blocking ? '#edc6b5' : '#c0dcc3'}}.label{color:#5d7067;font-size:12px;text-transform:uppercase;letter-spacing:.08em}.number{display:block;font-size:32px;letter-spacing:-1px;line-height:1.25;margin-top:8px}.status .number{font-size:25px;letter-spacing:-.6px}.section{background:white;border:1px solid #d9e2d9;border-radius:12px;margin-top:24px;overflow:hidden}.section-head{padding:22px 24px 16px;display:flex;justify-content:space-between;align-items:center;gap:16px}.muted{color:#5a6c63;font-size:13px}.filters{display:flex;align-items:end;gap:14px;padding:0 24px 22px;flex-wrap:wrap}.filter-field{display:flex;flex-direction:column;gap:6px}label{font-size:12px;font-weight:600;color:#53695e;display:flex;flex-direction:column;gap:6px}select,input{font:inherit;font-size:14px;background:#fff;border:1px solid #cbd8ce;border-radius:6px;padding:9px 12px;min-width:210px;color:#173c2c}input{min-width:280px}select:focus,input:focus{outline:2px solid #087552;outline-offset:2px}.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}#findings{min-width:1080px}thead{background:#f6f8f4}th{padding:12px 16px;color:#587064;font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:650;border-block:1px solid #e1e8df}td{padding:17px 16px;border-bottom:1px solid #e5ebe2;vertical-align:top;overflow-wrap:anywhere}tbody tr:last-child td{border-bottom:0}tbody tr:hover{background:#f8faf5}tr[hidden]{display:none}small{display:block;margin-top:5px;color:#64766d;font-size:11px}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}.tag{display:inline-block;color:#3b594d;background:#edf2ea;border:1px solid #dce6d7;border-radius:4px;padding:3px 7px;white-space:nowrap;font-size:11px}.explanation{min-width:260px;max-width:460px}.empty{padding:28px 24px;color:#53695e}.empty[hidden]{display:none}a{color:#076843}footer{display:flex;justify-content:space-between;gap:20px;margin-top:25px;font-size:12px;color:#5a6c63}noscript{display:block;padding:12px 24px;color:#6d4d24}@media(max-width:760px){main{padding:22px 16px 36px}h1{font-size:34px}.cards{grid-template-columns:repeat(2,1fr)}.card{padding:16px}.safety{max-width:150px;text-align:right}input,select{min-width:0;width:100%}.filter-field{flex:1 1 180px}.filters{padding-inline:16px}.section-head{padding-inline:16px;align-items:start;flex-direction:column}footer{flex-direction:column;gap:5px}}
-</style></head><body><main>
-<header><div class="brand">Logi<b>Parity</b></div><div class="safety">Test &amp; staging only</div></header>
-<p class="eyebrow">Data consistency / Parity</p><h1>Parity report</h1><p class="intro">Compare the same records across configured sources. Review missing records, field differences and aggregate results below.</p>
-<div class="cards"><div class="card status"><span class="label">Check result</span><strong class="number">${status}</strong></div><div class="card"><span class="label">Findings</span><strong class="number">${report.findings.length}</strong></div><div class="card"><span class="label">Blocking</span><strong class="number">${blocking}</strong></div><div class="card"><span class="label">Entities</span><strong class="number">${report.entities.length}</strong></div>${report.warnings?.length ? `<div class="card"><span class="label">Warnings</span><strong class="number">${report.warnings.length}</strong></div>` : ''}</div>
-${groups.length ? `<section class="section" aria-labelledby="groups-title"><div class="section-head"><h2 id="groups-title">Patterns to investigate</h2></div><ul>${groups.map((g) => `<li><strong>${escape(g.entity)}</strong>: ${escape(g.summary)}</li>`).join('')}</ul></section>` : ''}
-${report.warnings?.length ? `<section class="section"><div class="section-head"><h2>Warnings (${report.warnings.length})</h2></div><ul>${report.warnings.map((warning) => `<li>${escape(warning.message)}</li>`).join('')}</ul></section>` : ''}
-<section class="section" aria-labelledby="counts-title"><div class="section-head"><h2 id="counts-title">Finding counts</h2></div><div class="scroll"><table id="finding-counts"><thead><tr><th>Finding type</th><th>Total</th><th>Blocking</th></tr></thead><tbody>${countRows}</tbody></table></div></section>
-<section class="section" aria-labelledby="findings-title"><div class="section-head"><h2 id="findings-title">Findings</h2><span class="muted" id="visible-count" aria-live="polite">Showing ${report.findings.length} of ${report.findings.length} ${report.findings.length === 1 ? 'finding' : 'findings'}</span></div>
-<div class="filters"><div class="filter-field"><label for="entity-filter">Entity</label><select id="entity-filter"><option value="">All entities</option>${options(entityNames(report))}</select></div><div class="filter-field"><label for="type-filter">Finding type</label><select id="type-filter"><option value="">All finding types</option>${options(findingTypes)}</select></div><div class="filter-field"><label for="search">Search records</label><input id="search" type="search" placeholder="Key, source or explanation"></div></div>
-<noscript>All findings are shown. Enable JavaScript to use filters.</noscript><div class="scroll"><table id="findings"><thead><tr><th>Entity / source</th><th>Record key</th><th>Field</th><th>Finding</th><th>Expected</th><th>Actual</th><th>Explanation</th></tr></thead><tbody>${report.findings.map((f) => findingRow(f, presentation)).join('\n')}</tbody></table></div>
-${report.findings.length ? '' : '<p class="empty">No findings. All configured comparisons passed.</p>'}<p class="empty" id="no-matches" hidden>No findings match these filters.</p></section>
-${aggregateRows.length ? `<section class="section" aria-labelledby="aggregate-title"><div class="section-head"><h2 id="aggregate-title">Aggregates</h2><span class="muted">Normalized values by source</span></div><div class="scroll"><table><thead><tr><th>Entity</th><th>Aggregate</th><th>Values by source</th><th>Skipped sources</th></tr></thead><tbody>${aggregateRows.join('\n')}</tbody></table></div></section>` : ''}
-<footer><span>Money: minor units + configured currency equivalent · Dates: epoch milliseconds + ISO 8601 UTC</span><span>Generated locally by LogiParity · Report schema v${report.schemaVersion}</span></footer>
-</main><script>${filterScript}</script></body></html>\n`;
+  const sources = report.entities
+    .flatMap((entity) =>
+      Object.entries(entity.counts).map(([source, count]) => {
+        const difference = count - (entity.counts[entity.reference] ?? 0);
+        return `<div class="src"><small>${labelSpan(labels.source(entity.entity, source), source)}${source === entity.reference ? ' · reference' : ''}</small><b>${fmt(count)}</b>${source !== entity.reference ? `<span class="bad">${difference > 0 ? '+' : ''}${fmt(difference)} rows</span>` : ''}</div>`;
+      }),
+    )
+    .join('');
+  const aggregates = report.entities.some((entity) => entity.aggregates?.length);
+  const options = (items: [string, string][]) =>
+    items.map(([raw, label]) => `<option value="${escape(raw)}">${escape(label)}</option>`).join('');
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; font-src data:; img-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Parity report · LogiParity</title><style>${studioStyle}</style></head><body><main class="wrap">
+<header class="top"><div class="brand">${brandMark}LogiParity <span class="sub">/ Parity report</span></div><div class="top-r"><span class="chip">${escape([presentation.environment ?? 'Test & staging only', presentation.configFile, presentation.generatedAt].filter(Boolean).join(' · '))}</span>${themeButton}</div></header>
+<section class="hero"><div class="card"><div class="status ${code ? '' : 'passed'}"><i></i>${verdict(report)} · exit code ${code}</div><h1 class="big">${fmt(report.findings.length)} findings</h1><div class="lead"><b>${cards.length} patterns explain ${fmt(explained)} of them.</b> Only ${fmt(review)} need individual review.</div><div class="srcs">${sources}</div>${!report.findings.length ? '<p>All configured comparisons passed.</p>' : ''}</div><div class="card donut"><svg width="150" height="150" viewBox="0 0 150 150" role="img" aria-label="${percent}% of findings explained by patterns"><circle cx="75" cy="75" r="59" fill="none" stroke="var(--line)" stroke-width="15"/>${segments}<text x="75" y="74" text-anchor="middle" font-weight="800" font-size="24" fill="var(--ink)">${percent}%</text><text x="75" y="93" text-anchor="middle" font-size="11" fill="var(--muted)">explained</text></svg><div class="legend">${[...counts].map(([name, value]) => `<div><span><i style="background:var(--c-${value.color})"></i>${escape(name)}</span><b>${fmt(value.count)}</b></div>`).join('')}</div></div></section>
+${
+  cards.length
+    ? `<h3>Patterns to investigate</h3><section class="pats">${cards
+        .map((card, index) => {
+          const kind = kindInfo[card.kind];
+          return `<article class="card pat" style="--c:var(--c-${kind.color});--soft:var(--c-${kind.color}-soft)"><div class="ic">${icon(kind.path)}</div><div class="kind">${escape(card.label)}</div><div class="delta">${escape(card.headline)}</div><p>${escape(card.hint)}</p><div class="viz" title="${escape(
+            card.groups
+              .map((index) => {
+                const group = groups[index]!;
+                return `${group.source}.${group.field || 'whole row'}${group.delta ? ` delta=${group.delta}` : ''}`;
+              })
+              .join('; '),
+          )}">${card.chart}</div><button class="btn btn-soft" data-card="${index}" type="button">Show these findings</button></article>`;
+        })
+        .join('')}</section>`
+    : ''
+}
+${aggregates ? `<h3>Totals</h3><section class="card">${totals(report, presentation)}</section><section class="recon">${reconciliationCards(report, presentation)}</section>` : ''}
+${report.warnings?.length ? `<h3>Warnings (${report.warnings.length})</h3><section class="card"><ul>${report.warnings.map((warning) => `<li>${escape(warning.message)}</li>`).join('')}</ul></section>` : ''}
+<h3 id="findings-title" tabindex="-1">Findings</h3><section class="card findings"><div class="toolbar"><div class="seg" role="group" aria-label="Finding view"><button type="button" data-mode="review" aria-pressed="true">Needs review (${fmt(review)})</button><button type="button" data-mode="all" aria-pressed="false">All (${fmt(report.findings.length)})</button></div><input id="search" type="search" placeholder="Search key, source or field" aria-label="Search findings"><select id="entity-filter" aria-label="Entity"><option value="">All entities</option>${options(report.entities.map((entity) => [entity.entity, labels.entity(entity.entity)?.label ?? humanize(entity.entity)]))}</select><select id="type-filter" aria-label="Finding type"><option value="">All finding types</option>${options([...new Set(report.findings.map((finding) => finding.type))].map((type) => [type, humanize(type)]))}</select></div><span id="active-pattern" class="details" aria-live="polite"></span><table id="findings"><thead><tr><th>Key</th><th>Source</th><th>Field</th><th class="num">Reference</th><th class="num">Source value</th><th class="num">Difference</th><th>Pattern</th></tr></thead><tbody>${data.rows
+    .filter((row) => !row.explained)
+    .slice(0, 50)
+    .map((row) => row.html)
+    .join(
+      '',
+    )}</tbody></table><p id="no-matches" class="empty"${review ? ' hidden' : ''}>${report.findings.length ? 'No findings match these filters.' : 'No findings. All configured comparisons passed.'}</p><nav class="pager" aria-label="Finding pages"><span id="visible-count" aria-live="polite"></span><button id="previous" class="btn btn-soft" type="button">Previous</button><span id="page-number"></span><button id="next" class="btn btn-soft" type="button">Next</button></nav><noscript>The first 50 findings needing review are shown. Enable JavaScript for filters and all pages; JSON contains every finding.</noscript></section><footer>Generated locally by LogiParity · Report schema v${report.schemaVersion} · Money in configured currencies · Dates in UTC · Raw values in tooltips and JSON</footer></main><script>${script}</script></body></html>\n`;
 }

@@ -1,4 +1,11 @@
-import type { Adapter, AdapterContext, DataRow, SourceConfig, Config } from '@logiparity/core';
+import {
+  fieldPath,
+  type Adapter,
+  type AdapterContext,
+  type DataRow,
+  type SourceConfig,
+  type Config,
+} from '@logiparity/core';
 import { selectJson } from './jsonpath.js';
 import { validateReadOnlySql } from './sql-guard.js';
 import { readRest } from './rest.js';
@@ -31,7 +38,7 @@ export function validateSource(config: SourceConfig): void {
   const p = config.pagination;
   const paths = [
     config.items,
-    ...Object.values(config.fields),
+    ...Object.values(config.fields).map(fieldPath),
     ...(p?.type === 'cursor'
       ? [p.next]
       : p?.type === 'page' || p?.type === 'offset'

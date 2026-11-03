@@ -13,7 +13,8 @@ import { findingCategories } from './policy.js';
 
 const name = z.string().min(1);
 const envName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
-const fields = z.record(name, name).refine((v) => Object.keys(v).length > 0, 'Map at least one field');
+export const fieldSchema = z.union([name, z.object({ path: name, label: name.optional() }).strict()]);
+const fields = z.record(name, fieldSchema).refine((v) => Object.keys(v).length > 0, 'Map at least one field');
 const httpUrl = z.url().refine((v) => {
   const u = new URL(v);
   return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password;
@@ -85,6 +86,7 @@ export const sourceSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('rest'),
+      label: name.optional(),
       rollup: rollup.optional(),
       baseUrl: httpUrl,
       path: name,
@@ -109,6 +111,7 @@ export const sourceSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('csv'),
+      label: name.optional(),
       rollup: rollup.optional(),
       file: name,
       fields,
@@ -121,6 +124,7 @@ export const sourceSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('xlsx'),
+      label: name.optional(),
       rollup: rollup.optional(),
       file: name,
       fields,
@@ -131,6 +135,7 @@ export const sourceSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('ui'),
+      label: name.optional(),
       rollup: rollup.optional(),
       url: httpUrl,
       storageState: name.optional(),
@@ -149,6 +154,7 @@ export const sourceSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('sql'),
+      label: name.optional(),
       rollup: rollup.optional(),
       connectionEnv: envName,
       query: name,
@@ -194,6 +200,7 @@ export const aggregateSchema = z.discriminatedUnion('type', [
   z
     .object({
       name,
+      label: name.optional(),
       type: z.literal('count'),
       where,
       tolerance: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0),
@@ -202,6 +209,7 @@ export const aggregateSchema = z.discriminatedUnion('type', [
   z
     .object({
       name,
+      label: name.optional(),
       type: z.literal('sum'),
       field: name,
       where,
@@ -216,6 +224,8 @@ export const failOnSchema = z
 export const entitySchema = z
   .object({
     name,
+    label: name.optional(),
+    pluralLabel: name.optional(),
     key: name,
     sources: z.record(name, sourceSchema),
     compare: z.record(name, ruleSchema).default({}),
@@ -515,3 +525,8 @@ export function formatConfigIssues(schema: z.ZodType, raw: unknown, error: z.Zod
     })
     .join('\n');
 }
+
+export type FieldMapping = z.infer<typeof fieldSchema>;
+export const fieldPath = (field: FieldMapping): string => (typeof field === 'string' ? field : field.path);
+export const fieldPaths = (fields: Record<string, FieldMapping>): Record<string, string> =>
+  Object.fromEntries(Object.entries(fields).map(([name, mapping]) => [name, fieldPath(mapping)]));

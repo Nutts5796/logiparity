@@ -4,7 +4,7 @@ import { equalValues, normalize } from './normalize.js';
 import type { EntitySummary, Finding, NormalizedValue, Report, SourceReader } from './types.js';
 import { aggregateEqual, measureAggregate, DecimalSum } from './aggregates.js';
 import { applyFailurePolicies } from './policy.js';
-import { groupFindings } from './groups.js';
+import { groupFindings, attachGroupMembership } from './groups.js';
 import { formatMoneyMajor } from './money-display.js';
 import { SourceError } from './source-error.js';
 
@@ -262,6 +262,7 @@ function compareSource(
     if (!actual) {
       report.findings.push({
         type: 'missing_in_source',
+        referencePosition: baseline.firstLines.get(key)!,
         entity: entity.name,
         source,
         key,
@@ -336,6 +337,65 @@ function publishAggregates(
       });
   }
 }
+// Keep exact missing-row contributions before releasing normalized source rows.
+function collectMissingMoney(
+  entity: EntityConfig,
+  baseline: SourceState,
+  current: SourceState,
+  source: string,
+  reference: string,
+  summary: EntitySummary,
+): void {
+  // Retain only exact missing-money contributions, never the source rows themselves.
+  for (const aggregate of entity.aggregates) {
+    if (aggregate.type !== 'sum' || entity.compare[aggregate.field]?.type !== 'money') continue;
+    const result = summary.aggregates?.find((item) => item.name === aggregate.name);
+    if (!result || result.values[source] === undefined || result.values[reference] === undefined) continue;
+    let amount = 0n,
+      count = 0;
+    for (const [key, row] of baseline.rows) {
+      if (!current.rows.has(key)) {
+        count++;
+        if (typeof row[aggregate.field] === 'bigint') amount -= row[aggregate.field] as bigint;
+      }
+    }
+    result.reconciliation ??= {};
+    result.reconciliation[source] = { missingRows: { count, amount }, patterns: [], remainder: 0n };
+  }
+}
+
+// Explain aggregate differences only with measured parts; keep every unmatched amount as a remainder.
+function reconcileMoney(report: Report, entities: readonly EntityConfig[]): void {
+  for (const summary of report.entities) {
+    const entity = entities.find((item) => item.name === summary.entity)!;
+    for (const aggregate of summary.aggregates ?? []) {
+      const definition = entity.aggregates.find((item) => item.name === aggregate.name);
+      if (definition?.type !== 'sum') continue;
+      for (const [source, reconciliation] of Object.entries(aggregate.reconciliation ?? {})) {
+        reconciliation.patterns = report.groups!.flatMap((group, index) =>
+          group.entity === entity.name &&
+          group.source === source &&
+          group.field === definition.field &&
+          group.kind === 'money_delta'
+            ? [
+                {
+                  group: index,
+                  count: group.findingIndexes!.length,
+                  amount: BigInt(group.delta!) * BigInt(group.findingIndexes!.length),
+                },
+              ]
+            : [],
+        );
+        reconciliation.remainder =
+          BigInt(aggregate.values[source]!) -
+          BigInt(aggregate.values[summary.reference]!) -
+          BigInt(reconciliation.missingRows.amount) -
+          reconciliation.patterns.reduce((sum, part) => sum + BigInt(part.amount), 0n);
+      }
+    }
+  }
+}
+
 export async function compareEntities(
   entities: EntityConfig[],
   read: SourceReader,
@@ -377,7 +437,10 @@ export async function compareEntities(
         baseline = current;
         const last = [...current.rows.keys()].at(-1);
         if (last) finalKeys[entity.name] = last;
-      } else if (baseline) compareSource(entity, source, reference, config, baseline, current, report);
+      } else if (baseline) {
+        compareSource(entity, source, reference, config, baseline, current, report);
+        collectMissingMoney(entity, baseline, current, source, reference, summary);
+      }
     }
   }
   // Sort findings deterministically, then derive investigation groups without dropping any rows.
@@ -385,5 +448,7 @@ export async function compareEntities(
   report.entities.sort((a, b) => order(a.entity, b.entity));
   applyFailurePolicies(report, entities);
   report.groups = groupFindings(report.findings, entities, finalKeys);
+  attachGroupMembership(report);
+  reconcileMoney(report, entities);
   return report;
 }

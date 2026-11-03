@@ -6,6 +6,7 @@ import {
   markdownReport,
   jsonReport,
   presentationValue,
+  readableDatetime,
   type Report,
 } from '@logiparity/core';
 const source = { type: 'csv', file: 'unused.csv', fields: { id: 'ID', at: 'At' } };
@@ -23,12 +24,14 @@ it.each([
   [1793624460123, '2026-11-02T13:01:00.123Z'],
 ])('formats epoch %s as UTC without losing milliseconds', (epoch, iso) => {
   expect(formatDatetimeUtc(epoch as number)).toBe(iso);
-  expect(presentationValue(epoch as number, 'order', 'at', false, presentation)).toBe(`${epoch} (${iso})`);
+  expect(presentationValue(epoch as number, 'order', 'at', false, presentation)).toBe(
+    readableDatetime(epoch as number),
+  );
 });
 it.each([NaN, Infinity, 1.5, Number.MAX_SAFE_INTEGER])('does not format invalid epoch %s', (epoch) =>
   expect(formatDatetimeUtc(epoch)).toBeUndefined(),
 );
-it('adds UTC only to configured datetime fields in HTML/Markdown, leaving JSON byte-for-byte unchanged', () => {
+it('shows readable UTC only for configured datetime fields and preserves raw JSON', () => {
   const report: Report = {
     schemaVersion: 1,
     entities: [],
@@ -48,7 +51,7 @@ it('adds UTC only to configured datetime fields in HTML/Markdown, leaving JSON b
   const json = jsonReport(report);
   for (const render of [htmlReport, markdownReport])
     expect(render(report, presentation).replaceAll('\\(', '(').replaceAll('\\)', ')')).toContain(
-      '1793624460000 (2026-11-02T13:01:00Z)',
+      'Nov 2, 2026, 1:01 PM UTC',
     );
   expect(jsonReport(report)).toBe(json);
   expect(json).not.toContain('2026-11-02');

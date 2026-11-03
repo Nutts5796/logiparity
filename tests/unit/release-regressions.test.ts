@@ -148,13 +148,13 @@ it('uses singular grammar, meaningful money units and clean finding locations', 
   const output = consoleReport(report, presentation);
   expect(output).toContain('1 entity, 1 finding (1 blocking)');
   expect(output).toContain('-$0.01 (1 cent)');
-  expect(output).toContain('$1.00 (100 cents)');
+  expect(output).toContain('Expected=$1.00 Actual=$0.99 Difference=-$0.01');
   expect(markdownReport(report, presentation)).toContain('1 entity · 1 finding');
   const aggregate = consoleReport(
     { ...report, findings: [{ ...finding, type: 'aggregate_mismatch', field: 'total', key: '' }] },
     presentation,
   );
-  expect(aggregate).toContain('$1.00 (100 cents)');
+  expect(aggregate).toContain('Expected=$1.00 Actual=$0.99 Difference=-$0.01');
   expect(groupFindings([finding], [entity])[0]?.delta).toBe('-1');
   const error = consoleReport({
     ...report,
@@ -163,5 +163,5 @@ it('uses singular grammar, meaningful money units and clean finding locations', 
   expect(error).toContain('1 entity, 0 findings (0 blocking), 1 configuration/source error');
   expect(error).not.toMatch(/key=-|field=-|load\//);
   const html = htmlReport(report, presentation);
-  expect(html.indexOf('id="groups-title"')).toBeLessThan(html.indexOf('id="counts-title"'));
+  expect(html.indexOf('Patterns to investigate')).toBeLessThan(html.indexOf('id="findings-title"'));
 });

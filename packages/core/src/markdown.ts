@@ -1,7 +1,7 @@
 import { reportGroups, presentationFindings } from './groups.js';
 import { isBlocking } from './policy.js';
 import { escapeMarkup, findingTypes, verdict } from './report-utils.js';
-import { presentationValue, type ReportPresentation } from './money-display.js';
+import { presentationDifference, presentationValue, type ReportPresentation } from './money-display.js';
 import type { Report } from './types.js';
 
 function cell(text: string): string {
@@ -17,7 +17,7 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
     '',
     `**${verdict(report)}** · ${report.entities.length} ${report.entities.length === 1 ? 'entity' : 'entities'} · ${report.findings.length} ${report.findings.length === 1 ? 'finding' : 'findings'} · ${report.findings.filter(isBlocking).length} blocking${report.warnings?.length ? ` · ${report.warnings.length} ${report.warnings.length === 1 ? 'warning' : 'warnings'}` : ''}`,
     '',
-    'Test and staging environments only. Money values show minor units and configured currency equivalents; datetime values show UTC epoch milliseconds and ISO 8601 UTC.',
+    'Test and staging environments only. Money uses configured currencies. Dates use UTC. JSON preserves raw values.',
     '',
     '| Finding type | Total | Blocking |',
     '| --- | ---: | ---: |',
@@ -58,12 +58,12 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
       '',
       '## Findings',
       '',
-      '| Entity | Source | Key | Field | Type | Blocking | Expected | Actual | Explanation |',
-      '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+      '| Entity | Source | Key | Field | Type | Blocking | Reference | Source value | Difference | Explanation |',
+      '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
     );
     for (const f of presentationFindings(report, presentation).slice(0, 50))
       lines.push(
-        `| ${[f.entity, f.source, f.key || '—', f.field || '—', f.type, isBlocking(f) ? 'yes' : 'no', presentationValue(f.expected, f.entity, f.field, f.type === 'aggregate_mismatch', presentation), presentationValue(f.actual, f.entity, f.field, f.type === 'aggregate_mismatch', presentation), f.message + (f.values ? ` Observed: ${f.values.map((item) => `line ${item.line}: ${presentationValue(item.value, f.entity, f.field, false, presentation)}`).join('; ')}` : '')].map(cell).join(' | ')} |`,
+        `| ${[f.entity, f.source, f.key || '—', f.field || '—', f.type, isBlocking(f) ? 'yes' : 'no', presentationValue(f.expected, f.entity, f.field, f.type === 'aggregate_mismatch', presentation), presentationValue(f.actual, f.entity, f.field, f.type === 'aggregate_mismatch', presentation), presentationDifference(f.expected, f.actual, f.entity, f.field, f.type === 'aggregate_mismatch', presentation), f.message + (f.values ? ` Observed: ${f.values.map((item) => `line ${item.line}: ${presentationValue(item.value, f.entity, f.field, false, presentation)}`).join('; ')}` : '')].map(cell).join(' | ')} |`,
       );
     if (report.findings.length > 50)
       lines.push(

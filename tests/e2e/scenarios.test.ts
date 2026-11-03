@@ -127,7 +127,7 @@ it.each([
   expect(result.stdout).toContain('S000801');
   expect(await readFile(join(directory, 'report/scenario.md'), 'utf8')).toContain('S000801');
 });
-it('reports all six bugs, displays UTC beside epoch milliseconds, and preserves numeric JSON', async () => {
+it('reports all six bugs, displays readable UTC, and preserves numeric JSON', async () => {
   const { directory, url } = await setup({
     loseOrder: true,
     doubleAssign: true,
@@ -153,8 +153,9 @@ it('reports all six bugs, displays UTC beside epoch milliseconds, and preserves 
   const iso = new Date(epoch).toISOString().replace('.000Z', 'Z');
   for (const file of ['report.html', 'report.md']) {
     const text = await readFile(join(directory, 'report/parity', file), 'utf8');
-    expect(text.replaceAll('\\(', '(').replaceAll('\\)', ')')).toContain(`${epoch} (${iso})`);
+    expect(text.includes('Nov 2, 2026, 10:00 AM UTC')).toBe(true);
     expect(text).toContain('$');
+    if (file === 'report.html') expect(text.includes('parity-scenario.yaml')).toBe(true);
   }
   const raw = await readFile(join(directory, 'report/parity/report.json'), 'utf8');
   expect(raw).not.toContain(iso);

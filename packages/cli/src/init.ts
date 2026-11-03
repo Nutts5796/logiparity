@@ -9,17 +9,21 @@ version: 1
 environment: test
 entities:
   - name: shipment
+    label: Order
+    pluralLabel: orders
     key: shipment_id
     sources:
       api:
+        label: API
         type: rest
         baseUrl: \${STAGING_API_URL}
         path: /api/shipments
         items: $.data[*]
         pagination: { type: page, totalPath: $.pagination.total, pageParam: page, sizeParam: limit, size: 200 }
         # auth: { type: bearer, tokenEnv: STAGING_API_TOKEN }
-        fields: { shipment_id: $.id, status: $.status, payout: $.driver_payout }
+        fields: { shipment_id: $.id, status: $.status, payout: {path: $.driver_payout, label: Driver payout} }
       export:
+        label: CSV export
         type: csv
         file: ./shipments.csv
         headerRow: 1
@@ -30,8 +34,8 @@ entities:
       # Tolerance is in minor units.
       payout: { type: money, currency: USD, tolerance: 0 }
     aggregates:
-      - { name: delivered_count, type: count, where: { status: delivered } }
-      - { name: payout_total, type: sum, field: payout }
+      - { name: delivered_count, label: Delivered orders, type: count, where: { status: delivered } }
+      - { name: payout_total, label: Total driver payout, type: sum, field: payout }
     # List: any finding in a selected category fails. [] is report-only.
     failOn: [missing, extra, mismatch, aggregate, duplicate]
     # Or use allowed counts: { missing: 2, mismatch: 10, aggregate: 0 }

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
-import { SourceError, type AdapterContext, type DataRow, type UiConfig } from '@logiparity/core';
+import { fieldPaths, SourceError, type AdapterContext, type DataRow, type UiConfig } from '@logiparity/core';
 
 export async function* readUi(config: UiConfig, context: AdapterContext): AsyncIterable<DataRow> {
   let browser: Browser | undefined;
@@ -92,7 +92,7 @@ export async function* readUi(config: UiConfig, context: AdapterContext): AsyncI
           records.push(record);
         }
         return { records, fingerprint: JSON.stringify(elements.map((row) => row.textContent)), error: '' };
-      }, config.fields);
+      }, fieldPaths(config.fields));
       if (extracted.error) throw new SourceError(extracted.error);
       const fingerprint = extracted.fingerprint;
       assertOrigin();

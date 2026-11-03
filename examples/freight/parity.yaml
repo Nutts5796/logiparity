@@ -2,17 +2,33 @@ version: 1
 environment: test
 entities:
   - name: load
+    label: Load
+    pluralLabel: loads
     key: load_id
     sources:
       tms:
+        label: TMS
         type: csv
         file: ./tms-loads.csv
-        fields: { load_id: 'Load ID', carrier_pay: 'Carrier pay', status: Status, delivered_at: 'Delivered at' }
+        fields:
+          {
+            load_id: 'Load ID',
+            carrier_pay: { path: 'Carrier pay', label: Carrier pay },
+            status: Status,
+            delivered_at: { path: 'Delivered at', label: Delivery time },
+          }
       settlement:
+        label: Carrier settlement
         type: csv
         file: ./carrier-settlement-lines.csv
         fields:
-          { load_id: 'Load ID', carrier_pay: Amount, charge: Charge, status: Status, delivered_at: 'Delivered at' }
+          {
+            load_id: 'Load ID',
+            carrier_pay: Amount,
+            charge: Charge,
+            status: Status,
+            delivered_at: { path: 'Delivered at', label: Delivery time },
+          }
         rollup:
           { by: load_id, sum: [carrier_pay], first: [status, delivered_at], duplicates: { by: [load_id, charge] } }
     compare:

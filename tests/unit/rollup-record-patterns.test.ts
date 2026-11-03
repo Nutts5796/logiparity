@@ -87,8 +87,8 @@ it.each(['missing_in_source', 'extra_in_source'] as const)(
     expect(groups[0]?.summary).toContain('likely page boundary');
     expect(groupFindings([...findings].reverse(), [entity])).toEqual(groups);
     const report = { schemaVersion: 1 as const, entities: [], findings, groups };
-    for (const text of [htmlReport(report), markdownReport(report), consoleReport(report)])
-      expect(text).toContain('likely page boundary');
+    for (const text of [markdownReport(report), consoleReport(report)]) expect(text).toContain('likely page boundary');
+    expect(htmlReport(report).includes('Likely a pagination bug')).toBe(true);
     expect(report.findings).toHaveLength(4);
   },
 );

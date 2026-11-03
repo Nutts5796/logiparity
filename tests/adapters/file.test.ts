@@ -34,7 +34,7 @@ describe('streaming file adapters', () => {
         config({
           file: 'tests/fixtures/shipments.csv',
           delimiter: ';',
-          fields: { id: 'Shipment ID', value: 'Driver payout', note: 'Note' },
+          fields: { id: 'Shipment ID', value: { path: 'Driver payout', label: 'Driver payout' }, note: 'Note' },
         }),
         { baseDir: resolve('.'), env: {} },
       ),
@@ -92,7 +92,13 @@ describe('streaming file adapters', () => {
           file: 'test.xlsx',
           sheet: 'Shipments',
           headerRow: 2,
-          fields: { id: 'ID', value: 'Value', date: 'Date', rich: 'Rich', formula: 'Formula' },
+          fields: {
+            id: 'ID',
+            value: { path: 'Value', label: 'Driver payout' },
+            date: 'Date',
+            rich: 'Rich',
+            formula: 'Formula',
+          },
         }),
         { baseDir, env: {} },
       ),

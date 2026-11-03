@@ -2,7 +2,7 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { adapters, validateConfig } from '@logiparity/adapters';
 import {
   compareEntities,
@@ -178,6 +178,9 @@ export async function runScenario(
         );
         await writeReports(report.parity, directory, ['html', 'json', 'markdown', 'junit'], {
           entities: parity.config.entities,
+          environment: parity.config.environment,
+          configFile: basename(scenario.afterwards!.parity),
+          generatedAt: new Date().toISOString(),
         });
       }
       report.exitCode =

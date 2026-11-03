@@ -2,15 +2,16 @@ import { createReadStream } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parse } from 'csv-parse';
-import type { AdapterContext, DataRow, FileConfig } from '@logiparity/core';
+import { fieldPath, type FieldMapping, type AdapterContext, type DataRow, type FileConfig } from '@logiparity/core';
 import { xlsxRows } from './xlsx.js';
 
-function headerIndexes(headers: unknown[], fields: Record<string, string>): [string, number][] {
+function headerIndexes(headers: unknown[], fields: Record<string, FieldMapping>): [string, number][] {
   const names = headers.map((v) => String(v ?? '').trim());
   const nonempty = names.filter(Boolean);
   if (new Set(nonempty).size !== nonempty.length)
     throw new Error('Duplicate column headers; give each column a unique name.');
-  return Object.entries(fields).map(([field, column]) => {
+  return Object.entries(fields).map(([field, mapping]) => {
+    const column = fieldPath(mapping);
     const index = names.indexOf(column);
     if (index < 0)
       throw new Error(

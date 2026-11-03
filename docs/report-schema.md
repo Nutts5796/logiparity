@@ -12,10 +12,10 @@ The root contains `schemaVersion: 1`, `entities`, `findings` and additive `group
       "source": "export",
       "key": "S000001",
       "field": "payout",
-      "expected": "101",
-      "actual": "100",
+      "expected": "1819",
+      "actual": "1818",
       "blocking": true,
-      "message": "export: key S000001, field payout differs from reference api; check formatting, rounding and business rules."
+      "message": "export: key S000001, field payout differs from reference api."
     }
   ],
   "entities": [{"entity": "shipment", "reference": "api", "counts": {"api": 2750, "export": 2750}}],
@@ -27,7 +27,7 @@ Each finding has string fields type, entity, source, key, field and message. exp
 
 Money serializes as decimal **integer minor-unit strings**, avoiding JSON number precision loss. Datetimes serialize as UTC epoch milliseconds. Consumers should read the config to interpret currency/types; a numeric-looking string alone does not identify currency.
 
-HTML/Markdown currency equivalents use separate configuration context. They do not change JSON values, units, structure or schemaVersion, and add no display fields to the report.
+Readable HTML, Markdown and console values use separate configuration context. They do not change raw JSON values, units or schemaVersion, and add no human display labels to the report.
 
 | Finding type       | Key/field                                   | Meaning                                                                             |
 | ------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -42,7 +42,7 @@ HTML/Markdown currency equivalents use separate configuration context. They do n
 
 Exit 0 means no blocking findings; exit 1 means blocking ordinary findings, with source errors taking precedence as exit 2. Thresholds apply per entity/category across sources; all findings remain in reports. Schema changes will increment schemaVersion; optional properties may be added within a version. See report-formats.md for HTML/JUnit/Markdown.
 
-For datetime presentation, configured datetime values show epoch milliseconds plus ISO 8601 UTC. Existing Parity JSON retains the same schema and numeric epochs. The separate `scenario.json` envelope uses `schemaVersion: 1`, `kind: scenario`, target/environment, completed event steps, invariant results, optional nested unchanged Parity report, runtime error and exit code; it omits raw snapshots and request bodies. Its format is documented in [scenario reference](scenarios.md).
+For datetime presentation, configured values show readable fixed en-US UTC dates; HTML titles retain epoch milliseconds. Existing Parity JSON retains the same schema and numeric epochs. The separate `scenario.json` envelope uses `schemaVersion: 1`, `kind: scenario`, target/environment, completed event steps, invariant results, optional nested unchanged Parity report, runtime error and exit code; it omits raw snapshots and request bodies. Its format is documented in [scenario reference](scenarios.md).
 
 ## Finding groups (additive field)
 
@@ -59,3 +59,11 @@ Stride groups include their explained `keys`. A missing final reference key can 
 The rounding hint is limited to absolute money deltas of at most three configured minor units. Larger uniform deltas are labelled "consistent fixed difference". A constant delta establishes an observed pattern, not its cause.
 
 Conflict line numbers are one-based extracted data-row numbers; file header rows are not counted.
+
+## Exact pattern membership and money reconciliation
+
+New engine reports may include `groups[].findingIndexes`, an array of zero-based indexes into the sorted `findings` array. `coverage: {explained, needsReview}` counts the union of exact group members and all other findings. Values with another delta and source-local rollup issues are not included. Missing final-page keys belong to the stride group when the run matches. `missing_in_source` can include `referencePosition`, the one-based logical input row in the reference, so charts do not mistake the numeric part of a key for its position.
+
+A money sum aggregate may add `reconciliation`, keyed by source. Each value contains `missingRows: {count, amount}`, `patterns: [{group, count, amount}]` and `remainder`. `group` indexes the report groups array. Amounts are signed decimal minor-unit strings. The identity is `source total - reference total = missingRows.amount + sum(patterns.amount) + remainder`. Missing contributions use reference values for keys absent in that source. Pattern contributions use exact member counts times delta. A filter, rollup or extra row can leave a nonzero remainder; no assumption erases it.
+
+All these fields are optional additions within schemaVersion 1. Existing reports remain readable. Human labels are supplied separately by configuration and do not replace technical identifiers or normalized JSON and JUnit values.

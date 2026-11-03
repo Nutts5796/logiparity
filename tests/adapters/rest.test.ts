@@ -18,7 +18,7 @@ function config(baseUrl: string, extra: Record<string, unknown> = {}): RestConfi
     type: 'rest',
     baseUrl,
     path: '/data',
-    fields: { id: '$.id' },
+    fields: { id: { path: '$.id', label: 'Order' } },
     retries: 0,
     ...extra,
   });

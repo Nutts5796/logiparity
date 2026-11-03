@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { adapters, validateConfig } from '@logiparity/adapters';
 import {
   compareEntities,
@@ -14,7 +14,6 @@ import {
   secretValues,
 } from '@logiparity/core';
 import { runScenario, scenarioConsole } from '@logiparity/scenarios';
-import { basename } from 'node:path';
 import { aiCommand } from './ai.js';
 import { initConfig } from './init.js';
 
@@ -145,7 +144,12 @@ async function main(): Promise<number> {
   );
   if (warnings.length) report.warnings = [...warnings.map((message) => ({ message })), ...(report.warnings ?? [])];
   if (config.report.outputs.includes('console')) output(consoleReport(report, { entities: config.entities }));
-  await writeReports(report, resolve(baseDir, config.report.dir), config.report.outputs, { entities: config.entities });
+  await writeReports(report, resolve(baseDir, config.report.dir), config.report.outputs, {
+    entities: config.entities,
+    environment: config.environment,
+    configFile: basename(values.config),
+    generatedAt: new Date().toISOString(),
+  });
   return reportExitCode(report);
 }
 

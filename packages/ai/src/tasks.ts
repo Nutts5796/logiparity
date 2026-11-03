@@ -35,6 +35,26 @@ const reportSchema = z
                   type: z.enum(['count', 'sum']),
                   values: z.record(text, z.union([z.string(), z.number().finite()])),
                   skippedSources: z.array(text),
+                  reconciliation: z
+                    .record(
+                      text,
+                      z
+                        .object({
+                          missingRows: z.object({ count: z.number().int().nonnegative(), amount: scalar }).strict(),
+                          patterns: z.array(
+                            z
+                              .object({
+                                group: z.number().int().nonnegative(),
+                                count: z.number().int().nonnegative(),
+                                amount: scalar,
+                              })
+                              .strict(),
+                          ),
+                          remainder: scalar,
+                        })
+                        .strict(),
+                    )
+                    .optional(),
                 })
                 .strict(),
             )
@@ -57,9 +77,14 @@ const reportSchema = z
             expected: scalar.optional(),
             actual: scalar.optional(),
             summary: text,
+            findingIndexes: z.array(z.number().int().nonnegative()).optional(),
           })
           .strict(),
       )
+      .optional(),
+    coverage: z
+      .object({ explained: z.number().int().nonnegative(), needsReview: z.number().int().nonnegative() })
+      .strict()
       .optional(),
     warnings: z
       .array(z.object({ message: text, entity: text.optional(), source: text.optional() }).strict())
@@ -86,6 +111,7 @@ const reportSchema = z
           reason: z.enum(['rollup_conflict', 'rollup_missing_value', 'rollup_duplicate']).optional(),
           blocking: z.boolean().optional(),
           screenshot: z.string().optional(),
+          referencePosition: z.number().int().positive().optional(),
         })
         .strict(),
     ),

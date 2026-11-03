@@ -3,10 +3,13 @@ version: 1
 environment: test
 entities:
   - name: shipment
+    label: Order
+    pluralLabel: orders
     key: shipment_id
     sources:
       api: # First source is the reference.
         type: rest
+        label: API
         baseUrl: ${DEMO_API_URL}
         path: /api/shipments?date={{date}}
         pagination: { type: page, totalPath: $.pagination.total, pageParam: page, sizeParam: limit, size: 200 }
@@ -14,11 +17,12 @@ entities:
         fields:
           shipment_id: $.id
           status: $.status
-          payout: $.driver_payout
-          delivered_at: $.delivered_at
+          payout: { path: $.driver_payout, label: Driver payout }
+          delivered_at: { path: $.delivered_at, label: Delivery time }
           eta: $.eta
       export:
         type: xlsx
+        label: Excel export
         file: ${LOGIPARITY_SCENARIO_ARTIFACT_DIR}/shipments.xlsx
         sheet: Shipments
         headerRow: 1
@@ -32,6 +36,7 @@ entities:
           }
       csv:
         type: csv
+        label: CSV export
         file: ${LOGIPARITY_SCENARIO_ARTIFACT_DIR}/shipments.csv
         fields:
           {
@@ -47,8 +52,8 @@ entities:
       delivered_at: { type: datetime, sourceTimezones: { export: UTC, csv: UTC }, toleranceSeconds: 60 }
       eta: { type: datetime, sourceTimezones: { export: UTC, csv: UTC }, toleranceSeconds: 0 }
     aggregates:
-      - { name: delivered_count, type: count, where: { status: delivered } }
-      - { name: payout_total, type: sum, field: payout }
+      - { name: delivered_count, label: Delivered orders, type: count, where: { status: delivered } }
+      - { name: payout_total, label: Total driver payout, type: sum, field: payout }
     failOn: [missing, extra, mismatch, aggregate, duplicate]
 variables:
   date: '2026-11-02'

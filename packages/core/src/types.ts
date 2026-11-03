@@ -26,12 +26,21 @@ export interface Finding {
   reason?: 'rollup_conflict' | 'rollup_missing_value' | 'rollup_duplicate';
   blocking?: boolean;
   screenshot?: string;
+  referencePosition?: number;
 }
 export interface AggregateResult {
   name: string;
   type: 'count' | 'sum';
   values: Record<string, number | bigint>;
   skippedSources: string[];
+  reconciliation?: Record<
+    string,
+    {
+      missingRows: { count: number; amount: bigint | string };
+      patterns: { group: number; count: number; amount: bigint | string }[];
+      remainder: bigint | string;
+    }
+  >;
 }
 export interface EntitySummary {
   entity: string;
@@ -51,6 +60,7 @@ export interface FindingGroup {
   expected?: NormalizedValue;
   actual?: NormalizedValue;
   summary: string;
+  findingIndexes?: number[];
 }
 export interface ReportWarning {
   message: string;
@@ -66,5 +76,6 @@ export interface Report {
   entities: EntitySummary[];
   groups?: FindingGroup[];
   warnings?: ReportWarning[];
+  coverage?: { explained: number; needsReview: number };
 }
 export type SourceReader = (source: string, config: SourceConfig, context: SourceReadContext) => AsyncIterable<DataRow>;

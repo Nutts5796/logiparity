@@ -1,10 +1,14 @@
 import type { EntityConfig } from './config.js';
 import type { NormalizedValue } from './types.js';
+import { presentationRule } from './labels.js';
 import { displayValue } from './report-utils.js';
 
 // Presentation context stays outside Report, preserving the JSON wire format.
 export interface ReportPresentation {
   entities?: readonly EntityConfig[];
+  environment?: string;
+  configFile?: string;
+  generatedAt?: string;
 }
 
 export function formatDatetimeUtc(epoch: number): string | undefined {
@@ -44,24 +48,72 @@ export function presentationValue(
 ): string {
   const plain = displayValue(value);
   const entity = presentation.entities?.find((e) => e.name === entityName);
-  let moneyField = field;
-  if (aggregate) {
-    const definition = entity?.aggregates.find((a) => a.name === field);
-    if (definition?.type !== 'sum') return plain;
-    moneyField = definition.field;
+  const rule = presentationRule(entity, field, aggregate);
+  if (rule?.type === 'datetime' && typeof value === 'number') return readableDatetime(value) ?? plain;
+  if (rule?.type !== 'money' || !rule.currency || integerValue(value) === undefined) return plain;
+  return formatMoneyMajor(integerValue(value)!, rule.currency);
+}
+
+export function integerValue(value: NormalizedValue | undefined): bigint | undefined {
+  if (typeof value === 'bigint' || (typeof value === 'string' && /^-?\d+$/.test(value))) return BigInt(value);
+  return typeof value === 'number' && Number.isSafeInteger(value) ? BigInt(value) : undefined;
+}
+
+export function readableDatetime(epoch: number): string | undefined {
+  if (!formatDatetimeUtc(epoch)) return undefined;
+  const date = new Date(epoch);
+  const day = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+  const time = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date);
+  return `${day}, ${time} UTC`;
+}
+
+export function durationValue(delta: bigint): string {
+  for (const [unit, factor] of [
+    ['h', 3600000n],
+    ['m', 60000n],
+    ['s', 1000n],
+    ['ms', 1n],
+  ] as const)
+    if (delta % factor === 0n) return `${delta > 0n ? '+' : ''}${delta / factor}${unit}`;
+  return String(delta);
+}
+
+export function presentationDifference(
+  expected: NormalizedValue | undefined,
+  actual: NormalizedValue | undefined,
+  entityName: string,
+  field: string,
+  aggregate: boolean,
+  presentation: ReportPresentation = {},
+): string {
+  const rule = presentationRule(
+    presentation.entities?.find((item) => item.name === entityName),
+    field,
+    aggregate,
+  );
+  const left = integerValue(expected),
+    right = integerValue(actual);
+  if (left !== undefined && right !== undefined) {
+    const delta = right - left;
+    if (rule?.type === 'datetime') return durationValue(delta);
+    if (rule?.type === 'money') return `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, rule.currency!)}`;
+    return `${delta > 0n ? '+' : ''}${delta.toLocaleString('en-US')}`;
   }
-  const rule = entity?.compare[moneyField];
-  if (!aggregate && rule?.type === 'datetime' && typeof value === 'number') {
-    const iso = formatDatetimeUtc(value);
-    return iso ? `${plain} (${iso})` : plain;
+  if (typeof expected === 'number' && typeof actual === 'number') {
+    const delta = actual - expected;
+    return `${delta > 0 ? '+' : ''}${delta.toLocaleString('en-US', { maximumFractionDigits: 12 })}`;
   }
-  if (
-    rule?.type !== 'money' ||
-    !rule.currency ||
-    (typeof value !== 'bigint' && !(typeof value === 'string' && /^-?\d+$/.test(value)))
-  )
-    return plain;
-  return `${plain} (${formatMoneyMajor(BigInt(value), rule.currency, rule.locale)})`;
+  return '—';
 }
 
 export function moneyUnits(minor: bigint, currency: string): string {

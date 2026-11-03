@@ -31,7 +31,13 @@ describe('PostgreSQL read-only adapter against an isolated real server', () => {
     const query = `WITH deliveries AS (SELECT id, payout FROM ${db.schema}.shipments WHERE status = $1) SELECT id, payout FROM deliveries ORDER BY id`;
     expect(
       await collect(
-        readSql(config(query, { params: ['delivered'], fields: { id: 'id', payout: 'payout' } }), context()),
+        readSql(
+          config(query, {
+            params: ['delivered'],
+            fields: { id: { path: 'id', label: 'Order' }, payout: { path: 'payout', label: 'Driver payout' } },
+          }),
+          context(),
+        ),
       ),
     ).toEqual([{ id: 'S1', payout: '9007199254740993.01' }]);
     const injection = "S1'; DROP TABLE never; --";
@@ -85,7 +91,10 @@ describe('PostgreSQL read-only adapter against an isolated real server', () => {
     const query = 'SELECT n::text AS id, 9007199254740993.01::numeric AS payout FROM generate_series(1, 100000) n';
     let count = 0;
     for await (const row of readSql(
-      config(query, { batchSize: 777, fields: { id: 'id', payout: 'payout' } }),
+      config(query, {
+        batchSize: 777,
+        fields: { id: { path: 'id', label: 'Order' }, payout: { path: 'payout', label: 'Driver payout' } },
+      }),
       context(),
     )) {
       expect(row.payout).toBe('9007199254740993.01');

@@ -156,17 +156,39 @@ export function reportGroups(report: Report, presentation: ReportPresentation = 
 
 // Keep findings with no matching explanation ahead of grouped rows in truncated presentations.
 export function presentationFindings(report: Report, presentation: ReportPresentation = {}): Finding[] {
-  const groups = reportGroups(report, presentation);
-  const explained = (finding: Finding) =>
-    !finding.reason &&
-    groups.some(
-      (group) =>
-        group.entity === finding.entity &&
-        group.source === finding.source &&
-        (group.kind.endsWith('_stride')
-          ? group.keys?.includes(finding.key) &&
-            finding.type === (group.kind === 'missing_stride' ? 'missing_in_source' : 'extra_in_source')
-          : finding.type === 'field_mismatch' && group.field === finding.field),
-    );
-  return [...report.findings.filter((finding) => !explained(finding)), ...report.findings.filter(explained)];
+  const covered = new Set(groupMembership(report, presentation).flat());
+  return [
+    ...report.findings.filter((_, index) => !covered.has(index)),
+    ...report.findings.filter((_, index) => covered.has(index)),
+  ];
+}
+
+// Match actual values, not only a field name: unrelated deltas must remain unexplained.
+export function groupMembership(report: Report, presentation: ReportPresentation = {}): number[][] {
+  return reportGroups(report, presentation).map((group) => {
+    const keys = new Set(group.keys ?? []);
+    return report.findings.flatMap((finding, index) => {
+      if (finding.reason || finding.entity !== group.entity || finding.source !== group.source) return [];
+      if (group.kind.endsWith('_stride'))
+        return keys.has(finding.key) &&
+          finding.type === (group.kind === 'missing_stride' ? 'missing_in_source' : 'extra_in_source')
+          ? [index]
+          : [];
+      if (finding.type !== 'field_mismatch' || finding.field !== group.field) return [];
+      if (group.kind === 'value_mapping')
+        return finding.expected === group.expected && finding.actual === group.actual ? [index] : [];
+      const expected = integer(finding.expected),
+        actual = integer(finding.actual);
+      return expected !== undefined && actual !== undefined && String(actual - expected) === group.delta ? [index] : [];
+    });
+  });
+}
+
+export function attachGroupMembership(report: Report): void {
+  const memberships = groupMembership(report);
+  report.groups?.forEach((group, index) => {
+    group.findingIndexes = memberships[index]!;
+  });
+  const explained = new Set(memberships.flat()).size;
+  report.coverage = { explained, needsReview: report.findings.length - explained };
 }
