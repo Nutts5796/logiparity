@@ -2,29 +2,43 @@ name: Versioned release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to verify
+        required: true
+        type: string
+      images_only:
+        description: Require existing GitHub and npm assets; rebuild only images
+        type: boolean
+        default: true
 permissions: {}
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
 jobs:
   verify:
     permissions:
       contents: read
     uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ inputs.tag || github.ref }}
   release:
     needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: write
       packages: write
       id-token: write
     env:
-      GH_TOKEN: ${{ github.token }}
-      TAG: ${{ github.ref_name }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+      IMAGE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.images_only }}
       IMAGE: ghcr.io/nutts5796/logiparity
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
@@ -40,31 +54,34 @@ jobs:
           npm run release:prepare
           cd output/release
           sha256sum --check "logiparity-$version.tgz.sha256"
-      - name: Attach verified assets to the GitHub release
-        shell: bash
-        run: |
-          version=$(node -p "require('./package.json').version")
-          printf 'LogiParity %s\n\nVerify the tarball with the attached SHA-256 file. The CycloneDX SBOM lists the bundled dependencies. Container digests are added after npm publication and image pushes succeed.\n' "$version" > output/release/notes.md
-          gh release create "$TAG" "output/release/logiparity-$version.tgz" "output/release/logiparity-$version.tgz.sha256" "output/release/logiparity-$version.cdx.json" --verify-tag --title "$TAG" --notes-file output/release/notes.md
-      - name: Publish the verified tarball to npm using OIDC
-        shell: bash
-        run: |
-          version=$(node -p "require('./package.json').version")
-          cd output/release
-          sha256sum --check "logiparity-$version.tgz.sha256"
-          npm publish "./logiparity-$version.tgz" --access public --provenance
+          printf 'LogiParity %s\n\nThe attached tarball is the exact artifact installed in both container images and published to npm. Verify it with the attached SHA-256 file. The CycloneDX SBOM lists its bundled runtime dependencies.\n' "$version" > notes.md
+      - name: Create or verify identical GitHub release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/publish-release.mjs github
+      - name: Publish npm or verify the existing version integrity
+        run: node scripts/publish-release.mjs npm
       - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - name: Build and push images after GitHub and npm publication
+      - name: Build and push images from the checksummed tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           version=$(node -p "require('./package.json').version")
+          (cd output/release && sha256sum --check "logiparity-$version.tgz.sha256")
           printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          docker buildx build --pull --platform linux/amd64 --target runtime --tag "$IMAGE:$version" --metadata-file output/release/full-image.json --push .
-          docker buildx build --pull --platform linux/amd64,linux/arm64 --target slim --tag "$IMAGE:$version-slim" --metadata-file output/release/slim-image.json --push .
+          docker buildx build --pull --platform linux/amd64,linux/arm64 --target runtime --tag "$IMAGE:$version" --provenance=mode=max --sbom=true --metadata-file output/release/full-image.json --push .
+          docker buildx build --pull --platform linux/amd64,linux/arm64 --target slim --tag "$IMAGE:$version-slim" --provenance=mode=max --sbom=true --metadata-file output/release/slim-image.json --push .
+      - name: Record verified image index digests in release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
           full=$(node -p "require('./output/release/full-image.json')['containerimage.digest']")
           slim=$(node -p "require('./output/release/slim-image.json')['containerimage.digest']")
-          printf '\nContainer (linux/amd64): `%s:%s@%s`\n\nSlim container (linux/amd64, linux/arm64): `%s:%s-slim@%s`\n' "$IMAGE" "$version" "$full" "$IMAGE" "$version" "$slim" >> output/release/notes.md
+          node scripts/release-image-notes.mjs "$version" "$IMAGE" "$full" "$slim"
           gh release edit "$TAG" --notes-file output/release/notes.md
       - name: Retain prepared files
         if: always()

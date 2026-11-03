@@ -1,9 +1,9 @@
+# Pin LOGIPARITY_IMAGE to a digest from the release notes if required:
+# Append @sha256: followed by the verified index digest in the release notes.
 # Copy to .gitlab-ci.yml. Set protected staging URL/token CI variables.
-# Replace the placeholder via LOGIPARITY_IMAGE with the verified 1.0.1 slim index digest.
-# docs/release.md tracks the follow-up commit after publication. Do not use the 1.0.0 image.
 stages: [test]
 variables:
-  LOGIPARITY_IMAGE: "ghcr.io/nutts5796/logiparity:1.0.1-slim@sha256:REPLACE_WITH_VERIFIED_1_0_1_SLIM_DIGEST"
+  LOGIPARITY_IMAGE: "ghcr.io/nutts5796/logiparity:1.0.1-slim"
 logiparity:
   stage: test
   image:

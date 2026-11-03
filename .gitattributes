@@ -1,0 +1,2 @@
+# Preserve exact upstream license bytes, including its final blank line.
+tests/fixtures/junit/LICENSE -whitespace

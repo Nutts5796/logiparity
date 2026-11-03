@@ -27,7 +27,8 @@
     "test:quickstart": "node scripts/check-quickstart.mjs",
     "test:docker": "node scripts/check-docker.mjs",
     "check:docs": "node scripts/check-docs.mjs",
-    "release:prepare": "npm run build && node scripts/prepare-release.mjs"
+    "release:prepare": "npm run build && node scripts/prepare-release.mjs",
+    "check:third-party": "node scripts/check-third-party.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

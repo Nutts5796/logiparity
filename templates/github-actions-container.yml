@@ -1,7 +1,5 @@
-# Set repository Actions variable LOGIPARITY_IMAGE to:
-# ghcr.io/nutts5796/logiparity:1.0.1-slim@sha256:REPLACE_WITH_VERIFIED_1_0_1_SLIM_DIGEST
-# Placeholder only: use the verified 1.0.1 slim index digest from release notes.
-# docs/release.md tracks the follow-up commit after publication. Do not use the 1.0.0 image.
+# Optional Actions variable LOGIPARITY_IMAGE overrides the version tag below.
+# To pin immutably, append @sha256: followed by the verified index digest in the release notes.
 name: Staging parity in a container
 on:
   workflow_dispatch:
@@ -12,7 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
-      image: ${{ vars.LOGIPARITY_IMAGE }}
+      image: ${{ vars.LOGIPARITY_IMAGE || 'ghcr.io/nutts5796/logiparity:1.0.1-slim' }}
+      # GitHub checkout and artifact actions need write access to runner-owned workspace mounts.
+      # This overrides the image default UID 1000 only for this CI job.
       options: --user 0
     env:
       STAGING_API_URL: ${{ vars.STAGING_API_URL }}
