@@ -49,18 +49,35 @@ export function secretValues(config: unknown, env: NodeJS.ProcessEnv = process.e
   };
   walk(config); return [...values];
 }
+const escaped = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function credentialEncodings(value: string): string[] {
+  const path = new URL('https://redaction.invalid'); path.pathname = '/' + value;
+  const query = new URL('https://redaction.invalid'); query.search = '?value=' + value;
+  return [...new Set([value, encodeURIComponent(value), encodeURI(value), path.pathname.slice(1), query.search.slice(7), new URLSearchParams({value}).toString().slice(6)])];
+}
+function replaceCredential(text: string, value: string, short: boolean): string {
+  if (!value) return text;
+  const pattern = short ? new RegExp(`(?<![\\p{L}\\p{N}_])${escaped(value)}(?![\\p{L}\\p{N}_])`, 'gu') : new RegExp(escaped(value), 'g');
+  return text.replace(pattern, '[REDACTED]');
+}
 export function redactSecrets(text: string, secrets: readonly string[]): string {
-  text = text.replace(/[^\s/\\?#"'<>:;()]+/g, (segment) => {
-    let value = segment;
-    for (let depth = 0; depth < 8; depth++) {
-      if (secrets.includes(value)) return '[REDACTED]';
-      try { const next = decodeURIComponent(value); if (next === value) break; value = next; } catch { break; }
+  const values = [...new Set(secrets.filter(Boolean))].sort((a,b)=>b.length-a.length);
+  for (const secret of values) for (const encoding of credentialEncodings(secret).sort((a,b)=>b.length-a.length)) text = replaceCredential(text, encoding, secret.length < 8);
+  return text.replace(/[^\s\\?#"'<>()[\]]*%[^\s\\?#"'<>()[\]]*/g, (segment) => {
+    let decoded = segment;
+    for (let depth=0;depth<8;depth++) {
+      try { const next=decodeURIComponent(decoded); if(next===decoded) break; decoded=next; } catch { break; }
+      let masked=decoded;
+      for(const secret of values) masked=replaceCredential(masked,secret,secret.length<8);
+      if(masked!==decoded) return masked;
     }
     return segment;
   });
-  for (const secret of [...new Set(secrets.flatMap((value) => value ? [value, encodeURIComponent(value)] : []))].sort((a, b) => b.length - a.length)) text = text.replaceAll(secret, '[REDACTED]');
-  return text;
+}
+export function shortSecretWarnings(config: unknown, env: NodeJS.ProcessEnv = process.env): string[] {
+  const secrets = new Set(secretValues(config, env));
+  return referencedEnvironment(config).filter((name) => env[name] && env[name]!.length < 8 && secrets.has(env[name]!)).map((name) => `Environment variable ${name} contains a secret shorter than 8 characters. Only whole delimited tokens can be redacted safely; use a longer secret.`);
 }
 export function safeConsole(text: string): string {
-  return [...text].filter((char) => { const code = char.codePointAt(0)!; return code === 9 || code === 10 || code >= 32 && !(code >= 127 && code <= 159); }).join('');
+  return [...text].filter((char) => { const code = char.codePointAt(0)!; return (code === 9 || code === 10 || code >= 32 && !(code >= 127 && code <= 159)) && ![0x061c,0x200e,0x200f,0x2028,0x2029,...Array.from({length:5},(_,i)=>0x202a+i),...Array.from({length:4},(_,i)=>0x2066+i)].includes(code); }).join('');
 }

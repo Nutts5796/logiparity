@@ -16,8 +16,22 @@ function pathTokens(path: string): Token[] {
 }
 function redactCredentials(text: string, collect: (...values: string[]) => void): string {
   const decoded = (value: string) => { try { return decodeURIComponent(value.replaceAll('+', ' ')); } catch { return value; } };
-  text = text.replace(/\b([a-z][a-z0-9+.-]*:\/\/)([^/\s:@]+):([^/@\s]*)@/gi, (_, scheme: string, user: string, password: string) => {
-    collect(password, decoded(password)); return `${scheme}${user}:${redacted}@`;
+  text = text.replace(/\b([a-z][a-z0-9+.-]*:\/\/)([^/\s@]*)@/gi, (_, scheme: string, userinfo: string) => {
+    const separator = userinfo.indexOf(':');
+    if (separator >= 0) {
+      const user = userinfo.slice(0,separator); const password = userinfo.slice(separator+1);
+      collect(password,decoded(password));
+      if (user) collect(user,decoded(user));
+      return `${scheme}${redacted}:${redacted}@`;
+    }
+    collect(userinfo,decoded(userinfo)); return `${scheme}${redacted}@`;
+  });
+  text = text.replace(/\b((?:proxy-)?authorization)[ \t]*[=:][ \t]*([A-Za-z][A-Za-z0-9_-]*)[ \t]+([^\r\n,;]+)/gi, (_, name: string, scheme: string, credentials: string) => {
+    collect(credentials,decoded(credentials)); return `${name}: ${scheme} ${redacted}`;
+  });
+  text = text.replace(/\b([A-Za-z_][A-Za-z0-9_.-]*)[ \t]*([=:])[ \t]*(?:"([^"\r\n]*)"|'([^'\r\n]*)'|([^\s,&#?<>]+))/g, (match, name: string, separator: string, quoted: string | undefined, single: string | undefined, plain: string | undefined) => {
+    if (!isSecretName(name) || /^(?:proxy-)?authorization$/i.test(name)) return match;
+    const value=quoted ?? single ?? plain ?? ''; if(value===redacted)return match; collect(value,decoded(value)); return `${name}${separator}${redacted}`;
   });
   text = text.replace(/([?&#])([^=&#\s?]+)=([^&#\s?]*)/g, (match, separator: string, key: string, value: string) => {
     const name = normalizedSecretName(decoded(key));

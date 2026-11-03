@@ -30,7 +30,7 @@ export function requestPlan(target: Target, template: RequestTemplate, context: 
   if (typeof path !== 'string') throw new ConfigError('Request path must render to a string');
   let decoded = path.split(/[?#]/, 1)[0]!;
   for (let depth = 0; depth < 8; depth++) {
-    if (decoded.replaceAll('\\', '/').split('/').some((part) => part === '.' || part === '..')) throw new ConfigError('Scenario request paths cannot contain dot-segments, including encoded forms');
+    if (decoded.replaceAll('\\', '/').split('/').some((part) => part === '.' || part === '..' || part.startsWith('..;'))) throw new ConfigError('Scenario request paths cannot contain dot-segments, including encoded forms');
     let next: string; try { next = decodeURIComponent(decoded); } catch { throw new ConfigError('Scenario request path contains invalid percent encoding'); }
     if (next === decoded) break;
     if (depth === 7) throw new ConfigError('Scenario request path has excessive percent encoding');

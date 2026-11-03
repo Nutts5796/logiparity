@@ -38,5 +38,5 @@ it('masks expanded credential names without globally scrubbing short values or n
 it.each(['key','sig','signature','X-Amz-Signature','X-Amz-Credential','access_token'])('masks URL query and fragment credential %s and provider echoes', name=>{
   const result=redactInput({url:`https://user:password-long@example.test/?${name}=query-secret#${name}=fragment-secret`,note:'Bearer bearer-secret'});
   const text=JSON.stringify(result.data); for(const secret of ['password-long','query-secret','fragment-secret','bearer-secret']) {expect(text).not.toContain(secret);expect(result.scrub(`echo ${secret}`)).toBe(`echo ${redacted}`);}
-  expect(result.scrub('https://u:pw@example.test/?sig=x#key=y Bearer tiny')).toBe(`https://u:${redacted}@example.test/?sig=${redacted}#key=${redacted} Bearer ${redacted}`);
+  expect(result.scrub('https://u:pw@example.test/?sig=x#key=y Bearer tiny')).toBe(`https://${redacted}:${redacted}@example.test/?sig=${redacted}#key=${redacted} Bearer ${redacted}`);
 });
