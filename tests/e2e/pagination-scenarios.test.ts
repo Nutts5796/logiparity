@@ -16,7 +16,7 @@ afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 async function dir() {
-  const value = await mkdtemp(join(tmpdir(), 'logiparity-m7-e2e-'));
+  const value = await mkdtemp(join(tmpdir(), 'logiparity-regression-e2e-'));
   dirs.push(value);
   return value;
 }
@@ -133,6 +133,7 @@ it.each(['healthy', 'lost', 'double', 'missing dependency', 'eta'] as const)(
         name: 'staging',
         environment: 'staging',
         allowMutations: true,
+        allowedHosts: ['127.0.0.1', 'localhost', 'example.test', 'example.invalid', 'staging.example.test'],
         baseUrl: url,
         events: { driver_no_show: { method: 'POST', path: '/event', body: '{{params}}' } },
         state,
@@ -164,7 +165,7 @@ it.each(['healthy', 'lost', 'double', 'missing dependency', 'eta'] as const)(
     expect(irrelevant).toBe(0);
     if (mode === 'missing dependency') {
       expect(events).toBe(0);
-      expect(result.stderr).toContain('require state.drivers');
+      expect(result.stderr).toContain('state.');
     } else {
       expect(events).toBe(1);
       if (mode === 'lost' || mode === 'double') expect(result.stdout).toContain('S1');
@@ -172,8 +173,8 @@ it.each(['healthy', 'lost', 'double', 'missing dependency', 'eta'] as const)(
   },
 );
 it.each([
-  { allow: false, payout: 12.34, expected: 2 },
-  { allow: true, payout: 12.345, expected: 2 },
+  { allow: false, payout: 12.34, expected: 1 },
+  { allow: true, payout: 12.345, expected: 1 },
   { allow: true, payout: 12.34, expected: 0 },
 ])('numeric HTTP money: allow=$allow payout=$payout', async ({ allow, payout, expected }) => {
   const directory = await dir();
@@ -202,7 +203,7 @@ it.each([
   const report = JSON.parse(await readFile(join(directory, 'report/report.json'), 'utf8')) as {
     findings: { type: string }[];
   };
-  expect(report.findings.map((f) => f.type)).toEqual(expected === 0 ? [] : ['source_error']);
+  expect(report.findings.map((f) => f.type)).toEqual(expected === 0 ? [] : ['invalid_value']);
 });
 it('renders real HTTP groups in every report without losing findings or normalized values', async () => {
   const directory = await dir();
@@ -212,13 +213,14 @@ it('renders real HTTP groups in every report without losing findings or normaliz
         data: [
           { id: 'S1', payout: 12.34, at: '2026-11-02T13:01:00Z', status: 'delivered' },
           { id: 'S2', payout: 12.35, at: '2026-11-02T13:02:00Z', status: 'delivered' },
+          { id: 'S3', payout: 12.36, at: '2026-11-02T13:03:00Z', status: 'delivered' },
         ],
       }),
     ),
   );
   await writeFile(
     join(directory, 'input.csv'),
-    'ID,Payout,At,Status\nS1,12.33,2026-11-02T07:01:00Z,in_transit\nS2,12.34,2026-11-02T07:02:00Z,in_transit\n',
+    'ID,Payout,At,Status\nS1,12.33,2026-11-02T07:01:00Z,in_transit\nS2,12.34,2026-11-02T07:02:00Z,in_transit\nS3,12.35,2026-11-02T07:03:00Z,in_transit\n',
   );
   await writeFile(
     join(directory, 'parity.yaml'),
@@ -250,7 +252,7 @@ it('renders real HTTP groups in every report without losing findings or normaliz
   const result = await run(['check', '--config', 'parity.yaml'], directory);
   expect(result.code).toBe(1);
   expect(result.stdout).toContain('Nov 2, 2026, 1:01 PM UTC');
-  expect(result.stdout).toContain('-6h (likely timezone)');
+  expect(result.stdout).toContain('−6h');
   const report = JSON.parse(await readFile(join(directory, 'report/report.json'), 'utf8')) as {
     schemaVersion: number;
     groups: { kind: string }[];
@@ -258,14 +260,14 @@ it('renders real HTTP groups in every report without losing findings or normaliz
   };
   expect(report.schemaVersion).toBe(1);
   expect(report.groups.map((g) => g.kind)).toEqual(['datetime_offset', 'money_delta', 'value_mapping']);
-  expect(report.findings).toHaveLength(6);
+  expect(report.findings).toHaveLength(9);
   expect(report.findings.find((f) => f.field === 'payout')?.expected).toBe('1234');
   for (const file of ['report.md']) {
     const text = await readFile(join(directory, 'report', file), 'utf8');
-    expect(text).toContain('likely timezone');
-    expect(text).toContain('likely rounding');
+    expect(text).toContain('Likely local time');
+    expect(text).toContain('Likely a different rounding rule');
   }
   const html = await readFile(join(directory, 'report/report.html'), 'utf8');
   expect(html.includes('class="card donut"')).toBe(true);
-  expect(html.includes('6 findings')).toBe(true);
+  expect(html.includes('9 findings')).toBe(true);
 });

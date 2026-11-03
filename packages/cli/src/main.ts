@@ -13,13 +13,15 @@ import {
   redactSecrets,
   secretValues,
 } from '@logiparity/core';
-import { runScenario, scenarioConsole } from '@logiparity/scenarios';
+import { runScenario, validateScenario, scenarioConsole } from '@logiparity/scenarios';
 import { aiCommand } from './ai.js';
+import { installBrowser } from './browser.js';
+import { version } from './version.js';
 import { initConfig } from './init.js';
 
 let configuredSecrets = secretValues(undefined);
 const output = (text: string) => process.stdout.write(safeConsole(redactSecrets(text, configuredSecrets)));
-const help = `LogiParity 1.0.1 — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
+const help = `LogiParity ${version} — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
 
 Usage: logiparity check --config <parity.yaml>
        logiparity scenario run <scenario.yaml> --target <target.yaml> [--report-dir <dir>] [--allow-modules]
@@ -45,12 +47,30 @@ Drafts are marked for review, never overwritten or executed automatically.
 init writes a commented starter config without overwriting an existing file.
 `;
 
+function commandHelp(commands: readonly string[]): string {
+  const command = commands[0];
+  if (command === 'scenario')
+    return `Usage: logiparity scenario run <scenario.yaml> --target <target.yaml> [--report-dir <dir>] [--allow-modules]\n       logiparity scenario validate <scenario.yaml> --target <target.yaml>\nValidation opens no sources and performs no mutations.\n`;
+  if (command === 'check')
+    return 'Usage: logiparity check --config <parity.yaml>\nCompare configured sources. Exit 0 for parity, 1 for findings, 2 for configuration or connection failures.\n';
+  if (command === 'validate')
+    return 'Usage: logiparity validate --config <parity.yaml> [--allow-missing-env]\nValidate mappings and environment references without opening sources. For targets use scenario validate.\n';
+  if (command === 'init')
+    return 'Usage: logiparity init [--config <parity.yaml>]\nCreate a starter without overwriting an existing file; then run validate and check.\n';
+  if (command === 'install-browser')
+    return 'Usage: logiparity install-browser\nInstall Chromium for the optional Playwright UI adapter.\n';
+  if (command === 'demo') return 'Usage: logiparity demo [--bugs]\nRun the local synthetic delivery service.\n';
+  if (command === 'ai')
+    return 'Usage: logiparity ai suggest-config --openapi <spec> --entity <name>\n       logiparity ai scenario --from <description>\n       logiparity ai explain <report.json>\nPreview locally by default; --send requires an explicitly configured provider.\n';
+  return help;
+}
 async function main(): Promise<number> {
   const { values, positionals } = parseArgs({
     options: {
       config: { type: 'string', short: 'c' },
       target: { type: 'string' },
       'report-dir': { type: 'string' },
+      bugs: { type: 'boolean' },
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
       'allow-modules': { type: 'boolean' },
@@ -67,11 +87,22 @@ async function main(): Promise<number> {
     strict: true,
   });
   if (values.help) {
-    output(help);
+    output(commandHelp(positionals));
     return 0;
   }
   if (values.version) {
-    output('1.0.1\n');
+    output(version + '\n');
+    return 0;
+  }
+  if (positionals[0] === 'demo' && positionals.length === 1) {
+    const { startDemo } = await import('@logiparity/demo-delivery');
+    await startDemo({ allBugs: values.bugs === true, writeExample: true });
+    return 0;
+  }
+  if (positionals[0] === 'install-browser' && positionals.length === 1) return installBrowser();
+  if (positionals[0] === 'scenario' && positionals[1] === 'validate' && positionals[2] && values.target) {
+    await validateScenario(positionals[2], values.target, process.env);
+    output('The scenario configuration is valid. Sources were not opened and no mutations were performed.\n');
     return 0;
   }
   if (values['allow-missing-env'] && positionals[0] !== 'validate')
@@ -111,7 +142,7 @@ async function main(): Promise<number> {
   if (positionals.length === 1 && positionals[0] === 'init') {
     const destination = await initConfig(values.config ?? 'parity.yaml');
     output(
-      `Created ${destination}. Set STAGING_API_URL, edit the source mappings and run logiparity check --config "${destination}". Test and staging only.\n`,
+      `Created ${destination}. Set STAGING_API_URL and edit the source mappings. Run npx logiparity validate --config "${values.config ?? 'parity.yaml'}", then npx logiparity check --config "${values.config ?? 'parity.yaml'}". Test and staging only.\n`,
     );
     return 0;
   }
@@ -122,7 +153,7 @@ async function main(): Promise<number> {
     command: positionals[0] === 'validate' ? 'validate' : 'check',
   });
   configuredSecrets = secretValues(config);
-  for (const warning of warnings)
+  for (const warning of positionals[0] === 'validate' || !config.report.outputs.includes('console') ? warnings : [])
     process.stderr.write(safeConsole(redactSecrets(`Warning: ${warning}\n`, configuredSecrets)));
   validateConfig(config);
   if (positionals[0] === 'validate') {
@@ -131,21 +162,28 @@ async function main(): Promise<number> {
     );
     return 0;
   }
-  const report = await compareEntities(config.entities, (_, source, context) =>
-    adapters.read(source, {
-      baseDir,
-      env: process.env,
-      reportDir: resolve(baseDir, config.report.dir),
-      warn: (message) => {
-        context.warn(message);
-        process.stderr.write(safeConsole(redactSecrets(`Warning: ${message}`, configuredSecrets)) + '\n');
-      },
-    }),
+  const report = await compareEntities(
+    config.entities,
+    (_, source, context) =>
+      adapters.read(source, {
+        baseDir,
+        ...(config.allowedHosts ? { allowedHosts: config.allowedHosts } : {}),
+        env: process.env,
+        reportDir: resolve(baseDir, config.report.dir),
+        warn: (message) => {
+          context.warn(message);
+          process.stderr.write(safeConsole(redactSecrets(`Warning: ${message}`, configuredSecrets)) + '\n');
+        },
+      }),
+    process.env,
+    { patterns: config.patterns, maxInvalidRows: config.maxInvalidRows },
   );
   if (warnings.length) report.warnings = [...warnings.map((message) => ({ message })), ...(report.warnings ?? [])];
-  if (config.report.outputs.includes('console')) output(consoleReport(report, { entities: config.entities }));
+  if (config.report.outputs.includes('console'))
+    output(consoleReport(report, { entities: config.entities, displayTimezone: config.report.displayTimezone }));
   await writeReports(report, resolve(baseDir, config.report.dir), config.report.outputs, {
     entities: config.entities,
+    displayTimezone: config.report.displayTimezone,
     environment: config.environment,
     configFile: basename(values.config),
     generatedAt: new Date().toISOString(),

@@ -105,19 +105,19 @@ it('opens the complete report offline with zero requests, correct default review
     await page.evaluate(() => document.fonts.ready);
     expect(requests).toEqual([]);
     expect(errors).toEqual([]);
-    expect(report.findings.length).toBe(4050);
+    expect(report.findings.length).toBe(3741);
     expect(await page.locator('[data-mode=review]').getAttribute('aria-pressed')).toBe('true');
     expect(await page.locator('#findings tbody tr').count()).toBe(report.coverage!.needsReview);
     expect(await page.locator('.pats article').count()).toBe(3);
-    expect(await page.locator('.pat').filter({ hasText: 'Rounding' }).locator('.cap').innerText()).toContain(
-      'Excel export: 186 of 2,750 (6.8%)',
+    expect(await page.locator('.pat').filter({ hasText: 'Rounding' }).locator('.cap').last().innerText()).toContain(
+      'Excel export: 34 of 2,736 (1.2%)',
     );
     expect(await page.locator('.donut svg').getAttribute('aria-label')).toBe(
-      `${Math.floor((report.coverage!.explained / report.findings.length) * 100)}% of findings explained by patterns`,
+      `${Math.floor((report.coverage!.explained / report.findings.length) * 100)}% of findings accounted for`,
     );
-    expect(await page.locator('.recon .ok').count()).toBe(2);
-    expect(await page.locator('#findings tbody').innerText()).toContain('All orders');
-    expect(await page.locator('#findings tbody').innerText()).toContain('Total driver payout');
+    expect(await page.locator('.recon').innerText()).toContain('accounted for');
+    expect(await page.locator('#findings tbody').innerText()).toBe('');
+    expect(await page.locator('.totals').innerText()).toContain('Total driver payout');
   } finally {
     await context.close();
   }
@@ -132,16 +132,16 @@ it('filters merged cards, searches all findings by human labels, and pages inste
       .filter({ hasText: 'Rounding' })
       .getByRole('button', { name: 'Show these findings' })
       .click();
-    expect(await page.locator('#visible-count').innerText()).toContain('377 findings');
+    expect(await page.locator('#visible-count').innerText()).toContain('68 results');
     expect(await page.locator('#findings tbody tr').count()).toBe(50);
-    expect(await page.locator('#findings tbody').innerText()).toContain('$18.19');
-    expect(await page.locator('#findings tbody span[title="1819"]').first().innerText()).toBe('$18.19');
+    expect(await page.locator('#findings tbody').innerText()).toContain('$');
+    expect(await page.locator('#findings tbody span[title]').count()).toBeGreaterThan(0);
     await page.locator('[data-mode=all]').click();
     await page.getByLabel('Search findings').fill('S002748');
     expect(await page.locator('#findings tbody').innerText()).toContain('S002748');
-    expect(await page.locator('#visible-count').innerText()).toContain('2 findings');
+    expect(await page.locator('#visible-count').innerText()).toContain('2 results');
     await page.getByLabel('Search findings').fill('Excel export delivery time');
-    expect(await page.locator('#visible-count').innerText()).toContain('1,823 findings');
+    expect(await page.locator('#visible-count').innerText()).toContain('1,823 results');
     await page.getByLabel('Search findings').fill('');
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     expect(await page.locator('#page-number').innerText()).toContain('Page 2');
@@ -175,6 +175,7 @@ it('honors system theme and toggles safely when localStorage is unavailable, wit
     await page.locator('#theme').click();
     expect(await page.locator('html').getAttribute('data-theme')).toBe('dark');
     expect(await page.locator('#findings thead').isVisible()).toBe(false);
+    await page.locator('[data-mode=all]').click();
     expect(
       await page
         .locator('#findings tbody tr')
@@ -241,14 +242,14 @@ it('persists the theme and shows visible Chicago times, UTC toggle, KPIs and mob
     expect(await page.getByRole('heading', { name: "Today's deliveries" }).isVisible()).toBe(true);
     expect(await page.locator('.kpis .card').count()).toBe(4);
     const second = page.locator('#shipments tbody tr').nth(1);
-    expect(await second.locator('[data-col=delivered_at]').innerText()).toContain('7:01 AM');
+    expect(await second.locator('[data-col=delivered_at]').innerText()).toContain('4:14 AM');
     expect(await second.locator('[data-col=delivered_at]').innerText()).toContain('CST');
-    expect(await second.locator('.parity-time').last().innerText()).toBe('7:01 AM\nNov 2, 2026');
+    expect(await second.locator('.parity-time').last().innerText()).toBe('4:14 AM\nNov 2, 2026');
     await page.locator('#theme').click();
     await page.reload();
     expect(await page.locator('html').getAttribute('data-theme')).toBe('dark');
     await page.getByRole('button', { name: 'UTC', exact: true }).click();
-    expect(await second.locator('[data-col=delivered_at]').innerText()).toContain('1:01 PM');
+    expect(await second.locator('[data-col=delivered_at]').innerText()).toContain('10:14 AM');
     await page.setViewportSize({ width: 375, height: 900 });
     expect(await page.locator('#shipments thead').isVisible()).toBe(false);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

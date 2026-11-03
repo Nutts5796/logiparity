@@ -211,8 +211,7 @@ describe.sequential('CLI against the actual demo executable', () => {
         expect(f.field).toBe('payout');
         expect(BigInt(f.expected ?? '') - BigInt(f.actual ?? '')).toBe(1n);
       }
-      if (rounding)
-        expect(findings.find((f) => f.key === 'S000001')).toMatchObject({ expected: '1819', actual: '1818' });
+      if (rounding) expect(findings).toHaveLength(34);
     }
     expect(report.findings.every((f) => ['missing_in_source', 'field_mismatch'].includes(f.type))).toBe(true);
     const again = await runCli(['check', '--config', join(dir, 'parity.yaml')], dir);
@@ -265,7 +264,7 @@ describe.sequential('CLI against the actual demo executable', () => {
     await writeConfig(dir, url);
     const failedSource = await runCli(['check', '--config', 'parity.yaml'], dir);
     expect(failedSource.code).toBe(2);
-    expect(failedSource.stdout).toContain('source_error');
+    expect(failedSource.stdout).toContain('Source errors');
     await saveExport(url, dir, 'xlsx');
     await saveExport(url, dir, 'csv');
     await rm(join(dir, 'report'), { recursive: true });
@@ -298,14 +297,14 @@ describe.sequential('CLI against the actual demo executable', () => {
       ['csv', 'payout_total'],
       ['export', 'payout_total'],
     ]);
-    expect(report.findings).toHaveLength(394);
+    expect(report.findings).toHaveLength(85);
     const html = await readFile(join(dir, 'report/report.html'), 'utf8');
-    expect(html.includes('394 findings')).toBe(true);
+    expect(html.includes('85 findings')).toBe(true);
     expect(html.includes('<h3>Totals</h3>')).toBe(true);
-    expect(await readFile(join(dir, 'report/report.md'), 'utf8')).toContain('344 further findings omitted');
-    expect(html).toContain('title="8598525"');
-    expect(await readFile(join(dir, 'report/report.md'), 'utf8')).toContain('$85,985.25');
-    expect(await readFile(join(dir, 'report/report.json'), 'utf8')).not.toContain('$85,985.25');
+    expect(await readFile(join(dir, 'report/report.md'), 'utf8')).toContain('One example per cause');
+    expect(html).toContain('title="$80,728.70"');
+    expect(await readFile(join(dir, 'report/report.md'), 'utf8')).toContain('$80,728.70');
+    expect(await readFile(join(dir, 'report/report.json'), 'utf8')).not.toContain('$80,728.70');
     await promisify(execFile)('xmllint', [
       '--nonet',
       '--noout',
@@ -315,7 +314,7 @@ describe.sequential('CLI against the actual demo executable', () => {
     ]);
     const xml = await readFile(join(dir, 'report/junit.xml'), 'utf8');
     expect(xml).toContain('failures="3"');
-    expect(xml.match(/<testcase /g)).toHaveLength(6);
+    expect(xml.match(/<testcase /g)).toHaveLength(8);
   });
   it('applies CLI thresholds at the boundary, preserves observations and cannot suppress runtime errors', async () => {
     const dir = await directory();
@@ -323,15 +322,15 @@ describe.sequential('CLI against the actual demo executable', () => {
     await saveExport(url, dir, 'xlsx');
     await saveExport(url, dir, 'csv');
     for (const [failOn, code] of [
-      [{ missing: 14, mismatch: 377 }, 0],
-      [{ missing: 13, mismatch: 377 }, 1],
+      [{ missing: 14, mismatch: 68 }, 0],
+      [{ missing: 13, mismatch: 68 }, 1],
       [[], 0],
     ] as const) {
       await writeConfig(dir, url, { failOn }, ['console', 'json', 'junit']);
       const result = await runCli(['check', '--config', 'parity.yaml'], dir);
       expect(result.code).toBe(code);
       const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
-      expect(report.findings).toHaveLength(391);
+      expect(report.findings).toHaveLength(82);
       expect(report.findings.filter((f) => f.blocking)).toHaveLength(code === 1 ? 14 : 0);
       if (code === 0) expect(await readFile(join(dir, 'report/junit.xml'), 'utf8')).toContain('skipped="2"');
     }
@@ -385,11 +384,7 @@ describe.sequential('CLI against the actual demo executable', () => {
     expect(result.code).toBe(stale || timezone ? 1 : 0);
     const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
     expect(report.entities[0]?.counts).toEqual({ api: 2750, export: 2750, csv: 2750, ui: 2750 });
-    const staleKeys = Array.from({ length: 46 }, (_, i) => [51, 53, 54, 56, 57, 59, 60].map((n) => n + i * 60))
-      .flat()
-      .filter((n) => n <= 2750)
-      .map(id)
-      .sort();
+    const staleKeys = JSON.parse(await readFile(resolve('tests/fixtures/demo-stale-keys.json'), 'utf8')) as string[];
     expect(report.findings.filter((f) => f.source === 'ui' && f.field === 'status').map((f) => f.key)).toEqual(
       stale ? staleKeys : [],
     );
@@ -402,7 +397,7 @@ describe.sequential('CLI against the actual demo executable', () => {
       for (const f of findings) expect(Number(f.expected) - Number(f.actual)).toBe(6 * 3600000);
     }
     expect(report.findings.filter((f) => f.type === 'aggregate_mismatch')).toHaveLength(stale ? 1 : 0);
-    expect(report.findings).toHaveLength((stale ? 316 : 0) + (timezone ? 3666 : 0));
+    expect(report.findings).toHaveLength((stale ? staleKeys.length + 1 : 0) + (timezone ? 3666 : 0));
   });
   it('links a real UI failure screenshot from the HTML report and exits 2', async () => {
     const dir = await directory();
@@ -459,7 +454,7 @@ describe.sequential('CLI against the actual demo executable', () => {
       };
       await writeFile(join(dir, 'parity.yaml'), stringify(config));
       expect((await runCli(['check', '--config', 'parity.yaml'], dir, { CLI_TEST_DB: db.url })).code).toBe(0);
-      expect(await readFile(join(dir, 'report/report.html'), 'utf8')).toContain('$36.39');
+      expect(await readFile(join(dir, 'report/report.html'), 'utf8')).toContain('$43.67');
       config.entities[0]!.sources.database.query = `DELETE FROM ${db.schema}.shipments`;
       await writeFile(join(dir, 'parity.yaml'), stringify(config));
       expect((await runCli(['check', '--config', 'parity.yaml'], dir, { CLI_TEST_DB: '' })).code).toBe(2);

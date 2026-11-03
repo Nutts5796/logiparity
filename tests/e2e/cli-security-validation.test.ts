@@ -34,7 +34,7 @@ async function run(args: string[], cwd: string, env: NodeJS.ProcessEnv = {}) {
 }
 it('prints the installed version without configuration', async () => {
   const result = await run(['--version'], await dir());
-  expect(result).toEqual({ code: 0, stdout: '1.0.1\n', stderr: '' });
+  expect(result).toEqual({ code: 0, stdout: '1.1.0\n', stderr: '' });
 });
 it('validates schema, field references and extraction syntax without reading files or contacting servers', async () => {
   const d = await dir();
@@ -94,6 +94,7 @@ it.each(['omitted', 'fixed', 'module denied', 'module allowed', 'module outside'
           name: 'test',
           environment: 'test',
           allowMutations: true,
+          allowedHosts: ['127.0.0.1', 'localhost', 'example.test', 'example.invalid', 'staging.example.test'],
           baseUrl: server.url,
           events: { driver_no_show: { method: 'POST', path: '/event' } },
           state: { orders: { type: 'rest', baseUrl: server.url, path: '/', fields: { id: '$.id' } } },
@@ -177,8 +178,8 @@ it('redacts a configured arbitrary-name credential in console errors and every r
 });
 it('runs the documented freight example', async () => {
   const result = await run(['check', '--config', resolve('examples/freight/parity.yaml')], await dir());
-  expect(result.code, result.stdout + result.stderr).toBe(0);
-  expect(result.stdout).toContain('0 findings');
+  expect(result.code, result.stdout + result.stderr).toBe(1);
+  expect(result.stdout).toContain('12 findings');
 });
 
 it('retains secret interpolation metadata through engine and all reports', async () => {
@@ -297,6 +298,7 @@ it('reuses one raw token for target event headers and state-source authenticatio
         name: 'test',
         environment: 'test',
         allowMutations: true,
+        allowedHosts: ['127.0.0.1', 'localhost', 'example.test', 'example.invalid', 'staging.example.test'],
         baseUrl: server.url,
         headersEnv: { Authorization: { env: 'STAGING_API_TOKEN', prefix: 'Bearer ' } },
         events: { http: { method: 'POST', path: '/event' } },
@@ -354,6 +356,7 @@ it('redacts scenario secret interpolations during fixture preflight', async () =
       name: 'test',
       environment: 'test',
       allowMutations: true,
+      allowedHosts: ['127.0.0.1', 'localhost', 'example.test', 'example.invalid', 'staging.example.test'],
       baseUrl: 'http://127.0.0.1:1',
       setup: { method: 'POST', path: '/setup' },
       events: { http: { method: 'POST', path: '/event' } },
@@ -392,7 +395,8 @@ it.each(['config', 'y', '1'])(
     for (const command of ['validate', 'check']) {
       const result = await run([command, '--config', 'target.yaml'], d, { RAJ_API_TOKEN: secret });
       expect(result.code, result.stderr).toBe(0);
-      expect(result.stderr).toContain('RAJ_API_TOKEN contains a secret shorter than 8');
+      expect(result.stdout + result.stderr).toContain('RAJ_API_TOKEN contains a secret shorter than 8');
+      expect((result.stdout + result.stderr).match(/contains a secret shorter than 8/g) ?? []).toHaveLength(1);
       expect(result.stdout + result.stderr).not.toContain('invalid [REDACTED]uration');
     }
     for (const file of ['report.json', 'report.html', 'report.md', 'junit.xml'])
@@ -551,6 +555,7 @@ it('warns about minimal scenario invariants in every scenario report and omits p
       name: 'test',
       environment: 'test',
       allowMutations: true,
+      allowedHosts: ['127.0.0.1', 'localhost', 'example.test', 'example.invalid', 'staging.example.test'],
       baseUrl: server.url,
       events: { http: { method: 'POST', path: '/event' } },
       state: { orders: { type: 'rest', baseUrl: server.url, path: '/', fields: { id: '$.id' } } },
