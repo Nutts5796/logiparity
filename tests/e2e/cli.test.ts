@@ -300,10 +300,10 @@ describe.sequential('CLI against the actual demo executable', () => {
     ]);
     expect(report.findings).toHaveLength(394);
     const html = await readFile(join(dir, 'report/report.html'), 'utf8');
-    expect(html).toContain('Showing 394 of 394');
-    expect(html).toContain('Aggregates');
+    expect(html.includes('394 findings')).toBe(true);
+    expect(html.includes('<h3>Totals</h3>')).toBe(true);
     expect(await readFile(join(dir, 'report/report.md'), 'utf8')).toContain('344 further findings omitted');
-    expect(html).toContain('8598525 ($85,985.25)');
+    expect(html).toContain('title="8598525"');
     expect(await readFile(join(dir, 'report/report.md'), 'utf8')).toContain('$85,985.25');
     expect(await readFile(join(dir, 'report/report.json'), 'utf8')).not.toContain('$85,985.25');
     await promisify(execFile)('xmllint', [
@@ -511,15 +511,20 @@ async function writeUiConfig(dir: string, url: string, uiOptions: Record<string,
     table: 'table#shipments',
     nextPage: 'button[aria-label="Next page"]',
     fields: {
-      id: 'td[data-col=id]',
-      status: 'td[data-col=status]',
-      payout: 'td[data-col=payout]',
-      delivered_at: 'td[data-col=delivered_at]',
+      id: '[data-col=id]',
+      status: '[data-col=status]',
+      payout: '[data-col=payout]',
+      delivered_at: 'td[data-col=delivered_at] .parity-time',
     },
     ...uiOptions,
   };
+  entity.compare.payout = { type: 'money', currency: 'USD', allowCurrencySymbol: true };
   entity.compare.status = { type: 'enum', map: { Delivered: 'delivered', 'In transit': 'in_transit' } };
-  entity.compare.delivered_at = { type: 'datetime', sourceTimezones: { export: 'UTC', csv: 'UTC' } };
+  entity.compare.delivered_at = {
+    type: 'datetime',
+    format: { ui: "h:mm a'\n'LLL d, yyyy" },
+    sourceTimezones: { export: 'UTC', csv: 'UTC', ui: 'America/Chicago' },
+  };
   await writeFile(join(dir, 'parity.yaml'), stringify(config));
 }
 

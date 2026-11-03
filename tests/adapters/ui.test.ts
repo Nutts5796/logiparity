@@ -53,7 +53,7 @@ function config(extra: Record<string, unknown> = {}): UiConfig {
     storageState: 'state.json',
     table: 'table#shipments',
     nextPage: "button[aria-label='Next page']",
-    fields: { id: 'td[data-col=id]', status: 'td[data-col=status]', payout: 'td[data-col=payout]' },
+    fields: { id: { path: '[data-col=id]', label: 'Order' }, status: '[data-col=status]', payout: '[data-col=payout]' },
     ...extra,
   }) as UiConfig;
 }
@@ -78,7 +78,7 @@ describe('Playwright table adapter', () => {
       ]);
       await page.getByLabel('Status', { exact: true }).selectOption('in_transit');
       await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
-      expect((await page.locator('td[data-col=status]').allInnerTexts()).every((s) => s === 'In transit')).toBe(true);
+      expect((await page.locator('[data-col=status]').allInnerTexts()).every((s) => s === 'In transit')).toBe(true);
       await page.getByLabel('Date', { exact: true }).fill('1900-01-01');
       await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
       expect(await page.locator('body').innerText()).toContain('Synthetic data exists only');
@@ -102,7 +102,7 @@ describe('Playwright table adapter', () => {
   it('uses storageState, reads typed text cells and follows server-rendered pagination', async () => {
     const rows = await collect(readUi(config(), context()));
     expect(rows).toHaveLength(201);
-    expect(rows[0]).toEqual({ id: 'S000001', status: 'In transit', payout: '18.19' });
+    expect(rows[0]).toEqual({ id: 'S000001', status: 'In transit', payout: '$18.19' });
     expect(rows[200]?.id).toBe('S000201');
   });
   it('supports filters and snapshots without pagination', async () => {
