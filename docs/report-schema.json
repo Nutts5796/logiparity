@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/Nutts5796/logiparity/blob/main/docs/report-schema.json",
+  "title": "LogiParity parity report, schemaVersion 1",
+  "type": "object",
+  "required": ["schemaVersion", "entities", "findings"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "patterns": { "type": "object", "properties": { "minCount": { "type": "integer", "minimum": 3 } } },
+    "coverage": {
+      "type": "object",
+      "required": ["explained", "needsReview"],
+      "properties": {
+        "explained": { "type": "integer", "minimum": 0 },
+        "needsReview": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["entity", "reference", "counts"],
+        "properties": {
+          "entity": { "type": "string" },
+          "reference": { "type": "string" },
+          "counts": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+          "pluralLabel": { "type": "string" },
+          "aggregates": { "type": "array", "items": { "$ref": "#/definitions/aggregate" } }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "entity", "source", "key", "field", "message"],
+        "properties": {
+          "type": {
+            "enum": [
+              "missing_in_source",
+              "extra_in_source",
+              "field_mismatch",
+              "aggregate_mismatch",
+              "duplicate_key",
+              "duplicate_value",
+              "invalid_value",
+              "source_error"
+            ]
+          },
+          "entity": { "type": "string" },
+          "source": { "type": "string" },
+          "key": { "type": "string" },
+          "field": { "type": "string" },
+          "message": { "type": "string" },
+          "row": { "type": "integer", "minimum": 1 },
+          "keyParts": { "type": "array", "items": { "type": "string" } },
+          "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+          "expected": { "$ref": "#/definitions/scalar" },
+          "actual": { "$ref": "#/definitions/scalar" },
+          "blocking": { "type": "boolean" }
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["entity", "source", "field", "kind", "count", "summary"],
+        "properties": {
+          "entity": { "type": "string" },
+          "source": { "type": "string" },
+          "field": { "type": "string" },
+          "summary": { "type": "string" },
+          "kind": { "enum": ["datetime_offset", "money_delta", "value_mapping", "missing_stride", "extra_stride"] },
+          "count": { "type": "integer", "minimum": 3 },
+          "findingIndexes": { "type": "array", "uniqueItems": true, "items": { "type": "integer", "minimum": 0 } }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "object", "required": ["message"], "properties": { "message": { "type": "string" } } }
+    }
+  },
+  "definitions": {
+    "scalar": { "type": ["string", "number", "boolean", "null"] },
+    "aggregate": {
+      "type": "object",
+      "required": ["name", "type", "values", "skippedSources"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "enum": ["sum", "count"] },
+        "values": { "type": "object", "additionalProperties": { "type": ["string", "number"] } },
+        "skippedSources": { "type": "array", "items": { "type": "string" } },
+        "valuesByCurrency": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": { "type": "string", "pattern": "^-?[0-9]+$" }
+          }
+        },
+        "reconciliation": {
+          "type": "object",
+          "additionalProperties": { "type": "object", "required": ["missingRows", "patterns", "remainder"] }
+        }
+      }
+    }
+  }
+}
