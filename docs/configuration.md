@@ -168,7 +168,7 @@ Reference sources must map every aggregate input and predicate field. Partial co
 
 ## Failure selection and thresholds
 
-The default per-entity policy is `failOn: [missing, extra, mismatch, aggregate, duplicate]`. Categories map respectively to missing_in_source, extra_in_source, field_mismatch, aggregate_mismatch and duplicate_key. A list means zero allowed findings in each selected category; omitted categories are nonblocking. `failOn: []` or `{}` allows ordinary findings as observations.
+The default per-entity policy is `failOn: [missing, extra, mismatch, aggregate, duplicate, invalid]`. Categories map respectively to missing_in_source, extra_in_source, field_mismatch, aggregate_mismatch and duplicate_key. A list means zero allowed findings in each selected category; omitted categories are nonblocking. `failOn: []` or `{}` allows ordinary findings as observations.
 
 For inclusive allowed counts:
 

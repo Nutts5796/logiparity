@@ -20,6 +20,7 @@ export async function writeDemoExample(port: number): Promise<void> {
     await writeFile(resolve(directory, 'target.yaml'), target, { flag: 'wx' });
   } catch (error) {
     if (!error || typeof error !== 'object' || Reflect.get(error, 'code') !== 'EEXIST') throw error;
+    await warnStalePort(resolve(directory, 'target.yaml'), port);
   }
   const parity = (
     await readFile(new URL('../../../examples/demo/parity-scenario.yaml', import.meta.url), 'utf8')
@@ -28,6 +29,7 @@ export async function writeDemoExample(port: number): Promise<void> {
     await writeFile(resolve(directory, 'parity-scenario.yaml'), parity, { flag: 'wx' });
   } catch (error) {
     if (!error || typeof error !== 'object' || Reflect.get(error, 'code') !== 'EEXIST') throw error;
+    await warnStalePort(resolve(directory, 'parity-scenario.yaml'), port);
   }
   const fields = `shipment_id: 'Shipment ID', status: Status, payout: 'Driver payout', delivered_at: 'Delivered at'`;
   const config = `# Synthetic closed-day data; no production credentials.
@@ -78,7 +80,7 @@ report:
     await writeFile(resolve(directory, 'parity.yaml'), config, { flag: 'wx' });
   } catch (error) {
     if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error;
-    process.stdout.write('Keeping existing logiparity-demo/parity.yaml. Check its port if DEMO_PORT changed.\n');
+    await warnStalePort(resolve(directory, 'parity.yaml'), port);
   }
   process.stdout.write(`
 In another terminal, from the same project directory:
@@ -90,4 +92,13 @@ In another terminal, from the same project directory:
 Scenario files and target are in logiparity-demo/scenarios and logiparity-demo/target.yaml. Scenarios reset demo state; restart the demo afterwards to return to the original dataset.
 Open logiparity-demo/report/report.html from the project directory. Stop the service with Ctrl+C.
 `);
+}
+
+async function warnStalePort(file: string, port: number): Promise<void> {
+  const content = await readFile(file, 'utf8');
+  const urls = [...content.matchAll(/http:\/\/127\.0\.0\.1:(\d+)/g)];
+  if (urls.some((match) => Number(match[1]) !== port))
+    process.stderr.write(
+      `Keeping existing ${file}: it still uses a different demo port. Update its URLs to http://127.0.0.1:${port}, or remove the file and restart the demo to regenerate it.\n`,
+    );
 }

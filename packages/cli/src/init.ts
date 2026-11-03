@@ -38,7 +38,7 @@ entities:
       - { name: delivered_count, label: Delivered orders, type: count, where: { status: delivered } }
       - { name: payout_total, label: Total driver payout, type: sum, field: payout }
     # List: any finding in a selected category fails. [] is report-only.
-    failOn: [missing, extra, mismatch, aggregate, duplicate]
+    failOn: [missing, extra, mismatch, aggregate, duplicate, invalid]
     # Or use allowed counts: { missing: 2, mismatch: 10, aggregate: 0 }
     # Runtime/source errors always exit 2, regardless of failOn.
 report:

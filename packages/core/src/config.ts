@@ -11,6 +11,7 @@ import { parseDocument } from 'yaml';
 import { z } from 'zod';
 import { normalize, sourceRule } from './normalize.js';
 import { validAllowedHost } from './hosts.js';
+import { DateTime } from 'luxon';
 import { findingCategories } from './policy.js';
 
 const name = z.string().min(1);
@@ -33,11 +34,30 @@ const numberFormat = z
   .object({ decimal: z.string().length(1), group: z.string().length(1).optional() })
   .strict()
   .refine((value) => value.decimal !== value.group, 'Decimal and grouping separators must differ');
+const datetimeFormat = name.refine((format) => {
+  const tokens = DateTime.fromFormatExplain('', format).tokens;
+  const supported =
+    /^(?:S{1,3}|u{1,3}|s{1,2}|m{1,2}|h{1,2}|H{1,2}|Z{1,5}|z|a|d{1,2}|c{1,5}|E{1,5}|L{1,5}|M{1,5}|y{1,6}|G{1,5}|k{2,4}|W{1,2}|o{1,3}|q{1,2}|X|x|D{1,4}|t{1,4}|T{1,4}|f{1,4}|F{1,4})$/;
+  return (
+    tokens.some((token) => !token.literal && supported.test(token.val)) &&
+    tokens.every((token) => token.literal || !/[A-Za-z]/.test(token.val) || supported.test(token.val))
+  );
+}, 'Use supported datetime format tokens, e.g. yyyy-MM-dd HH:mm; quote literal text');
+export const reportFileMode = z
+  .union([
+    z
+      .string()
+      .regex(/^0?[0-7]{3}$/)
+      .transform((value) => parseInt(value, 8)),
+    z.number().int().min(0).max(0o777),
+  ])
+  .default(0o600);
 const sourceFormatting = {
+  maxRows: z.number().int().min(1).max(10000000).default(100000),
   currencyField: name.optional(),
   locale: locale.optional(),
   numberFormat: numberFormat.optional(),
-  datetimeFormat: name.optional(),
+  datetimeFormat: datetimeFormat.optional(),
 };
 
 const envName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
@@ -244,7 +264,7 @@ export const ruleSchema = z
     type: z.enum(['string', 'number', 'money', 'datetime', 'enum']),
     allowCurrencySymbol: z.boolean().default(false),
     negativeParentheses: z.boolean().default(false),
-    format: z.union([name, z.record(name, name)]).optional(),
+    format: z.union([datetimeFormat, z.record(name, datetimeFormat)]).optional(),
     allowNumber: z.boolean().default(false),
     caseFold: z.boolean().default(false),
     emptyAsNull: z.boolean().default(true),
@@ -296,7 +316,9 @@ export const aggregateSchema = z.discriminatedUnion('type', [
 ]);
 const category = z.enum(findingCategories, { error: `Choose a failOn category: ${findingCategories.join(', ')}` });
 export const failOnSchema = z
-  .union([z.array(category), z.partialRecord(category, z.number().int().min(0).max(Number.MAX_SAFE_INTEGER))])
+  .union([z.array(category), z.partialRecord(category, z.number().int().min(0).max(Number.MAX_SAFE_INTEGER))], {
+    error: `Choose failOn categories: ${findingCategories.join(', ')}`,
+  })
   .default([...findingCategories]);
 export const entitySchema = z
   .object({
@@ -370,7 +392,9 @@ export const entitySchema = z
             ctx.addIssue({
               code: 'custom',
               path: ['sources', source, 'rollup'],
-              message: `Mapped field ${field} must appear in rollup by, sum, first, duplicates.by or where`,
+              message: Object.hasOwn(config.fields, field)
+                ? `Mapped field ${field} must appear in rollup by, sum, first, duplicates.by or where`
+                : `Rollup field ${field} is not mapped; add it to fields`,
             });
         for (const field of config.unique)
           if (![...keyFields(r.by), ...r.first].includes(field))
@@ -443,6 +467,7 @@ export const entitySchema = z
 export const configSchema = z
   .object({
     version: z.literal(1),
+    maxFindings: z.number().int().min(1).max(1000000).default(10000),
     maxInvalidRows: z.number().int().min(0).max(1000000).default(50),
     publicEnv: z.array(envName).default([]),
     secretEnv: z.array(envName).default([]),
@@ -459,6 +484,7 @@ export const configSchema = z
     variables: z.record(name, z.string()).default({}),
     report: z
       .object({
+        fileMode: reportFileMode,
         outputs: z
           .array(z.enum(['console', 'html', 'junit', 'json', 'markdown']))
           .min(1)
@@ -476,7 +502,7 @@ export const configSchema = z
         dir: name.default('./logiparity-report'),
       })
       .strict()
-      .default({ outputs: ['console', 'json'], dir: './logiparity-report', displayTimezone: 'UTC' }),
+      .default({ outputs: ['console', 'json'], dir: './logiparity-report', displayTimezone: 'UTC', fileMode: 0o600 }),
   })
   .strict()
   .refine((v) => new Set(v.entities.map((e) => e.name)).size === v.entities.length, 'Entity names must be unique');
@@ -609,7 +635,17 @@ export async function loadConfig(
     secrets: secretValues(result.data, env),
     referencedEnv: referencedEnvironment(result.data),
     missingEnv,
-    warnings: shortSecretWarnings(result.data, env),
+    warnings: [
+      ...shortSecretWarnings(result.data, env),
+      ...result.data.entities
+        .filter((entity) =>
+          Array.isArray(entity.failOn) ? !entity.failOn.includes('invalid') : !Object.hasOwn(entity.failOn, 'invalid'),
+        )
+        .map(
+          (entity) =>
+            `${entity.label ?? entity.name}: explicit failOn omits invalid; bad cells will not block the run. Add invalid to failOn.`,
+        ),
+    ],
   };
 }
 
@@ -684,7 +720,7 @@ export function formatConfigIssues(schema: z.ZodType, raw: unknown, error: z.Zod
       }
       current = unwrap(current, value);
       const keys = current instanceof z.ZodObject ? Object.keys(current.shape).sort() : [];
-      return `  ${issue.path.map((part, index) => (typeof part === 'number' ? `[${part}]` : `${index ? '.' : ''}${String(part)}`)).join('') || '<root>'}: ${issue.message}${issue.code === 'unrecognized_keys' && keys.length ? `. Valid keys: ${keys.join(', ')}` : ''}`;
+      return `  ${issue.path.map((part, index) => (typeof part === 'number' ? `[${part}]` : `${index ? '.' : ''}${String(part)}`)).join('') || '<root>'}: ${issue.path.includes('failOn') ? `Choose failOn categories: ${findingCategories.join(', ')}` : issue.message}${issue.code === 'unrecognized_keys' && keys.length ? `. Valid keys: ${keys.join(', ')}` : ''}`;
     })
     .join('\n');
 }

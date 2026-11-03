@@ -54,7 +54,7 @@ entities:
     aggregates:
       - { name: delivered_count, label: Delivered orders, type: count, where: { status: delivered } }
       - { name: payout_total, label: Total driver payout, type: sum, field: payout }
-    failOn: [missing, extra, mismatch, aggregate, duplicate]
+    failOn: [missing, extra, mismatch, aggregate, duplicate, invalid]
 variables:
   date: '2026-11-02'
 report:
