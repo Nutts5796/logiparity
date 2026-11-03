@@ -13,6 +13,7 @@ const cli = resolve('node_modules/.bin/logiparity');
 const demo = resolve('apps/demo-delivery/dist/main.js');
 const temporary: string[] = [];
 const children: ChildProcess[] = [];
+const startupLogs=new Map<string,string>();
 afterEach(async () => {
   await Promise.all(children.splice(0).map(async (child) => { if (child.exitCode === null) { child.kill('SIGTERM'); await once(child, 'exit'); } }));
   await Promise.all(temporary.splice(0).map((d) => rm(d, { recursive: true, force: true })));
@@ -28,7 +29,7 @@ async function startDemo(flags: Record<string, string> = {}, args: string[] = []
     let output = '';
     child.stdout?.on('data', (chunk: Buffer) => {
       output += chunk.toString(); const match = output.match(/http:\/\/127\.0\.0\.1:\d+/);
-      if (match) { clearTimeout(timeout); resolveUrl(match[0]); }
+      if (match) { clearTimeout(timeout); startupLogs.set(match[0],output);resolveUrl(match[0]); }
     });
   });
 }
@@ -63,9 +64,8 @@ async function writeConfig(dir: string, url: string, entityOptions: Record<strin
 interface JsonFinding { type: string; source: string; key: string; field: string; expected?: string | number; actual?: string | number; blocking?: boolean; screenshot?: string }
 interface JsonReport { schemaVersion: number; findings: JsonFinding[]; entities: { counts: Record<string, number> }[] }
 const id = (i: number) => `S${String(i).padStart(6, '0')}`;
-// Frozen expected affected positions for the synthetic decimal bases, repeated every 300 records.
-const roundingPositions = [1, 2, 3, 4, 26, 27, 28, 114, 116, 118, 120, 139, 141, 143, 145];
-const roundingKeys = Array.from({ length: 10 }, (_, block) => roundingPositions.map((p) => block * 300 + p)).flat().filter((i) => i <= 2750).map(id).sort();
+// Frozen affected keys for the realistic synthetic payout fixture.
+const roundingKeys = JSON.parse(await readFile(resolve('tests/fixtures/demo-rounding-keys.json'),'utf8')) as string[];
 const droppedKeys = [...Array.from({ length: 13 }, (_, i) => (i + 1) * 200), 2750].map(id);
 
 describe.sequential('CLI against the actual demo executable', () => {
@@ -73,6 +73,7 @@ describe.sequential('CLI against the actual demo executable', () => {
     const url = await startDemo({}, ['--bugs']);
     const health = await fetch(`${url}/health`).then((r) => r.json()) as { bugs: Record<string, boolean> };
     expect(health.bugs).toEqual({ dropLastRow: true, roundingPayout: true, staleUi: true, timezoneShift: true, loseOrder: true, doubleAssign: true });
+    for(const name of ['missing export rows','incorrect payout rounding','stale dispatcher statuses','shifted export datetimes','orders lost during replanning','duplicate assignments after replanning'])expect(startupLogs.get(url)).toContain(name);
   });
   it.each([
     { name: 'bugs off', drop: false, rounding: false },
@@ -93,7 +94,7 @@ describe.sequential('CLI against the actual demo executable', () => {
       const findings = report.findings.filter((f) => f.type === 'field_mismatch' && f.source === source);
       expect(findings.map((f) => f.key)).toEqual(rounding ? roundingKeys.filter((key) => source === 'csv' || !drop || !droppedKeys.includes(key)) : []);
       for (const f of findings) { expect(f.field).toBe('payout'); expect(BigInt(f.expected ?? '') - BigInt(f.actual ?? '')).toBe(1n); }
-      if (rounding) expect(findings.find((f) => f.key === 'S000001')).toMatchObject({ expected: '101', actual: '100' });
+      if (rounding) expect(findings.find((f) => f.key === 'S000001')).toMatchObject({ expected: '1819', actual: '1818' });
     }
     expect(report.findings.every((f) => ['missing_in_source', 'field_mismatch'].includes(f.type))).toBe(true);
     const again = await runCli(['check', '--config', join(dir, 'parity.yaml')], dir);
@@ -136,22 +137,22 @@ describe.sequential('CLI against the actual demo executable', () => {
     const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
     const aggregates = report.findings.filter((f) => f.type === 'aggregate_mismatch');
     expect(aggregates.map((f) => [f.source, f.field])).toEqual([['export', 'delivered_count'], ['csv', 'payout_total'], ['export', 'payout_total']]);
-    expect(report.findings).toHaveLength(301);
-    const html = await readFile(join(dir, 'report/report.html'), 'utf8'); expect(html).toContain('Showing 301 of 301'); expect(html).toContain('Aggregates');
-    expect(await readFile(join(dir, 'report/report.md'), 'utf8')).toContain('251 further findings omitted');
-    expect(html).toContain('682625 ($6,826.25)'); expect(await readFile(join(dir, 'report/report.md'), 'utf8')).toContain('$6,826.25');
-    expect(await readFile(join(dir, 'report/report.json'), 'utf8')).not.toContain('$6,826.25');
+    expect(report.findings).toHaveLength(394);
+    const html = await readFile(join(dir, 'report/report.html'), 'utf8'); expect(html).toContain('Showing 394 of 394'); expect(html).toContain('Aggregates');
+    expect(await readFile(join(dir, 'report/report.md'), 'utf8')).toContain('344 further findings omitted');
+    expect(html).toContain('8598525 ($85,985.25)'); expect(await readFile(join(dir, 'report/report.md'), 'utf8')).toContain('$85,985.25');
+    expect(await readFile(join(dir, 'report/report.json'), 'utf8')).not.toContain('$85,985.25');
     await promisify(execFile)('xmllint', ['--nonet', '--noout', '--schema', resolve('tests/fixtures/junit/JUnit.xsd'), join(dir, 'report/junit.xml')]);
     const xml = await readFile(join(dir, 'report/junit.xml'), 'utf8'); expect(xml).toContain('failures="3"'); expect(xml.match(/<testcase /g)).toHaveLength(6);
   });
   it('applies CLI thresholds at the boundary, preserves observations and cannot suppress runtime errors', async () => {
     const dir = await directory(); const url = await startDemo({ BUG_EXPORT_DROPS_LAST_ROW: '1', BUG_ROUNDING_PAYOUT: '1' });
     await saveExport(url, dir, 'xlsx'); await saveExport(url, dir, 'csv');
-    for (const [failOn, code] of [[{ missing: 14, mismatch: 284 }, 0], [{ missing: 13, mismatch: 284 }, 1], [[], 0]] as const) {
+    for (const [failOn, code] of [[{ missing: 14, mismatch: 377 }, 0], [{ missing: 13, mismatch: 377 }, 1], [[], 0]] as const) {
       await writeConfig(dir, url, { failOn }, ['console', 'json', 'junit']);
       const result = await runCli(['check', '--config', 'parity.yaml'], dir); expect(result.code).toBe(code);
       const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
-      expect(report.findings).toHaveLength(298);
+      expect(report.findings).toHaveLength(391);
       expect(report.findings.filter((f) => f.blocking)).toHaveLength(code === 1 ? 14 : 0);
       if (code === 0) expect(await readFile(join(dir, 'report/junit.xml'), 'utf8')).toContain('skipped="2"');
     }

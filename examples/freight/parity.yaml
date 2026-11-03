@@ -19,4 +19,4 @@ entities:
       delivered_at: {type: datetime}
 report:
   outputs: [console, html, json, markdown, junit]
-  dir: ../../output/freight-report
+  dir: ./logiparity-report

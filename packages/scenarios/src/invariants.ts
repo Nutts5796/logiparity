@@ -66,7 +66,7 @@ export function checkBuiltin(definition: Invariant, state: InvariantState): Inva
     case 'sla_window_violations': for (const o of after.orders) if (active(o.status) && Date.parse(o.eta) > Date.parse(o.delivery_end)) failed.add(o.id); break;
   }
   const max = typeof definition === 'object' && 'sla_window_violations' in definition ? definition.sla_window_violations.max : 0;
-  return { name, passed: failed.size <= max, affectedKeys: [...failed].sort(), explanation: failed.size ? `${failed.size} order(s) violate ${name}; allowed ${max}.` : `${name}: all applicable orders satisfy the invariant.` };
+  return { name, passed: failed.size <= max, affectedKeys: [...failed].sort(), explanation: failed.size ? `${failed.size} ${failed.size===1?'order violates':'orders violate'} ${name}; the allowed count is ${max}.` : `${name}: all applicable orders satisfy the invariant.` };
 }
 export type Check = (state: InvariantState) => InvariantResult | Promise<InvariantResult>;
 const resultSchema = z.object({ name: id, passed: z.boolean(), affectedKeys: z.array(id), explanation: id }).strict();

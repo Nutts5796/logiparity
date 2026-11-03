@@ -47,7 +47,7 @@ describe('Playwright table adapter', () => {
   });
   it('uses storageState, reads typed text cells and follows server-rendered pagination', async () => {
     const rows = await collect(readUi(config(), context()));
-    expect(rows).toHaveLength(201); expect(rows[0]).toEqual({ id: 'S000001', status: 'In transit', payout: '1.01' }); expect(rows[200]?.id).toBe('S000201');
+    expect(rows).toHaveLength(201); expect(rows[0]).toEqual({ id: 'S000001', status: 'In transit', payout: '18.19' }); expect(rows[200]?.id).toBe('S000201');
   });
   it('supports filters and snapshots without pagination', async () => {
     const options = config({ url: url + '/dispatcher?status=delivered' });

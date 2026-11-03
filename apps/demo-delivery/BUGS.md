@@ -5,7 +5,7 @@ All records are synthetic. Never connect this application to production data or 
 | Flag (`1` enables) | Behavior | Evidence |
 | --- | --- | --- |
 | `BUG_EXPORT_DROPS_LAST_ROW` | Drops the final XLSX record in every export page of up to 200 rows, including the final partial page. CSV remains complete. | Missing `S000200`, `S000400`, …, `S002600`, `S002750`: 14 findings. |
-| `BUG_ROUNDING_PAYOUT` | Uses intentionally wrong floating-point half-up rounding on decimal payout bases in CSV and XLSX. | `S000001`: expected `1.01`, actual `1.00`. There are 142 affected orders per format. |
+| `BUG_ROUNDING_PAYOUT` | Uses intentionally wrong floating-point half-up rounding on decimal payout bases in CSV and XLSX. | `S000001`: expected `18.19`, actual `18.18`. There are 191 affected orders per format. |
 | `BUG_STATUS_STALE_UI` | UI shows In transit for orders delivered in the last ten minutes of the virtual snapshot. API/exports remain current. | 315 field mismatches with exact keys, starting at S000051; UI delivered_count is 1518 instead of 1833. |
 | `BUG_TZ_SHIFT_EXPORT` | CSV/XLSX delivered_at and ETA write America/Chicago local wall time without an offset, violating their UTC serialization contract. | UTC-configured export readers see a six-hour shift on 1833 delivered orders per complete export. |
 | `BUG_REPLAN_LOSES_ORDER` | Drops the first affected order after a breakdown replan. | Breakdown scenario: no_order_lost fails for S000801. |

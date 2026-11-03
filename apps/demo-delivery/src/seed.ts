@@ -26,7 +26,7 @@ export function seedData(date = DEMO_DATE): DemoData {
   const shipments: Shipment[] = Array.from({ length: 2750 }, (_, i) => {
     const driver = drivers[Math.floor(i / 50)];
     if (!driver) throw new Error('Synthetic seed driver index is invalid.');
-    const milli = 1005 + (i % 300) * 10;
+    const milli = 18005 + ((i + 18) % 2700) * 10;
     const delivered = i % 3 !== 0;
     return {
       id: `S${String(i + 1).padStart(6, '0')}`, driver_id: driver.id, vehicle_id: driver.vehicle_id,
