@@ -62,7 +62,13 @@ Expected: zero findings and exit 0. Open `logiparity-report/report.html`. The sa
 
 Stop the demo, run `DEMO_PORT=3010 npm run demo:bugs`, then repeat the export and check commands. The report finds missing rows, payout differences and shifted datetimes. Repeated patterns get one summary line each, for example "1,833 delivered_at values in csv differ by exactly -6h (likely timezone)", and every individual finding stays listed below.
 
-![Synthetic parity report](docs/images/report.png)
+![Light parity report](docs/images/report.png)
+
+<details><summary>Dark report</summary>
+
+![Dark parity report](docs/images/report-dark.png)
+
+</details>
 
 <details><summary>Dispatcher screen</summary>
 
@@ -70,7 +76,7 @@ Stop the demo, run `DEMO_PORT=3010 npm run demo:bugs`, then repeat the export an
 
 </details>
 
-HTML and Markdown show currency values beside minor units, and ISO UTC beside epoch milliseconds. JSON retains normalized values and adds pattern groups without removing individual findings.
+HTML, Markdown and console reports show currency amounts and readable UTC dates, with a separate difference. HTML tooltips and JSON keep the raw values. The offline HTML report groups causes, reconciles money totals and opens with the findings that need individual review.
 
 ## Try it on your staging
 
@@ -85,17 +91,21 @@ version: 1
 environment: test
 entities:
   - name: shipment
+    label: Order
+    pluralLabel: orders
     key: shipment_id
     sources:
       api:
+        label: API
         type: rest
         baseUrl: ${STAGING_API_URL}
         path: /api/shipments
         items: $.data[*]
         pagination: { type: page, totalPath: $.pagination.total, pageParam: page, sizeParam: limit, size: 200 }
         # auth: { type: bearer, tokenEnv: STAGING_API_TOKEN }
-        fields: { shipment_id: $.id, status: $.status, payout: $.driver_payout }
+        fields: { shipment_id: $.id, status: $.status, payout: {path: $.driver_payout, label: Driver payout} }
       export:
+        label: CSV export
         type: csv
         file: ./shipments.csv
         headerRow: 1
@@ -106,8 +116,8 @@ entities:
       # Tolerance is in minor units.
       payout: { type: money, currency: USD, tolerance: 0 }
     aggregates:
-      - { name: delivered_count, type: count, where: { status: delivered } }
-      - { name: payout_total, type: sum, field: payout }
+      - { name: delivered_count, label: Delivered orders, type: count, where: { status: delivered } }
+      - { name: payout_total, label: Total driver payout, type: sum, field: payout }
     # List: any finding in a selected category fails. [] is report-only.
     failOn: [missing, extra, mismatch, aggregate, duplicate]
     # Or use allowed counts: { missing: 2, mismatch: 10, aggregate: 0 }

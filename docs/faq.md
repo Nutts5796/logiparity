@@ -4,9 +4,9 @@
 
 **What is compared?** The first source in an entity is the reference; other sources are joined by the canonical key. Missing/extra records, duplicate keys, scalar mismatches and configured aggregates become findings. Duplicate keys contribute the first row once. Source failures exit 2 and suppress misleading incomplete comparisons.
 
-**Why did a one-cent difference appear?** Monetary inputs must be decimal strings, not floating-point numbers. Normalization converts to exact bigint minor units; tolerance is an integer in those units. The intentionally buggy demo export rounds some values incorrectly. HTML/Markdown show both minor units and configured currency equivalents; JSON keeps exact minor-unit strings.
+**Why did a one-cent difference appear?** Monetary inputs must be decimal strings, not floating-point numbers. Normalization converts to exact bigint minor units; tolerance is an integer in those units. The intentionally buggy demo export rounds some values incorrectly. HTML, Markdown and console show configured currency amounts with a difference. HTML tooltips and JSON keep exact minor-unit values.
 
-**Why show both epoch milliseconds and UTC text?** Normalized JSON retains numeric UTC epoch milliseconds for consumers. HTML/Markdown add ISO 8601 UTC from the field's comparison rule, preserving nonzero milliseconds. Numeric fields are not guessed to be dates. Set source timezones explicitly for offsetless timestamps; do not reinterpret the injected timezone bug to hide it.
+**Where are raw dates and money?** JSON and JUnit retain numeric UTC epoch milliseconds and integer minor units. HTML tooltips retain raw values, while human reports show readable UTC dates and currencies with a separate difference. Numeric fields are not guessed to be dates. Set source timezones explicitly for offsetless timestamps; do not reinterpret the injected timezone bug to hide it.
 
 **Why can all sources agree while a scenario fails?** An order can disappear from every surface or be assigned twice in independent assignment records. Domain invariants compare baseline and final state; post-scenario Parity independently checks the final surfaces. Both results remain visible.
 

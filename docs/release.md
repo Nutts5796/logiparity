@@ -2,7 +2,7 @@
 
 Before tagging 1.0.1, run lint, type checks, unit tests and end-to-end tests on Node 20 and 22. Run `npm run test:package` with npm 10.9.9 and 11.6.0. The packaging check creates a fresh project and runs plain install, removes node_modules, runs plain npm ci and runs plain npm audit. All three must succeed and the audit must report zero vulnerabilities. The separate empty-cache offline installation remains covered.
 
-`npm run check:third-party` compares the remaining development schema fixture and its license with an immutable upstream tarball. No vendored runtime code remains. Review the [dependency audit](dependency-audit.md).
+`npm run check:third-party` compares the development schema fixture and its license with an immutable upstream tarball, and verifies the bundled font subsets and OFL texts against their recorded upstream URLs and hashes. No vendored runtime code remains. Review the [dependency audit](dependency-audit.md).
 
 ## One-time npm setup
 

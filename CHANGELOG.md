@@ -6,6 +6,12 @@
 
 ### Fixed
 
+- HTML reports use the Studio layout, readable labels, offline fonts and light and dark themes.
+- Pattern charts merge matching causes across sources and filter the paginated finding table.
+- Money totals reconcile missing rows and pattern deltas with an honest unexplained remainder.
+- Human reports show readable UTC dates and currency values with a separate difference. Raw JSON and JUnit values remain unchanged.
+- The demo dispatcher shows local depot time, a UTC toggle, operational counts and stacked mobile rows.
+
 - Consumer projects can install the tarball, run npm ci and run npm audit without audit suppression. The runtime no longer includes ExcelJS or its archiver chain.
 - XLSX reading streams XML and stores shared strings on disk with a bounded memory cache.
 - Short secrets no longer corrupt unrelated words, and encoded credentials are redacted from diagnostics.
