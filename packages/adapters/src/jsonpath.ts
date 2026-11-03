@@ -8,7 +8,8 @@ export function selectJson(value: unknown, path: string): unknown[] {
   while (offset < rest.length) {
     pattern.lastIndex = offset;
     const match = pattern.exec(rest);
-    if (!match) throw new Error(`Unsupported JSONPath ${path}; use properties, quoted properties, array indexes and [*].`);
+    if (!match)
+      throw new Error(`Unsupported JSONPath ${path}; use properties, quoted properties, array indexes and [*].`);
     tokens.push(match[1] ?? match[2] ?? match[3] ?? match[4] ?? '');
     offset = pattern.lastIndex;
   }
@@ -16,10 +17,12 @@ export function selectJson(value: unknown, path: string): unknown[] {
   for (const token of tokens) {
     nodes = nodes.flatMap((node) => {
       if (token === '*') {
-        if (!Array.isArray(node)) throw new Error(`JSONPath ${path}: [*] requires an array; correct the extraction path.`);
+        if (!Array.isArray(node))
+          throw new Error(`JSONPath ${path}: [*] requires an array; correct the extraction path.`);
         return node as unknown[];
       }
-      if (!node || typeof node !== 'object' || !Object.hasOwn(node, token)) throw new Error(`JSONPath ${path}: property ${token} is missing; correct the field mapping.`);
+      if (!node || typeof node !== 'object' || !Object.hasOwn(node, token))
+        throw new Error(`JSONPath ${path}: property ${token} is missing; correct the field mapping.`);
       return [Reflect.get(node, token) as unknown];
     });
   }

@@ -7,16 +7,18 @@ entities:
       tms:
         type: csv
         file: ./tms-loads.csv
-        fields: {load_id: "Load ID", carrier_pay: "Carrier pay", status: Status, delivered_at: "Delivered at"}
+        fields: { load_id: 'Load ID', carrier_pay: 'Carrier pay', status: Status, delivered_at: 'Delivered at' }
       settlement:
         type: csv
         file: ./carrier-settlement-lines.csv
-        fields: {load_id: "Load ID", carrier_pay: Amount, charge: Charge, status: Status, delivered_at: "Delivered at"}
-        rollup: {by: load_id, sum: [carrier_pay], first: [status, delivered_at], duplicates: {by: [load_id, charge]}}
+        fields:
+          { load_id: 'Load ID', carrier_pay: Amount, charge: Charge, status: Status, delivered_at: 'Delivered at' }
+        rollup:
+          { by: load_id, sum: [carrier_pay], first: [status, delivered_at], duplicates: { by: [load_id, charge] } }
     compare:
-      carrier_pay: {type: money, currency: USD}
-      status: {type: enum}
-      delivered_at: {type: datetime}
+      carrier_pay: { type: money, currency: USD }
+      status: { type: enum }
+      delivered_at: { type: datetime }
 report:
   outputs: [console, html, json, markdown, junit]
   dir: ./logiparity-report

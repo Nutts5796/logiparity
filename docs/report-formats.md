@@ -2,13 +2,13 @@
 
 Select any subset of `console`, `html`, `junit`, `json`, `markdown` in `report.outputs`. Defaults remain console and JSON by default. The shipped demo and `logiparity init` example select all five. Paths are relative to `report.dir`; repeated outputs are written once. Console-only checks do not create a report directory. Write failures include the format/path and return exit 2.
 
-| Output | Destination | Content |
-| --- | --- | --- |
-| console | stdout | Counts, blocking count, first ten findings. |
-| html | report.html | Complete findings and aggregate values, entity/type filters and text search. |
-| junit | junit.xml | One suite per entity and six cases per suite, one for each finding type. |
-| json | report.json | Complete versioned machine-readable result. |
-| markdown | report.md | Summary counts/aggregates and the first 50 findings for a merge request comment. |
+| Output   | Destination | Content                                                                          |
+| -------- | ----------- | -------------------------------------------------------------------------------- |
+| console  | stdout      | Counts, blocking count, first ten findings.                                      |
+| html     | report.html | Complete findings and aggregate values, entity/type filters and text search.     |
+| junit    | junit.xml   | One suite per entity and six cases per suite, one for each finding type.         |
+| json     | report.json | Complete versioned machine-readable result.                                      |
+| markdown | report.md   | Summary counts/aggregates and the first 50 findings for a merge request comment. |
 
 ## HTML
 

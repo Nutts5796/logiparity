@@ -6,8 +6,11 @@ import { configSchema, errorText, loadConfig, ruleSchema, sourceSchema } from '@
 
 const temporary: string[] = [];
 async function configFile(content: string): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'logiparity-config-')); temporary.push(dir);
-  const file = join(dir, 'parity.yaml'); await writeFile(file, content); return file;
+  const dir = await mkdtemp(join(tmpdir(), 'logiparity-config-'));
+  temporary.push(dir);
+  const file = join(dir, 'parity.yaml');
+  await writeFile(file, content);
+  return file;
 }
 const valid = `version: 1
 entities:
@@ -25,7 +28,9 @@ entities:
         fields: {id: ID}
 variables: {date: "2026-11-02"}
 `;
-afterEach(async () => { await Promise.all(temporary.splice(0).map((d) => rm(d, { recursive: true, force: true }))); });
+afterEach(async () => {
+  await Promise.all(temporary.splice(0).map((d) => rm(d, { recursive: true, force: true })));
+});
 
 describe('configuration', () => {
   it('validates and interpolates parsed scalar values, resolves paths relative to the config', async () => {
@@ -50,18 +55,27 @@ describe('configuration', () => {
     await expect(loadConfig(file, {})).rejects.toThrow('API_URL is missing');
   });
   it('rejects missing or non-string variables', async () => {
-    await expect(loadConfig(await configFile(valid.replace('variables: {date: "2026-11-02"}', 'variables: {}')), { API_URL: 'http://localhost' })).rejects.toThrow('variables.date is missing');
-    await expect(loadConfig(await configFile(valid.replace('"2026-11-02"', '20261102')), { API_URL: 'http://localhost' })).rejects.toThrow('quoted string');
+    await expect(
+      loadConfig(await configFile(valid.replace('variables: {date: "2026-11-02"}', 'variables: {}')), {
+        API_URL: 'http://localhost',
+      }),
+    ).rejects.toThrow('variables.date is missing');
+    await expect(
+      loadConfig(await configFile(valid.replace('"2026-11-02"', '20261102')), { API_URL: 'http://localhost' }),
+    ).rejects.toThrow('quoted string');
   });
   it('rejects malformed YAML, duplicate keys, absent files and excessive aliases', async () => {
     await expect(loadConfig(await configFile('bad: ['))).rejects.toThrow('Fix the YAML syntax');
     await expect(loadConfig(await configFile('version: 1\nversion: 1'))).rejects.toThrow('Map keys must be unique');
     await expect(loadConfig('/does/not/exist.yaml')).rejects.toThrow('cannot read');
-    const aliases = 'a: &a [1, 2]\nb: &b [*a, *a, *a, *a, *a, *a, *a, *a, *a, *a]\nc: [*b, *b, *b, *b, *b, *b, *b, *b, *b, *b]';
+    const aliases =
+      'a: &a [1, 2]\nb: &b [*a, *a, *a, *a, *a, *a, *a, *a, *a, *a]\nc: [*b, *b, *b, *b, *b, *b, *b, *b, *b, *b]';
     await expect(loadConfig(await configFile(aliases))).rejects.toThrow('aliases');
   });
   it('requires at least two sources and a mapped key', async () => {
-    const file = await configFile('version: 1\nentities: [{name: a, key: id, sources: {one: {type: csv, file: a.csv, fields: {other: Other}}}}]');
+    const file = await configFile(
+      'version: 1\nentities: [{name: a, key: id, sources: {one: {type: csv, file: a.csv, fields: {other: Other}}}}]',
+    );
     await expect(loadConfig(file)).rejects.toThrow('at least two');
     await expect(loadConfig(file)).rejects.toThrow('Map the entity key id');
   });
@@ -73,19 +87,43 @@ describe('configuration', () => {
     const file = await configFile(valid + 'environment: production\n');
     await expect(loadConfig(file, { API_URL: 'http://localhost' })).rejects.toThrow('environment');
     const { config } = await loadConfig(await configFile(valid), { API_URL: 'http://localhost' });
-    expect(configSchema.safeParse({ ...config, report: { outputs: ['html', 'junit', 'markdown'] } }).success).toBe(true);
+    expect(configSchema.safeParse({ ...config, report: { outputs: ['html', 'junit', 'markdown'] } }).success).toBe(
+      true,
+    );
     expect(configSchema.safeParse({ ...config, report: { outputs: ['pdf'] } }).success).toBe(false);
-    expect(configSchema.safeParse({ ...config, entities: [...config.entities, ...config.entities] }).success).toBe(false);
-    await expect(loadConfig(await configFile(valid.replace('baseUrl: ${API_URL}', 'baseUrl: ftp://localhost')), {})).rejects.toThrow('HTTP(S)');
-    await expect(loadConfig(await configFile(valid.replace('path: /api/shipments?date={{date}}', 'path: /api\n        auth: {type: bearer, token: SECRET}')), { API_URL: 'http://localhost' })).rejects.toThrow('tokenEnv');
+    expect(configSchema.safeParse({ ...config, entities: [...config.entities, ...config.entities] }).success).toBe(
+      false,
+    );
+    await expect(
+      loadConfig(await configFile(valid.replace('baseUrl: ${API_URL}', 'baseUrl: ftp://localhost')), {}),
+    ).rejects.toThrow('HTTP(S)');
+    await expect(
+      loadConfig(
+        await configFile(
+          valid.replace(
+            'path: /api/shipments?date={{date}}',
+            'path: /api\n        auth: {type: bearer, token: SECRET}',
+          ),
+        ),
+        { API_URL: 'http://localhost' },
+      ),
+    ).rejects.toThrow('tokenEnv');
   });
-  it('formats unknown errors safely', () => { expect(errorText('failure')).toBe('failure'); expect(errorText(new Error('failure'))).toBe('failure'); });
+  it('formats unknown errors safely', () => {
+    expect(errorText('failure')).toBe('failure');
+    expect(errorText(new Error('failure'))).toBe('failure');
+  });
   it('validates configured browser origins and env-based SQL connections', () => {
     const ui = { type: 'ui', url: 'http://localhost:3010/dispatcher', table: '#shipments', fields: { id: 'td' } };
     expect(sourceSchema.safeParse({ ...ui, allowedOrigins: ['https://assets.example.test'] }).success).toBe(true);
     expect(sourceSchema.safeParse({ ...ui, allowedOrigins: ['https://assets.example.test/path'] }).success).toBe(false);
     expect(sourceSchema.safeParse({ ...ui, url: 'http://user:password@localhost' }).success).toBe(false);
-    const sql = { type: 'sql', connectionEnv: 'STAGING_DATABASE_URL', query: 'SELECT id FROM shipments', fields: { id: 'id' } };
+    const sql = {
+      type: 'sql',
+      connectionEnv: 'STAGING_DATABASE_URL',
+      query: 'SELECT id FROM shipments',
+      fields: { id: 'id' },
+    };
     expect(sourceSchema.safeParse(sql).success).toBe(true);
     expect(sourceSchema.safeParse({ ...sql, connectionString: 'secret' }).success).toBe(false);
     expect(sourceSchema.safeParse({ ...sql, params: [{}] }).success).toBe(false);

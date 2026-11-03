@@ -5,10 +5,10 @@ target: staging-dispatch
 events:
   - step: 1
     type: driver_no_show
-    params: {driver: D17}
+    params: { driver: D17 }
 wait:
   source: planning
-  until: {status: completed}
+  until: { status: completed }
   timeoutSeconds: 60
   pollSeconds: 2
 invariants: [no_order_lost, single_assignment]

@@ -29,14 +29,14 @@ Money serializes as decimal **integer minor-unit strings**, avoiding JSON number
 
 HTML/Markdown currency equivalents use separate configuration context. They do not change JSON values, units, structure or schemaVersion, and add no display fields to the report.
 
-| Finding type | Key/field | Meaning |
-| --- | --- | --- |
-| missing_in_source | key set, field empty | Key exists in the first/reference source but not this source. |
-| extra_in_source | key set, field empty | Key is absent from the first/reference source. |
-| field_mismatch | key and field set, optional expected/actual | Normalized values exceed tolerance, or a rollup field conflicts/is blank. |
-| duplicate_key | key and entity key field set | Repeated key within one source; first record retained. |
-| source_error | key and field empty | Read/normalization failed; message includes available source/row/key/field details. |
-| aggregate_mismatch | key empty, field is aggregate name | Normalized count/sum differs beyond aggregate tolerance; expected/actual present. |
+| Finding type       | Key/field                                   | Meaning                                                                             |
+| ------------------ | ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| missing_in_source  | key set, field empty                        | Key exists in the first/reference source but not this source.                       |
+| extra_in_source    | key set, field empty                        | Key is absent from the first/reference source.                                      |
+| field_mismatch     | key and field set, optional expected/actual | Normalized values exceed tolerance, or a rollup field conflicts/is blank.           |
+| duplicate_key      | key and entity key field set                | Repeated key within one source; first record retained.                              |
+| source_error       | key and field empty                         | Read/normalization failed; message includes available source/row/key/field details. |
+| aggregate_mismatch | key empty, field is aggregate name          | Normalized count/sum differs beyond aggregate tolerance; expected/actual present.   |
 
 `entities[].counts` contains successfully read rows, including duplicates. Failed sources have no count; a failed reference stops comparisons for that entity. No partial comparisons from failed sources are published. Optional `entities[].aggregates` contains `{name, type, values, skippedSources}`: `values` maps source names to numbers or minor-unit strings; `skippedSources` lists sources missing aggregate inputs or containing rollup uncertainty affecting those inputs. Failed sources publish no aggregate values. Aggregates count unique keys and ignore null sum values.
 

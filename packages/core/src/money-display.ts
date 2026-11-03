@@ -3,7 +3,9 @@ import type { NormalizedValue } from './types.js';
 import { displayValue } from './report-utils.js';
 
 // Presentation context stays outside Report, preserving the JSON wire format.
-export interface ReportPresentation { entities?: readonly EntityConfig[] }
+export interface ReportPresentation {
+  entities?: readonly EntityConfig[];
+}
 
 export function formatDatetimeUtc(epoch: number): string | undefined {
   if (!Number.isSafeInteger(epoch)) return undefined;
@@ -19,15 +21,27 @@ export function formatMoneyMajor(minor: bigint, currency: string, locale = 'en-U
   const whole = absolute / factor;
   // Use a negative integer template even for -0.xx, preserving the minus sign.
   const template = minor < 0n ? -(whole || 1n) : whole;
-  const fraction = digits ? new Intl.NumberFormat(locale, { useGrouping: false, minimumIntegerDigits: digits }).format(absolute % factor) : '';
-  return formatter.formatToParts(template).map((part) => {
-    if (part.type === 'fraction') return fraction;
-    if (part.type === 'integer' && minor < 0n && whole === 0n) return new Intl.NumberFormat(locale, { useGrouping: false }).format(0n);
-    return part.value;
-  }).join('');
+  const fraction = digits
+    ? new Intl.NumberFormat(locale, { useGrouping: false, minimumIntegerDigits: digits }).format(absolute % factor)
+    : '';
+  return formatter
+    .formatToParts(template)
+    .map((part) => {
+      if (part.type === 'fraction') return fraction;
+      if (part.type === 'integer' && minor < 0n && whole === 0n)
+        return new Intl.NumberFormat(locale, { useGrouping: false }).format(0n);
+      return part.value;
+    })
+    .join('');
 }
 
-export function presentationValue(value: NormalizedValue | undefined, entityName: string, field: string, aggregate: boolean, presentation: ReportPresentation = {}): string {
+export function presentationValue(
+  value: NormalizedValue | undefined,
+  entityName: string,
+  field: string,
+  aggregate: boolean,
+  presentation: ReportPresentation = {},
+): string {
   const plain = displayValue(value);
   const entity = presentation.entities?.find((e) => e.name === entityName);
   let moneyField = field;
@@ -41,7 +55,12 @@ export function presentationValue(value: NormalizedValue | undefined, entityName
     const iso = formatDatetimeUtc(value);
     return iso ? `${plain} (${iso})` : plain;
   }
-  if (rule?.type !== 'money' || !rule.currency || (typeof value !== 'bigint' && !(typeof value === 'string' && /^-?\d+$/.test(value)))) return plain;
+  if (
+    rule?.type !== 'money' ||
+    !rule.currency ||
+    (typeof value !== 'bigint' && !(typeof value === 'string' && /^-?\d+$/.test(value)))
+  )
+    return plain;
   return `${plain} (${formatMoneyMajor(BigInt(value), rule.currency, rule.locale)})`;
 }
 

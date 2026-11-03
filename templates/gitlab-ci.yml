@@ -3,12 +3,12 @@
 # Copy to .gitlab-ci.yml. Set protected staging URL/token CI variables.
 stages: [test]
 variables:
-  LOGIPARITY_IMAGE: "ghcr.io/nutts5796/logiparity:1.0.1-slim"
+  LOGIPARITY_IMAGE: 'ghcr.io/nutts5796/logiparity:1.0.1-slim'
 logiparity:
   stage: test
   image:
     name: $LOGIPARITY_IMAGE
-    entrypoint: [""]
+    entrypoint: ['']
   timeout: 15m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'

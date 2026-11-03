@@ -29,22 +29,48 @@ const filterScript = `(() => {
 })();`;
 
 function screenshotLink(path: string | undefined): string {
-  if (!path || !/^screenshots\//.test(path) || path.includes('\\') || [...path].some((char) => char.charCodeAt(0) < 32 || char === '?' || char === '#') || path.split('/').some((part) => !part || part === '.' || part === '..') || !/\.(png|jpe?g|webp)$/i.test(path)) return '';
+  if (
+    !path ||
+    !/^screenshots\//.test(path) ||
+    path.includes('\\') ||
+    [...path].some((char) => char.charCodeAt(0) < 32 || char === '?' || char === '#') ||
+    path.split('/').some((part) => !part || part === '.' || part === '..') ||
+    !/\.(png|jpe?g|webp)$/i.test(path)
+  )
+    return '';
   return `<a href="${escape(path.split('/').map(encodeURIComponent).join('/'))}" target="_blank" rel="noopener noreferrer">View screenshot</a>`;
 }
 
 function findingRow(f: Finding, presentation: ReportPresentation): string {
-  return `<tr data-entity="${escape(f.entity)}" data-type="${f.type}"><td><strong>${escape(f.entity)}</strong><small>${escape(f.source)}</small></td><td class="mono">${escape(f.key || '—')}</td><td>${escape(f.field || '—')}</td><td><span class="tag">${f.type.replaceAll('_', ' ')}</span><small>${isBlocking(f) ? 'Blocking' : 'Allowed by failOn'}</small></td><td class="mono">${escape(presentationValue(f.expected, f.entity, f.field, f.type === 'aggregate_mismatch', presentation))}</td><td class="mono">${escape(presentationValue(f.actual, f.entity, f.field, f.type === 'aggregate_mismatch', presentation))}</td><td class="explanation">${escape(f.message)}${f.values?`<small>${f.values.map((item)=>`Line ${item.line}: ${escape(presentationValue(item.value,f.entity,f.field,false,presentation))}`).join(' · ')}</small>`:''}${screenshotLink(f.screenshot) ? `<small>${screenshotLink(f.screenshot)}</small>` : ''}</td></tr>`;
+  return `<tr data-entity="${escape(f.entity)}" data-type="${f.type}"><td><strong>${escape(f.entity)}</strong><small>${escape(f.source)}</small></td><td class="mono">${escape(f.key || '—')}</td><td>${escape(f.field || '—')}</td><td><span class="tag">${f.type.replaceAll('_', ' ')}</span><small>${isBlocking(f) ? 'Blocking' : 'Allowed by failOn'}</small></td><td class="mono">${escape(presentationValue(f.expected, f.entity, f.field, f.type === 'aggregate_mismatch', presentation))}</td><td class="mono">${escape(presentationValue(f.actual, f.entity, f.field, f.type === 'aggregate_mismatch', presentation))}</td><td class="explanation">${escape(f.message)}${f.values ? `<small>${f.values.map((item) => `Line ${item.line}: ${escape(presentationValue(item.value, f.entity, f.field, false, presentation))}`).join(' · ')}</small>` : ''}${screenshotLink(f.screenshot) ? `<small>${screenshotLink(f.screenshot)}</small>` : ''}</td></tr>`;
 }
 
 export function htmlReport(report: Report, presentation: ReportPresentation = {}): string {
   const groups = reportGroups(report, presentation);
-  const countRows = findingTypes.map((type) => { const found = report.findings.filter((f) => f.type === type); return `<tr><td>${type}</td><td>${found.length}</td><td>${found.filter(isBlocking).length}</td></tr>`; }).join('');
+  const countRows = findingTypes
+    .map((type) => {
+      const found = report.findings.filter((f) => f.type === type);
+      return `<tr><td>${type}</td><td>${found.length}</td><td>${found.filter(isBlocking).length}</td></tr>`;
+    })
+    .join('');
   const status = verdict(report);
   const blocking = report.findings.filter(isBlocking).length;
   const hash = createHash('sha256').update(filterScript).digest('base64');
-  const options = (values: readonly string[]) => values.map((value) => `<option value="${escape(value)}">${escape(value.replaceAll('_', ' '))}</option>`).join('');
-  const aggregateRows = report.entities.flatMap((e) => (e.aggregates ?? []).map((a) => `<tr><td><strong>${escape(e.entity)}</strong></td><td>${escape(a.name)}<small>${a.type}</small></td><td class="mono">${Object.entries(a.values).map(([source, value]) => `${escape(source)}: ${escape(presentationValue(value, e.entity, a.name, true, presentation))}`).join(' · ')}</td><td>${escape(a.skippedSources.join(', ') || '—')}</td></tr>`));
+  const options = (values: readonly string[]) =>
+    values.map((value) => `<option value="${escape(value)}">${escape(value.replaceAll('_', ' '))}</option>`).join('');
+  const aggregateRows = report.entities.flatMap((e) =>
+    (e.aggregates ?? []).map(
+      (a) =>
+        `<tr><td><strong>${escape(e.entity)}</strong></td><td>${escape(a.name)}<small>${a.type}</small></td><td class="mono">${Object.entries(
+          a.values,
+        )
+          .map(
+            ([source, value]) =>
+              `${escape(source)}: ${escape(presentationValue(value, e.entity, a.name, true, presentation))}`,
+          )
+          .join(' · ')}</td><td>${escape(a.skippedSources.join(', ') || '—')}</td></tr>`,
+    ),
+  );
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; img-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'">
@@ -56,7 +82,7 @@ export function htmlReport(report: Report, presentation: ReportPresentation = {}
 <p class="eyebrow">Data consistency / Parity</p><h1>Parity report</h1><p class="intro">Compare the same records across configured sources. Review missing records, field differences and aggregate results below.</p>
 <div class="cards"><div class="card status"><span class="label">Check result</span><strong class="number">${status}</strong></div><div class="card"><span class="label">Findings</span><strong class="number">${report.findings.length}</strong></div><div class="card"><span class="label">Blocking</span><strong class="number">${blocking}</strong></div><div class="card"><span class="label">Entities</span><strong class="number">${report.entities.length}</strong></div>${report.warnings?.length ? `<div class="card"><span class="label">Warnings</span><strong class="number">${report.warnings.length}</strong></div>` : ''}</div>
 ${groups.length ? `<section class="section" aria-labelledby="groups-title"><div class="section-head"><h2 id="groups-title">Patterns to investigate</h2></div><ul>${groups.map((g) => `<li><strong>${escape(g.entity)}</strong>: ${escape(g.summary)}</li>`).join('')}</ul></section>` : ''}
-${report.warnings?.length ? `<section class="section"><div class="section-head"><h2>Warnings (${report.warnings.length})</h2></div><ul>${report.warnings.map((warning)=>`<li>${escape(warning.message)}</li>`).join('')}</ul></section>` : ''}
+${report.warnings?.length ? `<section class="section"><div class="section-head"><h2>Warnings (${report.warnings.length})</h2></div><ul>${report.warnings.map((warning) => `<li>${escape(warning.message)}</li>`).join('')}</ul></section>` : ''}
 <section class="section" aria-labelledby="counts-title"><div class="section-head"><h2 id="counts-title">Finding counts</h2></div><div class="scroll"><table id="finding-counts"><thead><tr><th>Finding type</th><th>Total</th><th>Blocking</th></tr></thead><tbody>${countRows}</tbody></table></div></section>
 <section class="section" aria-labelledby="findings-title"><div class="section-head"><h2 id="findings-title">Findings</h2><span class="muted" id="visible-count" aria-live="polite">Showing ${report.findings.length} of ${report.findings.length} ${report.findings.length === 1 ? 'finding' : 'findings'}</span></div>
 <div class="filters"><div class="filter-field"><label for="entity-filter">Entity</label><select id="entity-filter"><option value="">All entities</option>${options(entityNames(report))}</select></div><div class="filter-field"><label for="type-filter">Finding type</label><select id="type-filter"><option value="">All finding types</option>${options(findingTypes)}</select></div><div class="filter-field"><label for="search">Search records</label><input id="search" type="search" placeholder="Key, source or explanation"></div></div>

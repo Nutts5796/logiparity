@@ -19,7 +19,5 @@
       "path": "../ai"
     }
   ],
-  "include": [
-    "src/**/*.ts"
-  ]
+  "include": ["src/**/*.ts"]
 }

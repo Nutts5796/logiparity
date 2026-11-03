@@ -3,15 +3,26 @@ import { equalValues, moneyMinor, normalize, ruleSchema } from '@logiparity/core
 
 describe('normalization', () => {
   it.each([
-    ['1.01', 'USD', 'en-US', 101n], ['-1,234.50', 'USD', 'en-US', -123450n],
-    ['1.234,50', 'EUR', 'de-DE', 123450n], ['1\u202f234,50', 'EUR', 'fr-FR', 123450n],
-    ['100', 'JPY', 'en-US', 100n], ['1.234', 'KWD', 'en-US', 1234n],
+    ['1.01', 'USD', 'en-US', 101n],
+    ['-1,234.50', 'USD', 'en-US', -123450n],
+    ['1.234,50', 'EUR', 'de-DE', 123450n],
+    ['1\u202f234,50', 'EUR', 'fr-FR', 123450n],
+    ['100', 'JPY', 'en-US', 100n],
+    ['1.234', 'KWD', 'en-US', 1234n],
     ['12,34,567.89', 'INR', 'en-IN', 123456789n],
     ['9007199254740993.01', 'USD', 'en-US', 900719925474099301n],
-    ['1.0000', 'USD', 'en-US', 100n], ['+0.00', 'USD', 'en-US', 0n],
-  ])('converts %s %s exactly', (input, currency, locale, expected) => expect(moneyMinor(input, currency, locale)).toBe(expected));
-  it.each(['1.005', '1,2.00', '$1.00', 'NaN', '1e3', '1.2.3'])('rejects invalid or unrounded money %s', (v) => expect(() => moneyMinor(v, 'USD')).toThrow());
-  it('rejects numeric money to preserve exactness', () => expect(() => normalize(1.01, ruleSchema.parse({ type: 'money', currency: 'USD' }), 'api')).toThrow('decimal string'));
+    ['1.0000', 'USD', 'en-US', 100n],
+    ['+0.00', 'USD', 'en-US', 0n],
+  ])('converts %s %s exactly', (input, currency, locale, expected) =>
+    expect(moneyMinor(input, currency, locale)).toBe(expected),
+  );
+  it.each(['1.005', '1,2.00', '$1.00', 'NaN', '1e3', '1.2.3'])('rejects invalid or unrounded money %s', (v) =>
+    expect(() => moneyMinor(v, 'USD')).toThrow(),
+  );
+  it('rejects numeric money to preserve exactness', () =>
+    expect(() => normalize(1.01, ruleSchema.parse({ type: 'money', currency: 'USD' }), 'api')).toThrow(
+      'decimal string',
+    ));
   it('trims, folds case, maps enums and controls empty/null', () => {
     expect(normalize('  hi  ', undefined, 'a')).toBe('hi');
     expect(normalize(true, undefined, 'a')).toBe(true);
@@ -21,7 +32,13 @@ describe('normalization', () => {
     expect(normalize(' ', undefined, 'a')).toBeNull();
     expect(normalize('', ruleSchema.parse({ type: 'string', emptyAsNull: false }), 'a')).toBe('');
     expect(normalize(' HIGH ', ruleSchema.parse({ type: 'string', caseFold: true }), 'a')).toBe('high');
-    expect(normalize(' Delivered ', ruleSchema.parse({ type: 'enum', map: { Delivered: 'DELIVERED' }, caseFold: true }), 'a')).toBe('delivered');
+    expect(
+      normalize(
+        ' Delivered ',
+        ruleSchema.parse({ type: 'enum', map: { Delivered: 'DELIVERED' }, caseFold: true }),
+        'a',
+      ),
+    ).toBe('delivered');
     expect(normalize('unknown', ruleSchema.parse({ type: 'enum' }), 'a')).toBe('unknown');
     expect(normalize('constructor', ruleSchema.parse({ type: 'enum' }), 'a')).toBe('constructor');
     expect(normalize(7, undefined, 'a')).toBe(7);
@@ -45,7 +62,11 @@ describe('normalization', () => {
     expect(equalValues(100n, 100n)).toBe(true);
   });
   it('normalizes explicit and source-local datetimes to UTC with tolerance', () => {
-    const rule = ruleSchema.parse({ type: 'datetime', sourceTimezones: { export: 'America/Chicago' }, toleranceSeconds: 60 });
+    const rule = ruleSchema.parse({
+      type: 'datetime',
+      sourceTimezones: { export: 'America/Chicago' },
+      toleranceSeconds: 60,
+    });
     const utc = normalize('2026-11-02T13:00:00Z', rule, 'api');
     expect(normalize('2026-11-02 07:00:00', rule, 'export')).toBe(utc);
     expect(normalize(new Date('2026-11-02T13:00:00Z'), rule, 'api')).toBe(utc);
@@ -55,6 +76,8 @@ describe('normalization', () => {
     expect(() => normalize('not-a-dateZ', rule, 'api')).toThrow('Invalid ISO');
     expect(() => normalize('2026-11-01T01:30:00', rule, 'export')).toThrow('ambiguous');
     expect(() => normalize('2026-03-08T02:30:00', rule, 'export')).toThrow('gap');
-    expect(() => normalize('2026-11-02T07:00:00', ruleSchema.parse({ type: 'datetime', sourceTimezones: { a: 'No/Zone' } }), 'a')).toThrow('timezone');
+    expect(() =>
+      normalize('2026-11-02T07:00:00', ruleSchema.parse({ type: 'datetime', sourceTimezones: { a: 'No/Zone' } }), 'a'),
+    ).toThrow('timezone');
   });
 });

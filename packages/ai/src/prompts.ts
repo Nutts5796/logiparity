@@ -20,4 +20,6 @@ Optional setup: {fixture: path} and afterwards: {parity: path} resolve relative 
 Distinguish observed findings from hypotheses. Explain affected entities, sources, keys and fields using only supplied data. Respect blocking flags/failOn; source errors are runtime failures. Money JSON values are integer minor-unit strings and datetimes are UTC epoch milliseconds; do not infer an unspecified currency.
 The sampling section reports exact totals across the input report. Only the included findings are evidence for record-level details; explicitly disclose omitted findings and do not invent unseen affected keys. Preserve exact big integer strings, and do not recalculate totals using floating point. Suggest concrete test/staging verification steps, not automatic fixes or production actions.`,
 };
-export function systemPrompt(kind: DraftKind): string { return `${common}\n\n${contracts[kind]}`; }
+export function systemPrompt(kind: DraftKind): string {
+  return `${common}\n\n${contracts[kind]}`;
+}

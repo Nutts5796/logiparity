@@ -22,13 +22,27 @@ entities:
         file: ${LOGIPARITY_SCENARIO_ARTIFACT_DIR}/shipments.xlsx
         sheet: Shipments
         headerRow: 1
-        fields: { shipment_id: "Shipment ID", status: Status, payout: "Driver payout", delivered_at: "Delivered at", eta: ETA }
+        fields:
+          {
+            shipment_id: 'Shipment ID',
+            status: Status,
+            payout: 'Driver payout',
+            delivered_at: 'Delivered at',
+            eta: ETA,
+          }
       csv:
         type: csv
         file: ${LOGIPARITY_SCENARIO_ARTIFACT_DIR}/shipments.csv
-        fields: { shipment_id: "Shipment ID", status: Status, payout: "Driver payout", delivered_at: "Delivered at", eta: ETA }
+        fields:
+          {
+            shipment_id: 'Shipment ID',
+            status: Status,
+            payout: 'Driver payout',
+            delivered_at: 'Delivered at',
+            eta: ETA,
+          }
     compare:
-      status: { type: enum, map: { "In transit": in_transit, Delivered: delivered } }
+      status: { type: enum, map: { 'In transit': in_transit, Delivered: delivered } }
       payout: { type: money, currency: USD, tolerance: 0 }
       delivered_at: { type: datetime, sourceTimezones: { export: UTC, csv: UTC }, toleranceSeconds: 60 }
       eta: { type: datetime, sourceTimezones: { export: UTC, csv: UTC }, toleranceSeconds: 0 }
@@ -37,7 +51,7 @@ entities:
       - { name: payout_total, type: sum, field: payout }
     failOn: [missing, extra, mismatch, aggregate, duplicate]
 variables:
-  date: "2026-11-02"
+  date: '2026-11-02'
 report:
   outputs: [console, html, junit, json, markdown]
   dir: ../../logiparity-report

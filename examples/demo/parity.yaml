@@ -21,13 +21,13 @@ entities:
         file: ./out/shipments-{{date}}.xlsx
         sheet: Shipments
         headerRow: 1
-        fields: { shipment_id: "Shipment ID", status: Status, payout: "Driver payout", delivered_at: "Delivered at" }
+        fields: { shipment_id: 'Shipment ID', status: Status, payout: 'Driver payout', delivered_at: 'Delivered at' }
       csv:
         type: csv
         file: ./out/shipments-{{date}}.csv
-        fields: { shipment_id: "Shipment ID", status: Status, payout: "Driver payout", delivered_at: "Delivered at" }
+        fields: { shipment_id: 'Shipment ID', status: Status, payout: 'Driver payout', delivered_at: 'Delivered at' }
     compare:
-      status: { type: enum, map: { "In transit": in_transit, Delivered: delivered } }
+      status: { type: enum, map: { 'In transit': in_transit, Delivered: delivered } }
       payout: { type: money, currency: USD, tolerance: 0 }
       delivered_at: { type: datetime, sourceTimezones: { export: UTC, csv: UTC }, toleranceSeconds: 60 }
     aggregates:
@@ -35,7 +35,7 @@ entities:
       - { name: payout_total, type: sum, field: payout }
     failOn: [missing, extra, mismatch, aggregate, duplicate]
 variables:
-  date: "2026-11-02"
+  date: '2026-11-02'
 report:
   outputs: [console, html, junit, json, markdown]
   dir: ../../logiparity-report

@@ -1,8 +1,6 @@
 {
   "schemaVersion": 1,
-  "entities": [
-    {"entity": "shipment", "reference": "api", "counts": {"api": 1, "csv": 1}}
-  ],
+  "entities": [{ "entity": "shipment", "reference": "api", "counts": { "api": 1, "csv": 1 } }],
   "findings": [
     {
       "type": "field_mismatch",

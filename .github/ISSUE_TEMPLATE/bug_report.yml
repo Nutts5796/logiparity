@@ -7,16 +7,23 @@ body:
       value: 'Use test/staging and synthetic fixtures only. Do not attach tokens, storageState files, real customer data or private endpoints. For sensitive reports follow SECURITY.md.'
   - type: input
     id: version
-    attributes: {label: Version and environment, description: 'LogiParity version, Node version, OS and adapter types.'}
-    validations: {required: true}
+    attributes:
+      { label: Version and environment, description: 'LogiParity version, Node version, OS and adapter types.' }
+    validations: { required: true }
   - type: textarea
     id: reproduce
-    attributes: {label: Reproduction, description: 'Exact command and minimal synthetic YAML/data. Remove credentials and private hosts.'}
-    validations: {required: true}
+    attributes:
+      {
+        label: Reproduction,
+        description: 'Exact command and minimal synthetic YAML/data. Remove credentials and private hosts.',
+      }
+    validations: { required: true }
   - type: textarea
     id: expected
-    attributes: {label: Expected and actual result, description: 'Include exit code and affected synthetic keys/fields.'}
-    validations: {required: true}
+    attributes:
+      { label: Expected and actual result, description: 'Include exit code and affected synthetic keys/fields.' }
+    validations: { required: true }
   - type: textarea
     id: evidence
-    attributes: {label: Sanitized evidence, description: 'Optional report excerpt or screenshot. Review it before sharing.'}
+    attributes:
+      { label: Sanitized evidence, description: 'Optional report excerpt or screenshot. Review it before sharing.' }

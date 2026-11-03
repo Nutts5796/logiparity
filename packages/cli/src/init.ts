@@ -43,10 +43,13 @@ report:
 
 export async function initConfig(file: string): Promise<string> {
   const destination = resolve(file);
-  try { await writeFile(destination, starterConfig, { encoding: 'utf8', flag: 'wx' }); }
-  catch (error) {
+  try {
+    await writeFile(destination, starterConfig, { encoding: 'utf8', flag: 'wx' });
+  } catch (error) {
     const exists = error instanceof Error && 'code' in error && error.code === 'EEXIST';
-    throw new Error(`${destination}: ${exists ? 'file already exists; choose another --config path or move the existing file' : 'cannot create starter config; check the parent directory and write permissions'}.`);
+    throw new Error(
+      `${destination}: ${exists ? 'file already exists; choose another --config path or move the existing file' : 'cannot create starter config; check the parent directory and write permissions'}.`,
+    );
   }
   return destination;
 }

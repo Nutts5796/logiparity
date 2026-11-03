@@ -18,11 +18,11 @@ The CLI prints the destination endpoint/model (or environment placeholders), a m
 
 Set all three variables using your environment/secret-management mechanism:
 
-| Variable | Meaning |
-| --- | --- |
+| Variable                 | Meaning                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------ |
 | `LOGIPARITY_AI_BASE_URL` | API base, e.g. `https://provider.example/v1`; `/chat/completions` is appended under this exact prefix. |
-| `LOGIPARITY_AI_MODEL` | Your provider's explicit model identifier; no default or automatic model selection. |
-| `LOGIPARITY_AI_API_KEY` | Request credential, sent only in the Bearer Authorization header, omitted from previews. |
+| `LOGIPARITY_AI_MODEL`    | Your provider's explicit model identifier; no default or automatic model selection.                    |
+| `LOGIPARITY_AI_API_KEY`  | Request credential, sent only in the Bearer Authorization header, omitted from previews.               |
 
 Use HTTPS for remote services. HTTP is supported for local/explicitly configured providers. URLs must not embed credentials, query strings or fragments. Configure an API base, not the complete chat-completions URL. Missing variables prevent a send and return 2. Credentials/model/URL values are not interpolated into input files; no dotenv loader or auto-discovery is used.
 

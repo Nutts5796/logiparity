@@ -13,32 +13,52 @@ export async function* readUi(config: UiConfig, context: AdapterContext): AsyncI
   let stage = 'launch Chromium (run npx playwright install chromium if it is missing)';
   try {
     browser = await chromium.launch({ headless: true, timeout: Math.max(10000, config.timeoutMs) });
-    stage = config.storageState ? `load storageState ${resolve(context.baseDir, config.storageState)}` : 'create isolated browser context';
-    session = await browser.newContext({ serviceWorkers: 'block', ...(config.storageState ? { storageState: resolve(context.baseDir, config.storageState) } : {}) });
+    stage = config.storageState
+      ? `load storageState ${resolve(context.baseDir, config.storageState)}`
+      : 'create isolated browser context';
+    session = await browser.newContext({
+      serviceWorkers: 'block',
+      ...(config.storageState ? { storageState: resolve(context.baseDir, config.storageState) } : {}),
+    });
     const origins = new Set([new URL(config.url).origin, ...config.allowedOrigins]);
-    const allowed = (url: URL) => ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && origins.has(url.origin);
-    const assertOrigin = () => { if (violation) throw violation; if (page && !allowed(new URL(page.url()))) throw new SourceError('Page navigation left allowedOrigins.'); };
+    const allowed = (url: URL) =>
+      ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && origins.has(url.origin);
+    const assertOrigin = () => {
+      if (violation) throw violation;
+      if (page && !allowed(new URL(page.url()))) throw new SourceError('Page navigation left allowedOrigins.');
+    };
     await session.route('**/*', async (route) => {
       let url = new URL(route.request().url());
-      if (!allowed(url)) { if (route.request().isNavigationRequest()) violation = new SourceError('Page navigation left allowedOrigins.'); await route.abort('blockedbyclient'); return; }
+      if (!allowed(url)) {
+        if (route.request().isNavigationRequest()) violation = new SourceError('Page navigation left allowedOrigins.');
+        await route.abort('blockedbyclient');
+        return;
+      }
       try {
         for (let redirects = 0; redirects <= 20; redirects++) {
           const response = await route.fetch({ url: url.href, maxRedirects: 0, timeout: config.timeoutMs });
           const location = response.headers().location;
           if (response.status() >= 300 && response.status() < 400 && location) {
-            const next = new URL(location, url); await response.dispose();
+            const next = new URL(location, url);
+            await response.dispose();
             if (!allowed(next)) throw new SourceError('Redirect Location is outside allowedOrigins.');
-            url = next; continue;
+            url = next;
+            continue;
           }
-          await route.fulfill({ response }); await response.dispose(); return;
+          await route.fulfill({ response });
+          await response.dispose();
+          return;
         }
         throw new SourceError('UI redirect limit exceeded.');
       } catch (error) {
-        violation = error instanceof SourceError ? error : new SourceError('UI request failed while checking redirect origins.');
+        violation =
+          error instanceof SourceError ? error : new SourceError('UI request failed while checking redirect origins.');
         await route.abort('blockedbyclient').catch(() => {});
       }
     });
-    await session.routeWebSocket('**/*', (socket) => socket.close({ code: 1008, reason: 'LogiParity table snapshots do not open WebSockets.' }));
+    await session.routeWebSocket('**/*', (socket) =>
+      socket.close({ code: 1008, reason: 'LogiParity table snapshots do not open WebSockets.' }),
+    );
     page = await session.newPage();
     page.setDefaultTimeout(config.timeoutMs);
     page.setDefaultNavigationTimeout(config.timeoutMs);
@@ -60,9 +80,14 @@ export async function* readUi(config: UiConfig, context: AdapterContext): AsyncI
           const record: Record<string, string> = Object.create(null) as Record<string, string>;
           for (const [field, selector] of Object.entries(fields)) {
             const cells = elements[i]?.querySelectorAll(selector);
-            if (!cells || cells.length !== 1) return { records: [], fingerprint: '', error: `Row ${i + 1}, field ${field}: selector ${selector} must match exactly one cell.` };
+            if (!cells || cells.length !== 1)
+              return {
+                records: [],
+                fingerprint: '',
+                error: `Row ${i + 1}, field ${field}: selector ${selector} must match exactly one cell.`,
+              };
             const cell = cells[0];
-            record[field] = cell instanceof HTMLElement ? cell.innerText : cell?.textContent ?? '';
+            record[field] = cell instanceof HTMLElement ? cell.innerText : (cell?.textContent ?? '');
           }
           records.push(record);
         }
@@ -72,7 +97,8 @@ export async function* readUi(config: UiConfig, context: AdapterContext): AsyncI
       const fingerprint = extracted.fingerprint;
       assertOrigin();
       const digest = createHash('sha256').update(fingerprint).digest('hex');
-      if (visited.has(digest)) throw new SourceError('Pagination repeated earlier rows; correct nextPage or the target paginator.');
+      if (visited.has(digest))
+        throw new SourceError('Pagination repeated earlier rows; correct nextPage or the target paginator.');
       visited.add(digest);
       yield* extracted.records;
       if (!config.nextPage) return;
@@ -81,28 +107,53 @@ export async function* readUi(config: UiConfig, context: AdapterContext): AsyncI
       const count = await next.count();
       if (count === 0 && pageNumber > 1) return;
       if (count !== 1) throw new SourceError('Next-page selector must match one control.');
-      if (!await next.isVisible() || await next.isDisabled() || await next.getAttribute('aria-disabled') === 'true') return;
-      if (pageNumber === config.maxPages) throw new SourceError(`Reached maxPages=${config.maxPages}; fix pagination or increase the explicit limit.`);
+      if (
+        !(await next.isVisible()) ||
+        (await next.isDisabled()) ||
+        (await next.getAttribute('aria-disabled')) === 'true'
+      )
+        return;
+      if (pageNumber === config.maxPages)
+        throw new SourceError(`Reached maxPages=${config.maxPages}; fix pagination or increase the explicit limit.`);
       await next.click();
       assertOrigin();
       stage = `wait for next-page rows to change after ${config.nextPage}; check the paginator and timeoutMs`;
-      await page.waitForFunction(({ tableSelector, rowSelector, old }) => {
-        const root = document.querySelector(tableSelector);
-        return root && JSON.stringify([...root.querySelectorAll(rowSelector)].map((row) => row.textContent)) !== old;
-      }, { tableSelector: config.table, rowSelector: config.rows, old: fingerprint }, { timeout: config.timeoutMs });
+      await page.waitForFunction(
+        ({ tableSelector, rowSelector, old }) => {
+          const root = document.querySelector(tableSelector);
+          return root && JSON.stringify([...root.querySelectorAll(rowSelector)].map((row) => row.textContent)) !== old;
+        },
+        { tableSelector: config.table, rowSelector: config.rows, old: fingerprint },
+        { timeout: config.timeoutMs },
+      );
       assertOrigin();
     }
   } catch (error) {
     let screenshot: string | undefined;
     if (page && !page.isClosed()) {
-      const name = createHash('sha256').update(JSON.stringify({ url: config.url, table: config.table, fields: config.fields })).digest('hex').slice(0, 12);
+      const name = createHash('sha256')
+        .update(JSON.stringify({ url: config.url, table: config.table, fields: config.fields }))
+        .digest('hex')
+        .slice(0, 12);
       const relative = `screenshots/ui-${name}-page-${pageNumber}.png`;
       const directory = context.reportDir ?? resolve(context.baseDir, 'logiparity-report');
-      try { await mkdir(join(directory, 'screenshots'), { recursive: true }); await page.screenshot({ path: join(directory, relative), fullPage: true, timeout: Math.max(5000, config.timeoutMs) }); screenshot = relative; }
-      catch { stage += '; screenshot could not be saved—check report.dir permissions'; }
+      try {
+        await mkdir(join(directory, 'screenshots'), { recursive: true });
+        await page.screenshot({
+          path: join(directory, relative),
+          fullPage: true,
+          timeout: Math.max(5000, config.timeoutMs),
+        });
+        screenshot = relative;
+      } catch {
+        stage += '; screenshot could not be saved—check report.dir permissions';
+      }
     }
     const detail = violation ?? error;
-    throw new SourceError(`UI page ${pageNumber}: failed to ${stage}.${detail instanceof SourceError ? ` ${detail.message}` : ''} Check this test/staging target and its source configuration.`, screenshot);
+    throw new SourceError(
+      `UI page ${pageNumber}: failed to ${stage}.${detail instanceof SourceError ? ` ${detail.message}` : ''} Check this test/staging target and its source configuration.`,
+      screenshot,
+    );
   } finally {
     await session?.close().catch(() => {});
     await browser?.close().catch(() => {});

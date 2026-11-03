@@ -11,7 +11,7 @@ for (const [location, entry] of Object.entries(lock.packages)) {
   if (!license) throw new Error(`Missing license for runtime dependency ${manifest.name}; inspect before adding it.`);
   entries.push({ name: manifest.name, version: manifest.version, license });
 }
-entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : a.version < b.version ? -1 : 1);
+entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.version < b.version ? -1 : 1));
 const unique = [...new Map(entries.map((e) => [`${e.name}@${e.version}`, e])).values()];
 const preamble = `# Runtime dependencies and licenses
 

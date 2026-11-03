@@ -17,13 +17,13 @@ An endpoint test can pass while another surface shows different records. A contr
 
 ## How it differs from tools you already use
 
-| Tool | Typical focus |
-| --- | --- |
-| [Postman](https://learning.postman.com/docs/tests-and-scripts/write-scripts/intro-to-scripts/) | API requests, scripts and automated API tests. |
-| [Playwright](https://playwright.dev/docs/intro) | Browser automation and end-to-end application tests. |
-| [Pact](https://docs.pact.io/) | Consumer and provider expectations at integration boundaries. |
-| [Great Expectations](https://docs.greatexpectations.io/docs/core/introduction/) | Data validation through expectations and validation workflows. |
-| [data-diff style tools](https://github.com/datafold/data-diff) | Record and value differences within or across database tables. |
+| Tool                                                                                           | Typical focus                                                  |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| [Postman](https://learning.postman.com/docs/tests-and-scripts/write-scripts/intro-to-scripts/) | API requests, scripts and automated API tests.                 |
+| [Playwright](https://playwright.dev/docs/intro)                                                | Browser automation and end-to-end application tests.           |
+| [Pact](https://docs.pact.io/)                                                                  | Consumer and provider expectations at integration boundaries.  |
+| [Great Expectations](https://docs.greatexpectations.io/docs/core/introduction/)                | Data validation through expectations and validation workflows. |
+| [data-diff style tools](https://github.com/datafold/data-diff)                                 | Record and value differences within or across database tables. |
 
 One configuration compares records across browser tables, APIs, files and SQL. Scenario runs add invariant checks after disruptions, such as whether every order remains present and has one assignment.
 

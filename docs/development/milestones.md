@@ -2,14 +2,14 @@
 
 LogiParity is written in strict TypeScript and ESM for Node.js 20 or later. Tests run on Node 20 and 22. Software license: MIT, copyright Sergei Orekhovskii.
 
-| Milestone | Delivered |
-| --- | --- |
-| M1 | Keyed comparisons, exact normalization, REST and streaming file adapters, synthetic delivery API and export bug fixtures. |
-| M2 | HTML, Markdown and JUnit reports, aggregates, failure thresholds and config initialization. |
-| M3 | Dispatcher login and UI adapter, read-only PostgreSQL, stale-status and timezone bug fixtures, currency display. |
-| M4 | Disruption scenarios, virtual clock, operational invariants, fresh post-scenario comparisons and UTC display. |
-| M5 | Optional AI drafts with local payload previews, redaction and mock-provider tests. |
-| M6 | Standalone bundled package, public API exports, Docker build, CI templates and user guides. |
+| Milestone | Delivered                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------- |
+| M1        | Keyed comparisons, exact normalization, REST and streaming file adapters, synthetic delivery API and export bug fixtures. |
+| M2        | HTML, Markdown and JUnit reports, aggregates, failure thresholds and config initialization.                               |
+| M3        | Dispatcher login and UI adapter, read-only PostgreSQL, stale-status and timezone bug fixtures, currency display.          |
+| M4        | Disruption scenarios, virtual clock, operational invariants, fresh post-scenario comparisons and UTC display.             |
+| M5        | Optional AI drafts with local payload previews, redaction and mock-provider tests.                                        |
+| M6        | Standalone bundled package, public API exports, Docker build, CI templates and user guides.                               |
 
 M6 verification: 205 unit and adapter tests, 62 end-to-end tests, and 100% core line coverage on Node 20.20.2 and 22.23.4. The standalone package installed offline with an empty cache. The Docker image passed non-root Chromium and report checks on linux/arm64. A clean-source quickstart with fresh dependency downloads finished in 15.33 seconds.
 

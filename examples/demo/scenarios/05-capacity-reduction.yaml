@@ -6,9 +6,9 @@ setup:
 events:
   - step: 1
     type: capacity_change
-    params: {vehicle: V08, capacity: 25, at: "16:00"}
+    params: { vehicle: V08, capacity: 25, at: '16:00' }
 wait:
-  until: {replan_status: completed}
+  until: { replan_status: completed }
   timeoutSeconds: 60
   pollSeconds: 2
 invariants:
@@ -17,6 +17,6 @@ invariants:
   - capacity_respected
   - eta_updated_for_affected
   - customer_notified_for_affected
-  - {sla_window_violations: {max: 0}}
+  - { sla_window_violations: { max: 0 } }
 afterwards:
   parity: ../parity-scenario.yaml
