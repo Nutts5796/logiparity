@@ -40,6 +40,18 @@ npm install --save-dev --save-exact logiparity
 npx logiparity --version
 ```
 
+The default install supports CSV, XLSX and REST. Add only the adapters your configuration uses:
+
+```sh
+# Browser tables and the install-browser command:
+npm install --save-dev --save-exact playwright@1.64.1
+npx logiparity install-browser
+# PostgreSQL:
+npm install --save-dev --save-exact pg@8.23.1 pg-query-stream@4.17.1 pgsql-ast-parser@12.0.2
+```
+
+These are optional peers loaded only for UI or SQL configurations. Missing peers fail with exit 2 and the exact install command. External runtime dependencies are exact-pinned ordinary dependencies, so consumer `overrides` can patch them. See [dependencies and sizes](docs/dependencies.md) and the [offline kit](docs/release.md#offline-installation).
+
 The commands below describe 1.1.0, currently **Unreleased**. To review it before publication, install the locally prepared `logiparity-1.1.0.tgz` instead of the registry package. Published 1.0.0 does not include the `demo` command.
 
 ## Quickstart

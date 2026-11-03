@@ -1,6 +1,6 @@
 # Release procedure
 
-Release only reviewed changes. The 1.1.0 work is unreleased; 1.0.1 was never published and its notes are folded into 1.1.0. Local preparation never pushes, tags or publishes.
+Release only reviewed changes. The 1.1.0 work is unreleased; 1.0.1 was never published and its notes are folded into 1.1.0. Local preparation never pushes, tags or publishes. Use `npm run pack:artifact` for the sanitized CLI alone or `npm run release:prepare` for the complete release assets. Direct workspace `npm pack`/`npm publish` is rejected so a manifest with development fields cannot be distributed accidentally; release jobs publish the reviewed tarball.
 
 ## One-time setup
 
@@ -58,3 +58,17 @@ docker run --rm "$LOGIPARITY_IMAGE" --version
 ```
 
 Set `LOGIPARITY_IMAGE` to a digest-pinned full or slim reference from the release notes. Verify both linux/amd64 and linux/arm64 index members. `npm audit signatures` verifies a consumer installation's registry signatures; local file tarballs have no npm registry signature until publication. GitHub provenance verification is separate. See [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations).
+
+## Offline installation
+
+The CLI bundles first-party code only. A standalone CLI tarball cannot resolve unbundled dependencies without registry access or a populated cache. The release therefore includes `logiparity-offline-<version>.tgz` and its SHA-256 file. The kit contains the identical CLI archive, verified registry tarballs and committed consumer locks for two profiles. It contains no Chromium binaries.
+
+```sh
+VERSION=$(node -p "require('./package.json').version")
+shasum -a 256 -c "logiparity-offline-$VERSION.tgz.sha256"
+tar -xzf "logiparity-offline-$VERSION.tgz"
+node "logiparity-offline-$VERSION/install.mjs" default /absolute/path/to/empty/project
+# Or select full to include Playwright and all three PostgreSQL peers.
+```
+
+Run these commands from a directory containing downloaded or locally prepared release assets. The installer refuses nonempty destinations, verifies each local file, creates an empty temporary npm cache, seeds it only from local integrity-checked tarballs, and runs `npm ci --offline` without suppressing audit. The cache is removed afterwards. Normal online `npm install`, `npm ci` and `npm audit` are checked independently for both profiles on npm 10 and 11. `npm audit signatures` verifies registry-installed dependencies after publication; local kit archives are protected by checksums and GitHub provenance. Docker full and slim builds consume the same kit.

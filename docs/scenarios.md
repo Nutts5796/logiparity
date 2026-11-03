@@ -52,6 +52,7 @@ version: 1
 name: staging-delivery
 environment: staging
 allowMutations: true
+allowedHosts: [staging.example.test] # Replace with the host in STAGING_API_URL.
 baseUrl: ${STAGING_API_URL}
 headersEnv: {Authorization: {env: STAGING_API_TOKEN, prefix: "Bearer "}} # Reuse the raw token.
 events:
@@ -61,12 +62,12 @@ events:
     body: {reason: synthetic-test, at: "{{params.at}}"}
   http:
     method: PATCH
-    path: "{{params.path}}"
+    path: "/test/{{params.resource}}"
     body: "{{params.body}}"
 # Add state sources with the contract below, wait, optional setup/replan/clock/artifacts.
 ```
 
-Methods are literal `GET`, `POST`, `PUT`, `PATCH` or `DELETE` in the trusted target file; GET cannot have a body. `http` is a configurable custom request, with its method fixed by the mapping. Only mapped events can execute. A whole-value placeholder preserves the JSON type (arrays, objects, numbers, booleans); embedded placeholders require scalars. Embedded path values are URL-encoded. An exact path placeholder allows an event to select a path, still subject to the same-origin check. Placeholder roots are `params` and `step` for events, `fixture` for setup, `seconds` for clock advances. Property access is own-property only; prototype names, malformed/unknown tokens and cross-origin/credential-bearing URLs fail before injection. Redirects are rejected. Target credentials belong in `headersEnv`, not literal headers or event parameters; reports omit request bodies and response bodies.
+Methods are literal `GET`, `POST`, `PUT`, `PATCH` or `DELETE` in the trusted target file; GET cannot have a body. `http` is a configurable custom request, with its method fixed by the mapping. Only mapped events can execute. A whole-value placeholder preserves the JSON type (arrays, objects, numbers, booleans); embedded placeholders require scalars. Every path placeholder is URL-encoded, including a whole-value placeholder. Put literal route separators in the trusted template; values cannot contain whitespace or controls. The final path must stay within the configured base path. Placeholder roots are `params` and `step` for events, `fixture` for setup, `seconds` for clock advances. Property access is own-property only; prototype names, malformed/unknown tokens and cross-origin/credential-bearing URLs fail before injection. Redirects are rejected. Target credentials belong in `headersEnv`, not literal headers or event parameters; reports omit request bodies and response bodies.
 
 The runner loads YAML, fixture, custom modules and Parity configuration and renders HTTP plans before setup. State validation and affected-key derivation occur after optional setup but before events, using the baseline snapshot. Configured adapters may access their own explicitly configured origins; the event HTTP same-origin restriction does not rewrite adapter targets. A running custom module is trusted local code with Node permissions, without a sandbox or execution timeout.
 
@@ -113,9 +114,9 @@ Built-ins validate and read only their required sources and fields. Unknown or m
 
 Affected-order checks additionally need orders.zone for traffic_delay, or drivers.id and drivers.vehicle_id when capacity_change identifies a vehicle. Driver-based events derive affected keys from assignments. single_assignment verifies cardinality, cancellation and order references; capacity_respected verifies driver and vehicle resources. Custom modules and JSONPath checks can access any configured source, so a run containing a custom check reads all configured sources.
 
-Orders and assignments alone cannot establish that replanning executed: unchanged snapshots can satisfy both `no_order_lost` and `single_assignment` even if no replan ran. Add a completion source that identifies the requested run, a custom check of reassignment away from the absent driver, or appropriate ETA/resource checks for the intended behavior.
+Orders and assignments alone cannot establish that replanning executed: unchanged snapshots can satisfy both `no_order_lost` and `single_assignment` even if no replan ran. Add a completion source that identifies the requested run, the affected_reassigned check for reassignment away from the absent driver, or appropriate ETA/resource checks for the intended behavior.
 
-A minimal no-show scenario can use `invariants: [no_order_lost, single_assignment]` with only orders, assignments and its chosen wait source. See the [bring-your-own-API target](../examples/staging/driver-no-show-target.yaml) and [scenario](../examples/staging/driver-no-show.yaml). Their paths, IDs and payloads are placeholders to replace with your staging contract; they use no demo-specific replan or clock endpoint.
+A minimal no-show scenario can use `invariants: [no_order_lost, single_assignment]` with only orders, assignments and its chosen wait source. The shipped staging example adds affected_reassigned and its required drivers mapping. See the [bring-your-own-API target](../examples/staging/driver-no-show-target.yaml) and [scenario](../examples/staging/driver-no-show.yaml). Their paths, IDs and payloads are placeholders to replace with your staging contract; they use no demo-specific replan or clock endpoint.
 
 ## Custom checks
 
