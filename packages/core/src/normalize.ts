@@ -159,7 +159,7 @@ function normalizeDatetime(text: string, rule: ComparisonRule, source: string): 
     : DateTime.fromISO(iso, { zone: zone ?? 'UTC', setZone: true });
   if (!date.isValid)
     throw new Error(
-      `Invalid ${format ? 'formatted' : 'ISO'} datetime or timezone for source ${source}${format ? ` with configured format "${format}"` : ''}; check the date and sourceTimezones.`,
+      `Invalid ${format ? 'formatted' : 'ISO'} datetime or timezone for source ${source}${format ? ` with configured format "${format}"` : ''}; check the date and sourceTimezones, or set format: {${source}: ...}.`,
     );
   if (!explicitZone && !zone && !explanation?.zone)
     throw new Error(`Datetime has no offset; set sourceTimezones.${source} or supply an ISO 8601 offset.`);

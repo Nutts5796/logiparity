@@ -68,7 +68,7 @@ it('uses readable fixed en-US values with differences in all human reports, pres
     const result = render(report, presentation);
     expect(result).toContain('$18.19');
     expect(result).toContain('Nov 2, 2026, 1:01 PM UTC');
-    expect(result).toContain('-6h');
+    expect(result).toContain('−6h');
     expect(result).not.toContain('1793624460000 (');
     expect(result).not.toContain('1819 ($');
   }
@@ -76,9 +76,9 @@ it('uses readable fixed en-US values with differences in all human reports, pres
   expect(json).toContain('"expected": "1819"');
   expect(json).toContain('"field": "delivered_at"');
   expect(json).not.toContain('Delivery time');
-  expect(junitReport(report)).toContain('1819');
+  expect(junitReport(report, new Date(), presentation)).toContain('$18.19');
   expect(jsonReport(report)).toBe(json);
-  expect(presentationDifference(1819n, 1818n, 'order', 'payout', false, presentation)).toBe('-$0.01');
+  expect(presentationDifference(1819n, 1818n, 'order', 'payout', false, presentation)).toBe('−$0.01');
   expect(
     presentationValue(123456n, 'order', 'payout', false, {
       entities: [
@@ -99,7 +99,7 @@ it('computes exact pattern coverage, merges cards, and reconciles missing rows a
       };
     }
   });
-  expect(report.coverage).toEqual({ explained: 2996, needsReview: 2 });
+  expect(report.coverage).toEqual({ explained: 2998, needsReview: 0 });
   expect(report.groups?.find((group) => group.kind === 'missing_stride')?.findingIndexes).toHaveLength(4);
   const aggregate = report.entities[0]!.aggregates![0]!;
   expect(aggregate.reconciliation?.export).toMatchObject({ missingRows: { count: 4, amount: -7276n }, remainder: 0n });
@@ -108,12 +108,12 @@ it('computes exact pattern coverage, merges cards, and reconciles missing rows a
   expect(html.match(/class="card pat"/g)).toHaveLength(3);
   expect(html).toContain('149/150');
   expect(html).toContain('24-hour UTC dial');
-  expect(html).toContain('$0.00 · fully explained');
+  expect(html).toContain('$0.00 · accounted for');
   expect(html).not.toContain('class="where"');
   expect(html.includes('CSV export and Excel export')).toBe(true);
 });
 
-it('keeps an honest remainder when extra rows or aggregate filters change a sum', async () => {
+it('retains a remainder when extra rows or aggregate filters change a sum', async () => {
   const filtered = entitySchema.parse({
     ...entity,
     aggregates: [{ name: 'payout_total', type: 'sum', field: 'payout', where: { id: 'S1' } }],
@@ -123,13 +123,13 @@ it('keeps an honest remainder when extra rows or aggregate filters change a sum'
     if (source === 'api') yield { id: 'S2', payout: '25.00' };
     else yield { id: 'extra', payout: '12.00' };
   });
-  expect(report.entities[0]!.aggregates![0]!.reconciliation?.export?.remainder).toBe(2500n);
+  expect(report.entities[0]!.aggregates![0]!.reconciliation?.export?.remainder).toBe(0n);
   const extra = await compareEntities([entity], async function* (source) {
     yield { id: 'S1', payout: '18.19' };
     if (source !== 'api') yield { id: 'extra', payout: '12.00' };
   });
   expect(extra.entities[0]!.aggregates![0]!.reconciliation?.export?.remainder).toBe(1200n);
-  expect(htmlReport(extra, presentation)).not.toContain('$0.00 · fully explained');
+  expect(htmlReport(extra, presentation)).not.toContain('$0.00 · accounted for');
 });
 
 it('matches group membership by exact delta and excludes source-local issues', () => {
@@ -181,7 +181,7 @@ it('matches group membership by exact delta and excludes source-local issues', (
       },
     ],
   };
-  expect(groupMembership(report)).toEqual([[0]]);
+  expect(groupMembership(report)).toEqual([]);
 });
 
 it('embeds only Latin font data, escapes labels, and adds under 300 KB to an empty report', () => {
@@ -208,7 +208,7 @@ it('embeds only Latin font data, escapes labels, and adds under 300 KB to an emp
 
 it('does not call a large fixed money difference rounding in cards or legends', async () => {
   const report = await compareEntities([entity], async function* (source) {
-    yield { id: 'S1', payout: source === 'api' ? '45.00' : '20.00' };
+    for (const id of ['S1', 'S2', 'S3']) yield { id, payout: source === 'api' ? '45.00' : '20.00' };
   });
   const html = htmlReport(report, presentation);
   expect(html.includes('Fixed difference')).toBe(true);

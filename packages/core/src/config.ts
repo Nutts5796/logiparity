@@ -21,9 +21,27 @@ const httpUrl = z.url().refine((v) => {
 }, 'Use an HTTP(S) URL without embedded credentials');
 const pageSize = z.number().int().min(1).max(10000).default(200);
 const completionSignals = { totalPath: name.optional(), totalPagesPath: name.optional(), hasMorePath: name.optional() };
+export const keySchema = z.union([
+  name,
+  z
+    .array(name)
+    .min(1)
+    .refine((items) => new Set(items).size === items.length, 'Key fields must be unique'),
+]);
+const scalarFilter = z.union([z.string(), z.number().finite(), z.boolean(), z.null()], {
+  error: 'Expected a scalar: string, number, boolean or null',
+});
+const filterChoice = z.union([scalarFilter, z.array(scalarFilter).min(1)]);
+export const rowFilterSchema = z.record(
+  name,
+  z.union([filterChoice, z.object({ not: filterChoice }).strict()], {
+    error: 'Expected a scalar, a nonempty list of scalar values, or {not: value}',
+  }),
+);
 const rollup = z
   .object({
-    by: name,
+    by: keySchema,
+    where: rowFilterSchema.default({}),
     sum: z.array(name).default([]),
     first: z.array(name).default([]),
     duplicates: z
@@ -38,7 +56,9 @@ const rollup = z
   })
   .strict()
   .refine(
-    (v) => new Set([v.by, ...v.sum, ...v.first]).size === 1 + v.sum.length + v.first.length,
+    (v) =>
+      new Set([...keyFields(v.by), ...v.sum, ...v.first]).size ===
+      keyFields(v.by).length + v.sum.length + v.first.length,
     'Rollup fields must be unique and disjoint',
   );
 const pagination = z.discriminatedUnion('type', [
@@ -88,6 +108,8 @@ export const sourceSchema = z.discriminatedUnion('type', [
       type: z.literal('rest'),
       label: name.optional(),
       rollup: rollup.optional(),
+      where: rowFilterSchema.default({}),
+      unique: z.array(name).default([]),
       baseUrl: httpUrl,
       path: name,
       fields,
@@ -113,6 +135,8 @@ export const sourceSchema = z.discriminatedUnion('type', [
       type: z.literal('csv'),
       label: name.optional(),
       rollup: rollup.optional(),
+      where: rowFilterSchema.default({}),
+      unique: z.array(name).default([]),
       file: name,
       fields,
       delimiter: z.string().length(1).default(','),
@@ -126,6 +150,8 @@ export const sourceSchema = z.discriminatedUnion('type', [
       type: z.literal('xlsx'),
       label: name.optional(),
       rollup: rollup.optional(),
+      where: rowFilterSchema.default({}),
+      unique: z.array(name).default([]),
       file: name,
       fields,
       sheet: name,
@@ -137,6 +163,8 @@ export const sourceSchema = z.discriminatedUnion('type', [
       type: z.literal('ui'),
       label: name.optional(),
       rollup: rollup.optional(),
+      where: rowFilterSchema.default({}),
+      unique: z.array(name).default([]),
       url: httpUrl,
       storageState: name.optional(),
       table: name,
@@ -156,6 +184,8 @@ export const sourceSchema = z.discriminatedUnion('type', [
       type: z.literal('sql'),
       label: name.optional(),
       rollup: rollup.optional(),
+      where: rowFilterSchema.default({}),
+      unique: z.array(name).default([]),
       connectionEnv: envName,
       query: name,
       fields,
@@ -195,7 +225,7 @@ export const ruleSchema = z
         message: 'Money tolerance must be an integer in minor units',
       });
   });
-const where = z.record(name, z.union([z.string(), z.number().finite(), z.boolean(), z.null()])).default({});
+const where = z.record(name, scalarFilter).default({});
 export const aggregateSchema = z.discriminatedUnion('type', [
   z
     .object({
@@ -226,7 +256,7 @@ export const entitySchema = z
     name,
     label: name.optional(),
     pluralLabel: name.optional(),
-    key: name,
+    key: keySchema,
     sources: z.record(name, sourceSchema),
     compare: z.record(name, ruleSchema).default({}),
     aggregates: z.array(aggregateSchema).default([]),
@@ -241,20 +271,40 @@ export const entitySchema = z
         message: 'Configure at least two sources; the first is the reference',
       });
     for (const [source, config] of Object.entries(v.sources)) {
-      if (!Object.hasOwn(config.fields, v.key))
-        ctx.addIssue({ code: 'custom', path: ['sources', source, 'fields'], message: `Map the entity key ${v.key}` });
+      if (keyFields(v.key).some((field) => !Object.hasOwn(config.fields, field)))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['sources', source, 'fields'],
+          message: `Map the entity key ${keyFields(v.key).join(', ')}`,
+        });
+    }
+    for (const [source, config] of Object.entries(v.sources)) {
+      for (const field of [...Object.keys(config.where), ...Object.keys(config.rollup?.where ?? {}), ...config.unique])
+        if (!Object.hasOwn(config.fields, field))
+          ctx.addIssue({
+            code: 'custom',
+            path: ['sources', source],
+            message: `Map filter or uniqueness field ${field}`,
+          });
     }
     for (const [source, config] of Object.entries(v.sources))
       if (config.rollup) {
         const r = config.rollup;
-        const fields = new Set([r.by, ...r.sum, ...r.first, ...(r.duplicates?.by ?? [])]);
-        if (r.duplicates && !r.duplicates.by.includes(r.by))
+        const fields = new Set([
+          ...keyFields(r.by),
+          ...r.sum,
+          ...r.first,
+          ...(r.duplicates?.by ?? []),
+          ...Object.keys(config.where),
+          ...Object.keys(r.where),
+        ]);
+        if (r.duplicates && keyFields(r.by).some((field) => !r.duplicates?.by.includes(field)))
           ctx.addIssue({
             code: 'custom',
             path: ['sources', source, 'rollup', 'duplicates', 'by'],
             message: 'Duplicate identity must include the rollup key',
           });
-        if (r.by !== v.key)
+        if (JSON.stringify(r.by) !== JSON.stringify(v.key))
           ctx.addIssue({
             code: 'custom',
             path: ['sources', source, 'rollup', 'by'],
@@ -267,7 +317,7 @@ export const entitySchema = z
           ctx.addIssue({
             code: 'custom',
             path: ['sources', source, 'rollup'],
-            message: 'Every mapped field must appear in rollup by, sum, first or duplicates.by',
+            message: 'Every mapped field must appear in rollup by, sum, first, duplicates.by or where',
           });
         for (const field of r.sum)
           if (!['money', 'number'].includes(v.compare[field]?.type ?? ''))
@@ -312,6 +362,13 @@ export const entitySchema = z
 export const configSchema = z
   .object({
     version: z.literal(1),
+    maxInvalidRows: z.number().int().min(0).max(1000000).default(50),
+    publicEnv: z.array(envName).default([]),
+    allowedHosts: z.array(name).min(1).optional(),
+    patterns: z
+      .object({ minCount: z.number().int().min(3).default(3) })
+      .strict()
+      .default({ minCount: 3 }),
     environment: z.enum(['test', 'staging']).default('test'),
     entities: z.array(entitySchema).min(1),
     variables: z.record(name, z.string()).default({}),
@@ -321,10 +378,20 @@ export const configSchema = z
           .array(z.enum(['console', 'html', 'junit', 'json', 'markdown']))
           .min(1)
           .default(['console', 'json']),
+        displayTimezone: name
+          .refine((value) => {
+            try {
+              new Intl.DateTimeFormat('en-US', { timeZone: value });
+              return true;
+            } catch {
+              return false;
+            }
+          }, 'Use a valid IANA timezone')
+          .default('UTC'),
         dir: name.default('./logiparity-report'),
       })
       .strict()
-      .default({ outputs: ['console', 'json'], dir: './logiparity-report' }),
+      .default({ outputs: ['console', 'json'], dir: './logiparity-report', displayTimezone: 'UTC' }),
   })
   .strict()
   .refine((v) => new Set(v.entities.map((e) => e.name)).size === v.entities.length, 'Entity names must be unique');
@@ -416,6 +483,10 @@ export async function loadConfig(
 ): Promise<LoadedConfig> {
   const absolute = resolve(file);
   let raw = await loadYaml(absolute, env, options);
+  if (raw && typeof raw === 'object' && 'allowMutations' in raw && 'state' in raw)
+    throw new ConfigError(
+      'This is a scenario target. Use logiparity scenario validate <scenario.yaml> --target <target.yaml>.',
+    );
   const references = referencedEnvironment(raw);
   const secrets = secretValues(raw, env);
   const location = redactSecrets(absolute, secrets);
@@ -530,3 +601,8 @@ export type FieldMapping = z.infer<typeof fieldSchema>;
 export const fieldPath = (field: FieldMapping): string => (typeof field === 'string' ? field : field.path);
 export const fieldPaths = (fields: Record<string, FieldMapping>): Record<string, string> =>
   Object.fromEntries(Object.entries(fields).map(([name, mapping]) => [name, fieldPath(mapping)]));
+
+export function keyFields(key: string | readonly string[]): readonly string[] {
+  return typeof key === 'string' ? [key] : key;
+}
+export type RowFilter = z.infer<typeof rowFilterSchema>;

@@ -1,5 +1,8 @@
 import { isBlocking } from './policy.js';
-import { entityNames, escapeMarkup, findingDetail, findingTypes } from './report-utils.js';
+import { entityNames, escapeMarkup, findingTypes } from './report-utils.js';
+import { humanFinding, quantity, typeLabels } from './human.js';
+import type { ReportPresentation } from './money-display.js';
+import { reportLabels } from './labels.js';
 import type { Report } from './types.js';
 
 function xml(input: string): string {
@@ -19,7 +22,7 @@ function xml(input: string): string {
   return escapeMarkup(valid);
 }
 
-export function junitReport(report: Report, timestamp = new Date()): string {
+export function junitReport(report: Report, timestamp = new Date(), presentation: ReportPresentation = {}): string {
   const suites = entityNames(report).map((entity, index) => {
     let failures = 0;
     let errors = 0;
@@ -33,11 +36,18 @@ export function junitReport(report: Report, timestamp = new Date()): string {
         if (tag === 'error') errors++;
         else if (tag === 'failure') failures++;
         else skipped++;
-        result = `<${tag}${tag === 'skipped' ? '' : ` type="${type}"`} message="${findings.length} findings${blocking ? '' : ' allowed by failOn'}">${xml(findings.map(findingDetail).join('\n\n'))}</${tag}>`;
+        result = `<${tag}${tag === 'skipped' ? '' : ` type="${type}"`} message="${quantity(findings.length, 'finding')}${blocking ? '' : ' allowed by failOn'}">${xml(
+          findings
+            .map((finding) => {
+              const item = humanFinding(finding, presentation);
+              return `${item.key} | ${item.source} | ${item.field} | Reference: ${item.reference} | Source value: ${item.sourceValue} | Difference: ${item.difference}${item.details ? ` | ${item.details}` : ''}`;
+            })
+            .join('\n'),
+        )}</${tag}>`;
       }
-      return `    <testcase name="${type}" classname="${xml(`logiparity.${entity}`)}" time="0">${result}</testcase>`;
+      return `    <testcase name="${xml(typeLabels[type])}" classname="${xml(`logiparity.${entity}`)}" time="0">${result}</testcase>`;
     });
-    return `  <testsuite name="${xml(entity)}" package="logiparity" id="${index}" timestamp="${timestamp.toISOString().slice(0, 19)}" hostname="localhost" tests="${findingTypes.length}" failures="${failures}" errors="${errors}" skipped="${skipped}" time="0">
+    return `  <testsuite name="${xml(reportLabels(presentation).entity(entity)?.label ?? entity)}" package="logiparity" id="${index}" timestamp="${timestamp.toISOString().slice(0, 19)}" hostname="localhost" tests="${findingTypes.length}" failures="${failures}" errors="${errors}" skipped="${skipped}" time="0">
     <properties><property name="warnings" value="${report.warnings?.length ?? 0}"/><property name="timestamp.timezone" value="UTC"/><property name="timing" value="not measured; time=0 is the schema-required placeholder"/></properties>
 ${cases.join('\n')}
     <system-out>${xml((report.warnings ?? []).map((warning) => `Warning: ${warning.message}`).join('\n'))}</system-out>

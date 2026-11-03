@@ -1,28 +1,15 @@
-import { redactSecrets, secretValues } from './diagnostics.js';
-import { errorText, type EntityConfig, type SourceConfig } from './config.js';
-import { equalValues, normalize } from './normalize.js';
-import type { EntitySummary, Finding, NormalizedValue, Report, SourceReader } from './types.js';
-import { aggregateEqual, measureAggregate, DecimalSum } from './aggregates.js';
+import { secretValues, redactSecrets } from './diagnostics.js';
+import { keyFields, type EntityConfig, type Config } from './config.js';
+import type { Report, Finding, SourceReader, EntitySummary } from './types.js';
+import { readSource, type SourceState } from './source-state.js';
+import { equalValues } from './normalize.js';
+import { aggregateEqual } from './aggregates.js';
 import { applyFailurePolicies } from './policy.js';
 import { groupFindings, attachGroupMembership } from './groups.js';
+import { collectReconciliation, reconcileAggregates } from './reconciliation.js';
+import { keyText } from './keys.js';
 import { formatMoneyMajor } from './money-display.js';
-import { SourceError } from './source-error.js';
-
-type Row = Record<string, NormalizedValue>;
-interface SourceState {
-  rows: Map<string, Row>;
-  uncertain: Map<string, Set<string>>;
-  issues: Finding[];
-  firstLines: Map<string, number>;
-  conflicts: Map<string, Finding>;
-  identities: Set<string>;
-  sums: Map<string, Map<string, DecimalSum>>;
-  projection?: Set<string>;
-  measurements: Map<string, number | bigint | undefined>;
-  count: number;
-  context: string;
-}
-const order = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+const order = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
 export function sortFindings(findings: Finding[]): Finding[] {
   return findings.sort(
     (a, b) =>
@@ -33,249 +20,59 @@ export function sortFindings(findings: Finding[]): Finding[] {
       order(a.type, b.type),
   );
 }
-function uncertain(state: SourceState, key: string, fields: readonly string[]): void {
-  const names = state.uncertain.get(key) ?? new Set<string>();
-  for (const field of fields) names.add(field);
-  state.uncertain.set(key, names);
-}
-function readKey(entity: EntityConfig, raw: Record<string, unknown>): string {
-  const value = raw[entity.key];
-  if (
-    (typeof value !== 'string' && typeof value !== 'number') ||
-    String(value).trim() === '' ||
-    (typeof value === 'number' && !Number.isSafeInteger(value))
-  )
-    throw new Error(`Invalid key ${entity.key}; provide a nonempty string or safe integer.`);
-  return String(value).trim();
-}
-function normalizeRow(
+function rowDetails(
   entity: EntityConfig,
   source: string,
-  raw: Record<string, unknown>,
-  state: SourceState,
+  reference: string,
   key: string,
-): Row {
-  const row: Row = Object.create(null) as Row;
-  for (const [field, value] of Object.entries(raw)) {
-    state.context = `row ${state.count}, key ${key}, field ${field}`;
-    row[field] = field === entity.key ? key : normalize(value, entity.compare[field], source);
-  }
-  return row;
-}
-// Check line identities and disagreements before adding anything to a rolled-up total.
-function rollUpRow(
-  entity: EntityConfig,
-  source: string,
-  config: SourceConfig,
-  key: string,
-  row: Row,
   state: SourceState,
-): boolean {
-  const rollup = config.rollup!;
-  const previous = state.rows.get(key);
-  for (const field of rollup.first)
-    if (previous && previous[field] !== row[field]) {
-      const id = JSON.stringify([key, field]);
-      let finding = state.conflicts.get(id);
-      if (!finding) {
-        finding = {
-          type: 'field_mismatch',
-          reason: 'rollup_conflict',
-          entity: entity.name,
-          source,
-          key,
-          field,
-          values: [{ line: state.firstLines.get(key)!, value: previous[field] ?? null }],
-          message: `${source}: rollup field ${field} has conflicting values within load ${key}; the first value is retained.`,
-        };
-        state.conflicts.set(id, finding);
-        state.issues.push(finding);
-      }
-      finding.values!.push({ line: state.count, value: row[field] ?? null });
-      uncertain(state, key, [field]);
-    }
-  for (const field of rollup.sum)
-    if (entity.compare[field]?.type === 'money' && row[field] === null) {
-      state.issues.push({
-        type: 'field_mismatch',
-        reason: 'rollup_missing_value',
-        entity: entity.name,
-        source,
-        key,
-        field,
-        actual: null,
-        message: `${source}: blank money in ${field} at row ${state.count}, key ${key}; monetary comparison and affected totals are skipped.`,
-      });
-      uncertain(state, key, [field]);
-    }
-  if (rollup.duplicates) {
-    const fields = rollup.duplicates.by;
-    if (fields.some((field) => row[field] === null || row[field] === undefined))
-      throw new Error('Rollup duplicate identity fields cannot be blank');
-    const identity = JSON.stringify(fields.map((field) => [typeof row[field], String(row[field])]));
-    if (state.identities.has(identity)) {
-      const amounts = rollup.sum
-        .map((field) => {
-          const rule = entity.compare[field];
-          const value = row[field];
-          return rule?.type === 'money' && typeof value === 'bigint'
-            ? `excluded ${formatMoneyMajor(value, rule.currency!, rule.locale)} from load ${key} (${field})`
-            : undefined;
-        })
-        .filter(Boolean);
-      state.issues.push({
-        type: 'duplicate_key',
-        reason: 'rollup_duplicate',
-        entity: entity.name,
-        source,
-        key,
-        field: entity.key,
-        message: `${source}: duplicate rollup line identity (${fields.map((field) => `${field}=${String(row[field])}`).join(', ')}) at row ${state.count}; ${amounts.length ? amounts.join('; ') : 'the repeated line is excluded'} before summing.`,
-      });
-      uncertain(state, key, rollup.sum);
-      return false;
-    }
-    state.identities.add(identity);
-  }
-  for (const field of rollup.sum) {
-    const value = row[field];
-    if (value !== null && typeof value !== 'number' && typeof value !== 'bigint')
-      throw new Error(`Rollup sum field ${field} is not numeric`);
-    if (entity.compare[field]?.type === 'money')
-      row[field] = ((previous?.[field] as bigint | undefined) ?? 0n) + ((value as bigint | null) ?? 0n);
-    else {
-      const perKey = state.sums.get(key) ?? new Map<string, DecimalSum>();
-      const sum = perKey.get(field) ?? new DecimalSum();
-      if (typeof value === 'number') sum.add(value);
-      perKey.set(field, sum);
-      state.sums.set(key, perKey);
-      row[field] = sum.value();
-    }
-  }
-  if (previous) for (const field of rollup.first) row[field] = previous[field] ?? null;
-  for (const field of Object.keys(row)) if (!state.projection!.has(field)) delete row[field];
-  return true;
-}
-// Measure only inputs with complete, unambiguous values after rollup.
-function measureSource(entity: EntityConfig, source: string, config: SourceConfig, state: SourceState): void {
-  const measuredConfig = state.projection
-    ? {
-        ...config,
-        fields: Object.fromEntries(Object.entries(config.fields).filter(([field]) => state.projection!.has(field))),
-      }
-    : config;
-  for (const aggregate of entity.aggregates) {
-    state.context = `aggregate ${aggregate.name}`;
-    const required = [...Object.keys(aggregate.where), ...(aggregate.type === 'sum' ? [aggregate.field] : [])];
-    const ambiguous = [...state.uncertain.values()].some((fields) => required.some((field) => fields.has(field)));
-    state.measurements.set(
-      aggregate.name,
-      ambiguous ? undefined : measureAggregate(aggregate, entity, source, measuredConfig, state.rows),
-    );
-  }
-}
-// Read and normalize a whole source transactionally; discard partial results on any error.
-async function readSource(
-  entity: EntityConfig,
-  source: string,
-  config: SourceConfig,
-  read: SourceReader,
-  secrets: string[],
-  report: Report,
-): Promise<SourceState | undefined> {
-  const state: SourceState = {
-    rows: new Map(),
-    uncertain: new Map(),
-    issues: [],
-    firstLines: new Map(),
-    conflicts: new Map(),
-    identities: new Set(),
-    sums: new Map(),
-    measurements: new Map(),
-    count: 0,
-    context: '',
-    ...(config.rollup ? { projection: new Set([config.rollup.by, ...config.rollup.sum, ...config.rollup.first]) } : {}),
+  type: 'missing_in_source' | 'extra_in_source',
+): Finding {
+  const parts = state.parts.get(key),
+    row = state.rows.get(key);
+  const money = Object.entries(entity.compare).find(
+    ([field, rule]) => rule.type === 'money' && typeof row?.[field] === 'bigint',
+  );
+  const amount = money && row ? `, ${formatMoneyMajor(row[money[0]] as bigint, money[1].currency ?? 'USD')}` : '';
+  const message =
+    type === 'missing_in_source'
+      ? `${keyText(key, parts)}: missing from ${source}.`
+      : `${keyText(key, parts)}: not on ${reference}${amount}.`;
+  return {
+    type,
+    entity: entity.name,
+    source,
+    key,
+    field: '',
+    message,
+    ...(money && row ? { amounts: [{ field: money[0], amount: row[money[0]] as bigint }] } : {}),
+    ...(parts ? { keyParts: parts } : {}),
+    ...(type === 'missing_in_source' ? { referencePosition: state.positions.get(key) ?? 1 } : {}),
   };
-  try {
-    for await (const raw of read(source, config, {
-      warn: (message) => {
-        const warning = { entity: entity.name, source, message: redactSecrets(message, secrets) };
-        report.warnings ??= [];
-        if (
-          !report.warnings.some(
-            (item) => item.entity === entity.name && item.source === source && item.message === warning.message,
-          )
-        )
-          report.warnings.push(warning);
-      },
-    })) {
-      state.count++;
-      state.context = `row ${state.count}`;
-      const key = readKey(entity, raw);
-      state.context += `, key ${key}`;
-      if (state.rows.has(key) && !config.rollup) {
-        state.issues.push({
-          type: 'duplicate_key',
-          entity: entity.name,
-          source,
-          key,
-          field: entity.key,
-          message: `${source}: duplicate key ${key} at row ${state.count}; the first record is used.`,
-        });
-        continue;
-      }
-      const row = normalizeRow(entity, source, raw, state, key);
-      if (config.rollup && !rollUpRow(entity, source, config, key, row, state)) continue;
-      if (!state.firstLines.has(key)) state.firstLines.set(key, state.count);
-      state.rows.set(key, row);
-    }
-    measureSource(entity, source, config, state);
-    return state;
-  } catch (error) {
-    report.findings.push({
-      type: 'source_error',
-      entity: entity.name,
-      source,
-      key: '',
-      field: '',
-      message: redactSecrets(
-        `${entity.name}/${source}${state.context ? ` (${state.context})` : ''}: ${errorText(error)}`,
-        secrets,
-      ),
-      ...(error instanceof SourceError && error.screenshot ? { screenshot: error.screenshot } : {}),
-    });
-    return undefined;
-  }
 }
-// Compare unique keys and fields, skipping values made uncertain by source-local issues.
+// Compare valid, certain cells; an invalid cell does not suppress unrelated rows or fields.
 function compareSource(
   entity: EntityConfig,
   source: string,
   reference: string,
-  config: SourceConfig,
   baseline: SourceState,
   current: SourceState,
   report: Report,
 ): void {
+  const config = entity.sources[source];
+  if (!config) return;
+  const keys = new Set(keyFields(entity.key));
   for (const [key, expected] of baseline.rows) {
     const actual = current.rows.get(key);
     if (!actual) {
-      report.findings.push({
-        type: 'missing_in_source',
-        referencePosition: baseline.firstLines.get(key)!,
-        entity: entity.name,
-        source,
-        key,
-        field: '',
-        message: `${source}: key ${key} exists in reference ${reference} but is missing here.`,
-      });
+      report.findings.push(rowDetails(entity, source, reference, key, baseline, 'missing_in_source'));
       continue;
     }
     for (const [field, value] of Object.entries(expected)) {
       if (
-        field === entity.key ||
+        keys.has(field) ||
         !Object.hasOwn(config.fields, field) ||
-        (current.projection && !current.projection.has(field)) ||
+        (config.rollup && !config.rollup.sum.includes(field) && !config.rollup.first.includes(field)) ||
         current.uncertain.get(key)?.has(field) ||
         baseline.uncertain.get(key)?.has(field)
       )
@@ -287,25 +84,18 @@ function compareSource(
           entity: entity.name,
           source,
           key,
+          ...(baseline.parts.has(key) ? { keyParts: baseline.parts.get(key) ?? [] } : {}),
           field,
           expected: value,
           actual: actualValue,
-          message: `${source}: key ${key}, field ${field} differs from reference ${reference}.`,
+          message: `${keyText(key, baseline.parts.get(key))}: ${field} differs from ${reference}.`,
         });
     }
   }
   for (const key of current.rows.keys())
     if (!baseline.rows.has(key))
-      report.findings.push({
-        type: 'extra_in_source',
-        entity: entity.name,
-        source,
-        key,
-        field: '',
-        message: `${source}: key ${key} is absent from reference ${reference}.`,
-      });
+      report.findings.push(rowDetails(entity, source, reference, key, current, 'extra_in_source'));
 }
-// Publish aggregate values only after a complete source has been read.
 function publishAggregates(
   entity: EntityConfig,
   source: string,
@@ -314,141 +104,121 @@ function publishAggregates(
   summary: EntitySummary,
   report: Report,
 ): void {
-  for (const [index, aggregate] of entity.aggregates.entries()) {
-    const result = summary.aggregates?.[index];
-    if (!result) continue;
-    const actual = state.measurements.get(aggregate.name);
+  for (const [index, definition] of entity.aggregates.entries()) {
+    const aggregate = summary.aggregates?.[index];
+    if (!aggregate) continue;
+    const actual = state.measurements.get(definition.name);
+    aggregate.sourceStatus ??= {};
+    aggregate.uncertainKeys ??= {};
     if (actual === undefined) {
-      result.skippedSources.push(source);
+      aggregate.skippedSources.push(source);
+      aggregate.sourceStatus[source] = 'not_mapped';
       continue;
     }
-    result.values[source] = actual;
-    const expected = result.values[reference];
-    if (source !== reference && expected !== undefined && !aggregateEqual(expected, actual, aggregate))
+    const excluded = state.excluded.get(definition.name) ?? new Set<string>();
+    aggregate.sourceStatus[source] = excluded.size ? 'uncertain' : 'certain';
+    aggregate.uncertainKeys[source] = [...excluded].map((key) => keyText(key, state.parts.get(key)));
+    aggregate.values[source] = actual;
+    const expected = aggregate.values[reference];
+    if (source !== reference && expected !== undefined && !aggregateEqual(expected, actual, definition))
       report.findings.push({
         type: 'aggregate_mismatch',
         entity: entity.name,
         source,
         key: '',
-        field: aggregate.name,
+        field: definition.name,
         expected,
         actual,
-        message: `${source}: aggregate ${aggregate.name} differs from reference ${reference}.`,
+        message: `${definition.name} differs from ${reference}.`,
       });
   }
 }
-// Keep exact missing-row contributions before releasing normalized source rows.
-function collectMissingMoney(
-  entity: EntityConfig,
-  baseline: SourceState,
-  current: SourceState,
-  source: string,
-  reference: string,
-  summary: EntitySummary,
-): void {
-  // Retain only exact missing-money contributions, never the source rows themselves.
-  for (const aggregate of entity.aggregates) {
-    if (aggregate.type !== 'sum' || entity.compare[aggregate.field]?.type !== 'money') continue;
-    const result = summary.aggregates?.find((item) => item.name === aggregate.name);
-    if (!result || result.values[source] === undefined || result.values[reference] === undefined) continue;
-    let amount = 0n,
-      count = 0;
-    for (const [key, row] of baseline.rows) {
-      if (!current.rows.has(key)) {
-        count++;
-        if (typeof row[aggregate.field] === 'bigint') amount -= row[aggregate.field] as bigint;
-      }
-    }
-    result.reconciliation ??= {};
-    result.reconciliation[source] = { missingRows: { count, amount }, patterns: [], remainder: 0n };
+function redactReportValues(report: Report, secrets: readonly string[]): void {
+  const value = (input: unknown) => (typeof input === 'string' ? redactSecrets(input, secrets, 'data') : input);
+  for (const finding of report.findings) {
+    finding.key = String(value(finding.key));
+    if (finding.keyParts) finding.keyParts = finding.keyParts.map((part) => String(value(part)));
+    if (typeof finding.expected === 'string') finding.expected = String(value(finding.expected));
+    if (typeof finding.actual === 'string') finding.actual = String(value(finding.actual));
+    if (finding.relatedKeys) finding.relatedKeys = finding.relatedKeys.map((key) => String(value(key)));
+    finding.values?.forEach((item) => {
+      if (typeof item.value === 'string') item.value = String(value(item.value));
+    });
+    finding.message = redactSecrets(finding.message, secrets);
+  }
+  for (const group of report.groups ?? []) {
+    if (group.keys) group.keys = group.keys.map((key) => String(value(key)));
+    group.summary = redactSecrets(group.summary, secrets);
+    if (typeof group.expected === 'string') group.expected = String(value(group.expected));
+    if (typeof group.actual === 'string') group.actual = String(value(group.actual));
   }
 }
-
-// Explain aggregate differences only with measured parts; keep every unmatched amount as a remainder.
-function reconcileMoney(report: Report, entities: readonly EntityConfig[]): void {
-  for (const summary of report.entities) {
-    const entity = entities.find((item) => item.name === summary.entity)!;
-    for (const aggregate of summary.aggregates ?? []) {
-      const definition = entity.aggregates.find((item) => item.name === aggregate.name);
-      if (definition?.type !== 'sum') continue;
-      for (const [source, reconciliation] of Object.entries(aggregate.reconciliation ?? {})) {
-        reconciliation.patterns = report.groups!.flatMap((group, index) =>
-          group.entity === entity.name &&
-          group.source === source &&
-          group.field === definition.field &&
-          group.kind === 'money_delta'
-            ? [
-                {
-                  group: index,
-                  count: group.findingIndexes!.length,
-                  amount: BigInt(group.delta!) * BigInt(group.findingIndexes!.length),
-                },
-              ]
-            : [],
-        );
-        reconciliation.remainder =
-          BigInt(aggregate.values[source]!) -
-          BigInt(aggregate.values[summary.reference]!) -
-          BigInt(reconciliation.missingRows.amount) -
-          reconciliation.patterns.reduce((sum, part) => sum + BigInt(part.amount), 0n);
-      }
-    }
-  }
-}
-
 export async function compareEntities(
   entities: EntityConfig[],
   read: SourceReader,
   env: NodeJS.ProcessEnv = process.env,
+  options: Partial<Pick<Config, 'patterns' | 'maxInvalidRows'>> = {},
 ): Promise<Report> {
   const secrets = secretValues(entities, env);
-  const report: Report = { schemaVersion: 1, findings: [], entities: [] };
+  const report: Report = {
+    schemaVersion: 1,
+    findings: [],
+    entities: [],
+    patterns: options.patterns ?? { minCount: 3 },
+  };
   const finalKeys: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const entity of entities) {
-    const sources = Object.entries(entity.sources);
-    const reference = sources[0]?.[0] ?? '';
+    const sources = Object.entries(entity.sources),
+      reference = sources[0]?.[0] ?? '';
     const summary: EntitySummary = {
       entity: entity.name,
       reference,
       counts: {},
-      ...(entity.aggregates.length
-        ? {
-            aggregates: entity.aggregates.map((a) => ({
-              name: a.name,
-              type: a.type,
-              values: Object.create(null) as Record<string, number | bigint>,
-              skippedSources: [],
-            })),
-          }
-        : {}),
+      uniqueCounts: {},
+      filters: Object.fromEntries(
+        sources
+          .filter(([, source]) => Object.keys(source.where).length || Object.keys(source.rollup?.where ?? {}).length)
+          .map(([name, source]) => [name, { source: source.where, rollup: source.rollup?.where ?? {} }]),
+      ),
+      rollupSources: sources.filter(([, source]) => !!source.rollup).map(([name]) => name),
+      pluralLabel: entity.pluralLabel ?? 'records',
+      aggregates: entity.aggregates.map((aggregate) => ({
+        name: aggregate.name,
+        type: aggregate.type,
+        values: {},
+        skippedSources: [],
+        sourceStatus: Object.fromEntries(sources.map(([source]) => [source, 'not_read' as const])),
+      })),
     };
     report.entities.push(summary);
     let baseline: SourceState | undefined;
     for (const [source, config] of sources) {
-      const current = await readSource(entity, source, config, read, secrets, report);
+      const current = await readSource(entity, source, config, read, secrets, report, options.maxInvalidRows ?? 50);
       if (!current) {
         if (source === reference) break;
         continue;
       }
       summary.counts[source] = current.count;
+      if (summary.uniqueCounts) summary.uniqueCounts[source] = current.rows.size;
       report.findings.push(...current.issues);
       publishAggregates(entity, source, reference, current, summary, report);
       if (source === reference) {
         baseline = current;
         const last = [...current.rows.keys()].at(-1);
-        if (last) finalKeys[entity.name] = last;
+        if (last && typeof entity.key === 'string') finalKeys[entity.name] = last;
       } else if (baseline) {
-        compareSource(entity, source, reference, config, baseline, current, report);
-        collectMissingMoney(entity, baseline, current, source, reference, summary);
+        compareSource(entity, source, reference, baseline, current, report);
+        collectReconciliation(entity, baseline, current, source, reference, summary);
       }
     }
   }
-  // Sort findings deterministically, then derive investigation groups without dropping any rows.
   sortFindings(report.findings);
   report.entities.sort((a, b) => order(a.entity, b.entity));
   applyFailurePolicies(report, entities);
-  report.groups = groupFindings(report.findings, entities, finalKeys);
+  report.groups = groupFindings(report.findings, entities, finalKeys, report.patterns);
   attachGroupMembership(report);
-  reconcileMoney(report, entities);
+  reconcileAggregates(report, entities);
+  attachGroupMembership(report);
+  redactReportValues(report, secrets);
   return report;
 }

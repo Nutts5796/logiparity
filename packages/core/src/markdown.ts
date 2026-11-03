@@ -1,75 +1,106 @@
-import { reportGroups, presentationFindings } from './groups.js';
-import { isBlocking } from './policy.js';
-import { escapeMarkup, findingTypes, verdict } from './report-utils.js';
-import { presentationDifference, presentationValue, type ReportPresentation } from './money-display.js';
-import type { Report } from './types.js';
-
-function cell(text: string): string {
-  return escapeMarkup(text)
-    .replace(/[\\`*_[\]{}()!~]/g, '\\$&')
-    .replaceAll('|', '&#124;')
-    .replace(/\r\n|\r|\n/g, '<br>');
-}
-
+import { reportGroups, groupMembership, accountedFindingIndexes } from './groups.js';
+import { verdict } from './report-utils.js';
+import { reportLabels } from './labels.js';
+import { humanFinding, reportCounts, quantity, typeLabels, patternWords, markdownCell as cell } from './human.js';
+import { presentationValue, type ReportPresentation } from './money-display.js';
+import type { Report, Finding } from './types.js';
+const row = (finding: Finding, presentation: ReportPresentation) => {
+  const item = humanFinding(finding, presentation);
+  return `| ${[item.key, item.source, item.field, item.reference, item.sourceValue, item.difference, finding.accounting ? `Follows from: ${finding.accounting.causes.join(', ')}` : item.details || item.type].map(cell).join(' | ')} |`;
+};
 export function markdownReport(report: Report, presentation: ReportPresentation = {}): string {
+  const counts = reportCounts(report),
+    labels = reportLabels(presentation);
   const lines = [
     '# LogiParity report',
     '',
-    `**${verdict(report)}** · ${report.entities.length} ${report.entities.length === 1 ? 'entity' : 'entities'} · ${report.findings.length} ${report.findings.length === 1 ? 'finding' : 'findings'} · ${report.findings.filter(isBlocking).length} blocking${report.warnings?.length ? ` · ${report.warnings.length} ${report.warnings.length === 1 ? 'warning' : 'warnings'}` : ''}`,
+    `**${verdict(report)}** · ${quantity(counts.findings, 'finding')} · ${quantity(counts.blocking, 'blocking finding')} · ${quantity(counts.errors, 'source error')} · ${quantity(counts.warnings, 'warning')}`,
     '',
-    'Test and staging environments only. Money uses configured currencies. Dates use UTC. JSON preserves raw values.',
+    'Dates use ' +
+      (presentation.displayTimezone ?? 'UTC') +
+      '. Amounts use their configured currency. JSON retains normalized values.',
     '',
-    '| Finding type | Total | Blocking |',
-    '| --- | ---: | ---: |',
+    '| Finding | Count |',
+    '| --- | ---: |',
   ];
-  for (const type of findingTypes) {
-    const findings = report.findings.filter((f) => f.type === type);
-    lines.push(`| ${type} | ${findings.length} | ${findings.filter(isBlocking).length} |`);
+  for (const [type, label] of Object.entries(typeLabels)) {
+    const count = report.findings.filter((finding) => finding.type === type).length;
+    if (count) lines.push(`| ${label} | ${count.toLocaleString('en-US')} |`);
   }
   if (report.warnings?.length) {
     lines.push('', '## Warnings', '');
     for (const warning of report.warnings) lines.push(`- ${cell(warning.message)}`);
   }
-  const groups = reportGroups(report, presentation);
+  const groups = reportGroups(report, presentation),
+    members = groupMembership(report, presentation),
+    accounted = accountedFindingIndexes(report, presentation);
   if (groups.length) {
-    lines.push('', '## Patterns to investigate', '');
-    for (const group of groups) lines.push(`- ${cell(group.entity)}: ${cell(group.summary)}`);
+    lines.push('', '## Causes to investigate', '');
+    for (const group of groups) {
+      const words = patternWords(group, presentation);
+      lines.push(`- ${cell(words.sentence)} ${cell(words.hint)}`, `  Next step: ${cell(words.nextStep)}`);
+    }
   }
-  const aggregates = report.entities.flatMap((e) => (e.aggregates ?? []).map((a) => ({ entity: e.entity, ...a })));
-  if (aggregates.length) {
+  const totals = report.entities.flatMap((entity) =>
+    (entity.aggregates ?? []).map((aggregate) => ({ entity, ...aggregate })),
+  );
+  if (totals.length) {
+    lines.push('', '## Totals', '', '| Total | Source | Value | Status |', '| --- | --- | ---: | --- |');
+    for (const { entity, ...aggregate } of totals) {
+      const sources = Object.keys(labels.entity(entity.entity)?.sources ?? entity.counts);
+      for (const source of sources) {
+        const value = aggregate.values[source],
+          status = aggregate.sourceStatus?.[source];
+        const shown =
+          status === 'not_mapped'
+            ? 'Not mapped'
+            : value === undefined
+              ? 'Not read'
+              : presentationValue(value, entity.entity, aggregate.name, true, presentation);
+        const uncertain = aggregate.uncertainKeys?.[source];
+        lines.push(
+          `| ${cell(labels.field(entity.entity, aggregate.name, true))} | ${cell(labels.source(entity.entity, source))} | ${cell(shown)} | ${uncertain?.length ? cell('Uncertain lines: ' + uncertain.join(', ')) : source === entity.reference ? 'Reference' : ''} |`,
+        );
+      }
+    }
+  }
+  const unexplained = report.findings.filter((_, index) => !accounted.has(index));
+  if (unexplained.length) {
     lines.push(
       '',
-      '## Aggregates',
+      '## Needs review',
       '',
-      '| Entity | Aggregate | Values by source | Skipped sources |',
-      '| --- | --- | --- | --- |',
+      '| Key | Source | Field | Reference | Source value | Difference | Details |',
+      '| --- | --- | --- | --- | --- | --- | --- |',
     );
-    for (const a of aggregates)
-      lines.push(
-        `| ${cell(a.entity)} | ${cell(a.name)} | ${cell(
-          Object.entries(a.values)
-            .map(([source, value]) => `${source}: ${presentationValue(value, a.entity, a.name, true, presentation)}`)
-            .join('; '),
-        )} | ${cell(a.skippedSources.join(', ') || '—')} |`,
-      );
-  }
-  if (report.findings.length) {
-    lines.push(
-      '',
-      '## Findings',
-      '',
-      '| Entity | Source | Key | Field | Type | Blocking | Reference | Source value | Difference | Explanation |',
-      '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
-    );
-    for (const f of presentationFindings(report, presentation).slice(0, 50))
-      lines.push(
-        `| ${[f.entity, f.source, f.key || '—', f.field || '—', f.type, isBlocking(f) ? 'yes' : 'no', presentationValue(f.expected, f.entity, f.field, f.type === 'aggregate_mismatch', presentation), presentationValue(f.actual, f.entity, f.field, f.type === 'aggregate_mismatch', presentation), presentationDifference(f.expected, f.actual, f.entity, f.field, f.type === 'aggregate_mismatch', presentation), f.message + (f.values ? ` Observed: ${f.values.map((item) => `line ${item.line}: ${presentationValue(item.value, f.entity, f.field, false, presentation)}`).join('; ')}` : '')].map(cell).join(' | ')} |`,
-      );
-    if (report.findings.length > 50)
+    for (const finding of unexplained.slice(0, 50)) lines.push(row(finding, presentation));
+    if (unexplained.length > 50)
       lines.push(
         '',
-        `${report.findings.length - 50} further ${report.findings.length === 51 ? 'finding' : 'findings'} omitted from this summary. The HTML and JSON reports contain every finding.`,
+        `${quantity(unexplained.length - 50, 'additional finding')} require review in the complete HTML or JSON report.`,
       );
+  }
+  if (groups.length) {
+    lines.push(
+      '',
+      '## One example per cause',
+      '',
+      '| Key | Source | Field | Reference | Source value | Difference | Details |',
+      '| --- | --- | --- | --- | --- | --- | --- |',
+    );
+    for (const indexes of members) {
+      const finding = report.findings[indexes[0] ?? -1];
+      if (finding) lines.push(row(finding, presentation));
+    }
+  }
+  const follows = report.findings.filter((finding) => finding.accounting);
+  if (follows.length) {
+    lines.push('', '## Accounted for totals', '');
+    for (const finding of follows)
+      lines.push(
+        `- ${cell(labels.field(finding.entity, finding.field, true))}, ${cell(labels.source(finding.entity, finding.source))}: Follows from: ${cell(finding.accounting?.causes.join(', ') ?? '')}.`,
+      );
+    lines.push('', 'Accounted for means each difference is traced to a cause above. Each cause still needs a fix.');
   }
   return lines.join('\n') + '\n';
 }

@@ -43,7 +43,7 @@ describe('comparison engine', () => {
     ]);
     expect(report.findings[1]).toMatchObject({ field: 'payout', expected: 101n, actual: 100n });
     expect(reportExitCode(report)).toBe(1);
-    expect(report.entities).toEqual([{ entity: 'shipment', reference: 'api', counts: { api: 2, export: 2 } }]);
+    expect(report.entities).toMatchObject([{ entity: 'shipment', reference: 'api', counts: { api: 2, export: 2 } }]);
   });
   it('uses the first duplicate record, reports duplicates in reference and compared source', async () => {
     const report = await compareEntities(
@@ -75,12 +75,12 @@ describe('comparison engine', () => {
     expect(report.findings).toEqual([]);
     expect(reportExitCode(report)).toBe(0);
   });
-  it.each([null, '', {}, 1.2, Number.MAX_SAFE_INTEGER + 1])('rejects invalid key %s as a source error', async (id) => {
+  it.each([null, '', {}, 1.2, Number.MAX_SAFE_INTEGER + 1])('rejects invalid key %s as a row finding', async (id) => {
     const report = await compareEntities([entity], fromRows({ api: [{ id, payout: '1.00' }], export: [] }));
     expect(report.findings).toHaveLength(1);
-    expect(report.findings[0]?.type).toBe('source_error');
-    expect(report.findings[0]?.message).toContain('row 1');
-    expect(reportExitCode(report)).toBe(2);
+    expect(report.findings[0]?.type).toBe('invalid_value');
+    expect(report.findings[0]?.row).toBe(1);
+    expect(reportExitCode(report)).toBe(1);
   });
   it('reports normalization location and suppresses misleading missing records for failed sources', async () => {
     const report = await compareEntities(
@@ -88,8 +88,8 @@ describe('comparison engine', () => {
       fromRows({ api: [{ id: 'S1', payout: '1.00' }], export: [{ id: 'S1', payout: 'bad' }] }),
     );
     expect(report.findings).toHaveLength(1);
-    expect(report.findings[0]?.message).toContain('row 1, key S1, field payout');
-    expect(report.findings[0]?.type).toBe('source_error');
+    expect(report.findings[0]).toMatchObject({ row: 1, key: 'S1', field: 'payout' });
+    expect(report.findings[0]?.type).toBe('invalid_value');
   });
   it('turns a failure after partial reading into one source error', async () => {
     const read: SourceReader = async function* (name) {

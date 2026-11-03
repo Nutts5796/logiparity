@@ -1,23 +1,40 @@
 import type { SourceConfig } from './config.js';
 
-export type DataRow = Record<string, unknown>;
+export const sourceRow = Symbol.for('logiparity.sourceRow');
+export type DataRow = Record<string, unknown> & { [sourceRow]?: number };
+export function withSourceRow(row: DataRow, position: number): DataRow {
+  Object.defineProperty(row, sourceRow, { value: position });
+  return row;
+}
 export interface AdapterContext {
   baseDir: string;
   env: NodeJS.ProcessEnv;
   reportDir?: string;
   warn?: (message: string) => void;
+  allowedHosts?: readonly string[];
 }
 export interface Adapter {
   read(config: SourceConfig, context: AdapterContext): AsyncIterable<DataRow>;
 }
 export type FindingType =
-  'missing_in_source' | 'extra_in_source' | 'field_mismatch' | 'aggregate_mismatch' | 'duplicate_key' | 'source_error';
+  | 'missing_in_source'
+  | 'extra_in_source'
+  | 'field_mismatch'
+  | 'aggregate_mismatch'
+  | 'duplicate_key'
+  | 'source_error'
+  | 'invalid_value'
+  | 'duplicate_value';
 export type NormalizedValue = string | number | bigint | boolean | null;
 export interface Finding {
   type: FindingType;
   entity: string;
   source: string;
   key: string;
+  keyParts?: string[];
+  row?: number;
+  relatedKeys?: string[];
+  amounts?: { field: string; amount: bigint | string }[];
   field: string;
   message: string;
   expected?: NormalizedValue;
@@ -27,18 +44,23 @@ export interface Finding {
   blocking?: boolean;
   screenshot?: string;
   referencePosition?: number;
+  accounting?: { causes: string[]; remainder: string };
 }
 export interface AggregateResult {
   name: string;
   type: 'count' | 'sum';
   values: Record<string, number | bigint>;
   skippedSources: string[];
+  sourceStatus?: Record<string, 'certain' | 'uncertain' | 'not_mapped' | 'not_read'>;
+  uncertainKeys?: Record<string, string[]>;
   reconciliation?: Record<
     string,
     {
       missingRows: { count: number; amount: bigint | string };
       patterns: { group: number; count: number; amount: bigint | string }[];
       remainder: bigint | string;
+      uncertain?: { keys: string[]; amount: bigint | string };
+      causes?: string[];
     }
   >;
 }
@@ -46,6 +68,10 @@ export interface EntitySummary {
   entity: string;
   reference: string;
   counts: Record<string, number>;
+  uniqueCounts?: Record<string, number>;
+  filters?: Record<string, unknown>;
+  rollupSources?: string[];
+  pluralLabel?: string;
   aggregates?: AggregateResult[];
 }
 export interface FindingGroup {
@@ -72,6 +98,7 @@ export interface SourceReadContext {
 }
 export interface Report {
   schemaVersion: 1;
+  patterns?: { minCount: number };
   findings: Finding[];
   entities: EntitySummary[];
   groups?: FindingGroup[];

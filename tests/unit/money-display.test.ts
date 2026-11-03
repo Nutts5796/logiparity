@@ -29,7 +29,7 @@ const entity = entitySchema.parse({
 
 it.each([
   [682625n, 'USD', 'en-US', '$6,826.25'],
-  [-1n, 'USD', 'en-US', '-$0.01'],
+  [-1n, 'USD', 'en-US', '−$0.01'],
   [0n, 'USD', 'en-US', '$0.00'],
   [900719925474099301n, 'USD', 'en-US', '$9,007,199,254,740,993.01'],
   [123n, 'JPY', 'en-US', '¥123'],
@@ -85,14 +85,14 @@ it('shows readable currency for monetary fields and sum aggregates, with raw val
   }
   expect(presentationValue(3, 'shipment', 'payout', true, presentation)).toBe('3');
   expect(presentationValue(101n, 'shipment', 'unknown', true, presentation)).toBe('101');
-  expect(presentationValue(null, 'shipment', 'payout', false, presentation)).toBe('null');
+  expect(presentationValue(null, 'shipment', 'payout', false, presentation)).toBe('(blank)');
   expect(presentationValue('101', 'shipment', 'payout', false, presentation)).toBe('$1.01');
   expect(htmlReport(report)).not.toContain('$'); // Never guess a currency without config.
   const directory = await mkdtemp(join(tmpdir(), 'logiparity-money-'));
   try {
     await writeReports(report, directory, ['html', 'markdown', 'json'], presentation);
     expect(await readFile(join(directory, 'report.json'), 'utf8')).toBe(original);
-    expect(await readFile(join(directory, 'report.html'), 'utf8')).toContain('title="682625"');
+    expect(await readFile(join(directory, 'report.html'), 'utf8')).toContain('title="$6,826.25"');
     expect(jsonReport(report)).toBe(original);
   } finally {
     await rm(directory, { recursive: true, force: true });

@@ -59,7 +59,7 @@ it('reports invalid sum input without comparing partial rolled-up data', async (
   const report = await compareEntities([entity], async function* (name) {
     yield { load_id: 'L1', carrier_pay: name === 'tms' ? '1.00' : 'bad', units: 1, status: 'delivered' };
   });
-  expect(report.findings.map((f) => f.type)).toEqual(['source_error']);
+  expect(report.findings.map((f) => f.type)).toEqual(['invalid_value']);
 });
 const missing = (key: string, type: Finding['type'] = 'missing_in_source'): Finding => ({
   type,
@@ -84,10 +84,10 @@ it.each(['missing_in_source', 'extra_in_source'] as const)(
       stride: '200',
       count: 3,
     });
-    expect(groups[0]?.summary).toContain('likely page boundary');
+    expect(groups[0]?.summary).toContain('stride of 200');
     expect(groupFindings([...findings].reverse(), [entity])).toEqual(groups);
     const report = { schemaVersion: 1 as const, entities: [], findings, groups };
-    for (const text of [markdownReport(report), consoleReport(report)]) expect(text).toContain('likely page boundary');
+    for (const text of [markdownReport(report), consoleReport(report)]) expect(text).toContain('page boundaries');
     expect(htmlReport(report).includes('Likely a pagination bug')).toBe(true);
     expect(report.findings).toHaveLength(4);
   },

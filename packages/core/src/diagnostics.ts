@@ -2,7 +2,7 @@ export const normalizedSecretName = (name: string) => name.toLowerCase().replace
 export const isSecretName = (name: string): boolean =>
   /token|secret|password|passwd|pwd|apikey|auth|cookie|session|credential|privatekey|jwt|signature|subscriptionkey/.test(
     normalizedSecretName(name),
-  );
+  ) || /[-_.](?:pass|key|sig)$/i.test(name);
 export interface EnvironmentContext {
   secrets: readonly string[];
   references: readonly string[];
@@ -51,6 +51,14 @@ export function referencedEnvironment(config: unknown): string[] {
 }
 export function secretValues(config: unknown, env: NodeJS.ProcessEnv = process.env): string[] {
   const values = new Set<string>();
+  const publicNames = new Set(
+    config && typeof config === 'object' && Array.isArray(Reflect.get(config, 'publicEnv'))
+      ? (Reflect.get(config, 'publicEnv') as string[])
+      : [],
+  );
+  const addEnvironment = (name: string) => {
+    if (!publicNames.has(name)) add(env[name]);
+  };
   // Only variables the configuration actually uses are secrets. Scanning the whole
   // environment by name redacted unrelated values such as TERM_SESSION_ID or a flag "1".
   const add = (value: string | undefined) => {
@@ -67,23 +75,38 @@ export function secretValues(config: unknown, env: NodeJS.ProcessEnv = process.e
   };
   add(env.LOGIPARITY_AI_API_KEY);
   const seen = new WeakSet<object>();
-  const walk = (value: unknown): void => {
+  const walk = (value: unknown, sensitive = false): void => {
     if (!value || typeof value !== 'object' || seen.has(value)) return;
     seen.add(value);
     for (const secret of environments.get(value)?.secrets ?? []) add(secret);
+    const auth = Reflect.get(value, 'auth');
+    if (auth && typeof auth === 'object' && Reflect.get(auth, 'type') === 'basic') {
+      const username = env[String(Reflect.get(auth, 'usernameEnv'))],
+        password = env[String(Reflect.get(auth, 'passwordEnv'))];
+      if (username !== undefined && password !== undefined)
+        add(Buffer.from(`${username}:${password}`).toString('base64'));
+    }
     for (const [key, child] of Object.entries(value)) {
       if (/^(?:tokenEnv|passwordEnv|usernameEnv|connectionEnv)$/.test(key) && typeof child === 'string')
-        add(env[child]);
+        addEnvironment(child);
       else if (key === 'headersEnv' && child && typeof child === 'object') {
         for (const name of Object.values(child)) {
           const reference =
             typeof name === 'string' ? name : name && typeof name === 'object' ? Reflect.get(name, 'env') : undefined;
-          if (typeof reference === 'string') add(env[reference]);
+          if (typeof reference === 'string') addEnvironment(reference);
         }
       } else if (typeof child === 'string') {
         for (const [, name] of child.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g))
-          if (name && isSecretName(name)) add(env[name]);
-      } else walk(child);
+          if (
+            name &&
+            (sensitive || /^(?:url|baseUrl|path|connection|connectionString|headers)$/i.test(key) || isSecretName(name))
+          )
+            addEnvironment(name);
+      } else
+        walk(
+          child,
+          sensitive || /^(?:url|baseUrl|path|headers|headersEnv|auth|connection|connectionString)$/i.test(key),
+        );
     }
   };
   walk(config);
@@ -106,18 +129,27 @@ function credentialEncodings(value: string): string[] {
     ]),
   ];
 }
-function replaceCredential(text: string, value: string, short: boolean): string {
+function replaceCredential(text: string, value: string, short: boolean, mode: 'diagnostic' | 'data'): string {
   if (!value) return text;
-  const pattern = short
-    ? new RegExp(`(?<![\\p{L}\\p{N}_])${escaped(value)}(?![\\p{L}\\p{N}_])`, 'gu')
-    : new RegExp(escaped(value), 'g');
-  return text.replace(pattern, '[REDACTED]');
+  if (!short) return text.replace(new RegExp(escaped(value), 'g'), '[REDACTED]');
+  if (mode === 'data') return text.trim() === value ? '[REDACTED]' : text;
+  const token = new RegExp(`(?<=[/=?#:@&;])${escaped(value)}(?=$|[/?:#@&;])`, 'g');
+  text = text.replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi, (url) => url.replace(token, '[REDACTED]'));
+  const header = new RegExp(
+    `((?:^|[\\r\\n])[^:\\r\\n]+:[ \\t]*(?:[A-Za-z-]+[ \\t]+)?)${escaped(value)}(?=$|[\\r\\n])`,
+    'g',
+  );
+  return text.replace(header, '$1[REDACTED]');
 }
-export function redactSecrets(text: string, secrets: readonly string[]): string {
+export function redactSecrets(
+  text: string,
+  secrets: readonly string[],
+  mode: 'diagnostic' | 'data' = 'diagnostic',
+): string {
   const values = [...new Set(secrets.filter(Boolean))].sort((a, b) => b.length - a.length);
   for (const secret of values)
     for (const encoding of credentialEncodings(secret).sort((a, b) => b.length - a.length))
-      text = replaceCredential(text, encoding, secret.length < 8);
+      text = replaceCredential(text, encoding, secret.length < 8, mode);
   return text.replace(/[^\s\\?#"'<>()[\]]*%[^\s\\?#"'<>()[\]]*/g, (segment) => {
     let decoded = segment;
     for (let depth = 0; depth < 8; depth++) {
@@ -129,7 +161,7 @@ export function redactSecrets(text: string, secrets: readonly string[]): string 
         break;
       }
       let masked = decoded;
-      for (const secret of values) masked = replaceCredential(masked, secret, secret.length < 8);
+      for (const secret of values) masked = replaceCredential(masked, secret, secret.length < 8, mode);
       if (masked !== decoded) return masked;
     }
     return segment;
@@ -141,7 +173,7 @@ export function shortSecretWarnings(config: unknown, env: NodeJS.ProcessEnv = pr
     .filter((name) => env[name] && env[name]!.length < 8 && secrets.has(env[name]!))
     .map(
       (name) =>
-        `Environment variable ${name} contains a secret shorter than 8 characters. Only whole delimited tokens can be redacted safely; use a longer secret.`,
+        `Environment variable ${name} contains a secret shorter than 8 characters. Only whole data values, URL components and header values can be redacted safely; use a longer secret.`,
     );
 }
 export function safeConsole(text: string): string {
@@ -152,6 +184,8 @@ export function safeConsole(text: string): string {
         (code === 9 || code === 10 || (code >= 32 && !(code >= 127 && code <= 159))) &&
         ![
           0x061c,
+          0x200b,
+          0xfeff,
           0x200e,
           0x200f,
           0x2028,

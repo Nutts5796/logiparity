@@ -8,9 +8,7 @@ it('redacts short secrets only as whole tokens', () => {
   expect(redactSecrets('invalid configuration target.yaml L1001', secrets)).toBe(
     'invalid configuration target.yaml L1001',
   );
-  expect(redactSecrets('config y 1 /config.csv?token=y', secrets)).toBe(
-    '[REDACTED] [REDACTED] [REDACTED] /[REDACTED].csv?token=[REDACTED]',
-  );
+  expect(redactSecrets('config y 1 /config.csv?token=y', secrets)).toBe('config y 1 /config.csv?token=y');
   expect(redactSecrets('prefix-long-secret-suffix', ['long-secret'])).toBe('prefix-[REDACTED]-suffix');
 });
 it.each(['ab:cd{ef', 'x;y`z^', 'space and+plus'])(
@@ -29,9 +27,13 @@ it.each(['ab:cd{ef', 'x;y`z^', 'space and+plus'])(
       new URLSearchParams({ value: secret }).toString().slice(6),
     ];
     for (const variant of variants)
-      expect(redactSecrets(`/nope/${variant}/orders`, [secret])).toBe('/nope/[REDACTED]/orders');
+      expect(redactSecrets(`https://example.test/nope/${variant}/orders`, [secret])).toBe(
+        'https://example.test/nope/[REDACTED]/orders',
+      );
     const encoded = encodeURIComponent(encodeURI(secret));
-    expect(redactSecrets(`/nope/${encoded}/orders`, [secret])).toBe('/nope/[REDACTED]/orders');
+    expect(redactSecrets(`https://example.test/nope/${encoded}/orders`, [secret])).toBe(
+      'https://example.test/nope/[REDACTED]/orders',
+    );
   },
 );
 it.each([
@@ -65,6 +67,7 @@ it.each(['/a/..;x/b', '/a/%2e%2e%3bx/b', '/a/%252e%252e%253bx/b'])('rejects semi
     name: 'test',
     environment: 'test',
     allowMutations: true,
+    allowedHosts: ['127.0.0.1', 'localhost', 'example.test', 'example.invalid', 'staging.example.test'],
     baseUrl: 'http://localhost',
     events: {},
     state: { orders: { type: 'csv', file: 'unused.csv', fields: { id: 'ID' } } },

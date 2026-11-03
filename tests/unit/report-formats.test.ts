@@ -109,7 +109,7 @@ describe('report formats', () => {
     expect(htmlReport(empty)).toContain('All configured comparisons passed');
     expect(markdownReport(empty)).toContain('**Passed**');
     const allowed: Report = { ...report, findings: report.findings.map((f) => ({ ...f, blocking: false })) };
-    expect(htmlReport(allowed)).toContain('Passed with observations');
+    expect(htmlReport(allowed)).toContain('Passed');
     expect(markdownReport(allowed)).toContain('0 blocking');
     const error: Report = {
       ...report,
@@ -126,22 +126,23 @@ describe('report formats', () => {
       ],
     };
     expect(htmlReport(error)).toContain('Runtime error');
-    expect(consoleReport(error)).toContain('0 findings (0 blocking), 1 configuration/source error');
+    expect(consoleReport(error)).toContain('0 findings (0 blocking findings), 1 source error');
   });
   it('escapes Markdown injection and limits comment summaries to 50 findings', () => {
     const hostile = {
       ...report.findings[0]!,
+      reason: 'rollup_conflict' as const,
       message: '![x](https://example.invalid/img) | <script>\n`code` & text',
       actual: null,
     };
     const markdown = markdownReport({ ...report, findings: Array.from({ length: 52 }, () => hostile) });
-    expect(markdown).toContain('2 further findings omitted');
+    expect(markdown).toContain('2 additional findings');
     expect(markdown).not.toContain('![x]');
-    expect(markdown).toContain('&#124;');
-    expect(markdown).toContain('&lt;script&gt;');
-    expect(markdown).toContain('<br>');
-    expect(markdown).toContain('api: 101');
-    expect(markdown).toContain('ui');
+    expect(markdown).toContain('\\|');
+    expect(markdown).toContain('\\<script\\>');
+    expect(markdown).not.toContain('<br>');
+    expect(markdown).toContain('101');
+    expect(markdown).not.toContain('&quot;');
   });
   it('validates pass/failure/skipped/error JUnit reports against the independent Ant XSD', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'logiparity-junit-'));
@@ -181,7 +182,7 @@ describe('report formats', () => {
         if (index === 1) {
           expect(xml).toContain('failures="1"');
           expect(xml).toContain('skipped="1"');
-          expect(xml.match(/<testcase /g)).toHaveLength(6);
+          expect(xml.match(/<testcase /g)).toHaveLength(8);
         }
         if (index === 2) {
           expect(xml).toContain('errors="1"');

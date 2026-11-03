@@ -137,7 +137,7 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
       card.chart =
         svg(columns * 38, height, `${sources}: ${count} reference pages; highlighted rows are missing.`, shapes) +
         caption(
-          `${sources}: ${count} pages of up to ${fmt(size)} rows. Rows kept per page${card.groups.length > 1 ? ` in ${labels.source(first.entity, first.source)}` : ''}.`,
+          `1 row lost at the end of each ${fmt(size)}-row page. ${sources}: rows kept per page${card.groups.length > 1 ? ` in ${labels.source(first.entity, first.source)}` : ''}.`,
         );
     } else if (first.kind === 'datetime_offset') {
       const typical = (field: 'expected' | 'actual') => {
@@ -176,8 +176,9 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
           `${labels.source(first.entity, reference)}: around ${hourLabel(ref)}. ${sources}: around ${hourLabel(src)}. ${labels.field(first.entity, first.field)}.`,
         );
     } else if (first.kind === 'money_delta') {
-      const total = summary?.counts[reference] ?? rows;
-      const highlighted = total ? Math.round((members.length / total) * 100) : 0;
+      const total = summary?.uniqueCounts?.[first.source] ?? summary?.counts[first.source] ?? rows;
+      const sourceMembers = memberships[card.groups[0] ?? -1] ?? [];
+      const highlighted = total ? Math.floor((sourceMembers.length / total) * 100) : 0;
       let shapes = '';
       for (let i = 0; i < 100; i++)
         shapes += `<rect x="${(i % 10) * 14}" y="${Math.floor(i / 10) * 14}" width="11" height="11" rx="2" fill="${i < highlighted ? 'var(--c)' : 'var(--line)'}"/>`;
@@ -186,10 +187,11 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
         ? ` Example: ${example.key} is ${presentationValue(example.expected, first.entity, first.field, false, presentation)} in ${labels.source(first.entity, reference)} and ${presentationValue(example.actual, first.entity, first.field, false, presentation)} in ${labels.source(first.entity, first.source)}.`
         : '';
       card.chart =
+        caption(`Waffle: ${labels.source(first.entity, first.source)}. 1 square = 1%.`) +
         svg(
           137,
           137,
-          `${members.length} of ${total} values differ in ${labels.source(first.entity, first.source)}.`,
+          `${sourceMembers.length} of ${total} values differ in ${labels.source(first.entity, first.source)}.`,
           shapes,
         ) +
         caption(
@@ -197,7 +199,8 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
             .map((index) => {
               const group = groups[index]!;
               const count = memberships[index]!.length;
-              return `${labels.source(group.entity, group.source)}: ${fmt(count)} of ${fmt(total)} (${total ? ((count / total) * 100).toFixed(1) : '0.0'}%)`;
+              const denominator = summary?.uniqueCounts?.[group.source] ?? summary?.counts[group.source] ?? total;
+              return `${labels.source(group.entity, group.source)}: ${fmt(count)} of ${fmt(denominator)} (${denominator ? ((count / denominator) * 100).toFixed(1) : '0.0'}%)`;
             })
             .join('; ')}. ${labels.field(first.entity, first.field)} values.${extra}`,
         );

@@ -28,10 +28,10 @@ it('writes a versioned report with lossless money and bounded console details', 
     message: 'missing',
   });
   const text = consoleReport(report);
-  expect(text).toContain('field_mismatch: 12');
-  expect(text).toContain('missing_in_source: 1');
-  expect(text).toContain('3 more');
-  expect(text).toContain('900719925474099301');
+  expect(text).toContain('Value differences: 12');
+  expect(text).toContain('Missing: 1');
+  expect(text).toContain('3 additional results');
+  expect(text).toContain('900,719,925,474,099,301');
   const json = JSON.parse(jsonReport(report)) as { schemaVersion: number; findings: { expected: string }[] };
   expect(json.schemaVersion).toBe(1);
   expect(json.findings[0]?.expected).toBe('900719925474099301');

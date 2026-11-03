@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { errorText, type Config } from './config.js';
 import type { Report } from './types.js';
 import { reportGroups, presentationFindings } from './groups.js';
-import { presentationValue, presentationDifference } from './money-display.js';
+import { humanFinding, reportCounts, quantity, patternWords, typeLabels } from './human.js';
 import { isBlocking } from './policy.js';
 import { htmlReport } from './html.js';
 import { junitReport } from './junit.js';
@@ -26,23 +26,29 @@ export function jsonReport(report: Report): string {
 }
 
 export function consoleReport(report: Report, presentation: ReportPresentation = {}): string {
-  const counts = new Map<string, number>();
-  for (const f of report.findings) counts.set(f.type, (counts.get(f.type) ?? 0) + 1);
-  const findings = report.findings.filter((f) => f.type !== 'source_error');
-  const errors = report.findings.length - findings.length;
+  const counts = reportCounts(report);
   const lines = [
-    `LogiParity: ${report.entities.length} ${report.entities.length === 1 ? 'entity' : 'entities'}, ${findings.length} ${findings.length === 1 ? 'finding' : 'findings'} (${findings.filter(isBlocking).length} blocking)${report.warnings?.length ? `, ${report.warnings.length} ${report.warnings.length === 1 ? 'warning' : 'warnings'}` : ''}${errors ? `, ${errors} configuration/source ${errors === 1 ? 'error' : 'errors'}` : ''}`,
+    `LogiParity: ${quantity(counts.findings, 'finding')} (${quantity(counts.blocking, 'blocking finding')}), ${quantity(counts.errors, 'source error')}, ${quantity(counts.warnings, 'warning')}`,
   ];
-  for (const warning of report.warnings ?? []) lines.push(`  [warning] ${warning.message}`);
-  for (const [type, count] of [...counts].sort(([a], [b]) => (a < b ? -1 : 1))) lines.push(`  ${type}: ${count}`);
-  for (const group of reportGroups(report, presentation))
-    lines.push(`  [pattern] ${[group.entity, group.source, group.field].filter(Boolean).join('/')}: ${group.summary}`);
-  for (const f of presentationFindings(report, presentation).slice(0, 10))
-    lines.push(
-      `  [${f.type}${isBlocking(f) ? '' : '; allowed'}] ${[[f.entity, f.source].filter(Boolean).join('/'), f.key ? `key=${f.key}` : '', f.field ? `field=${f.field}` : ''].filter(Boolean).join(' ')}: ${f.message}${f.expected !== undefined ? ` Expected=${presentationValue(f.expected, f.entity, f.field, f.type === 'aggregate_mismatch', presentation)} Actual=${presentationValue(f.actual, f.entity, f.field, f.type === 'aggregate_mismatch', presentation)} Difference=${presentationDifference(f.expected, f.actual, f.entity, f.field, f.type === 'aggregate_mismatch', presentation)}` : ''}${f.values ? ` Observed=${f.values.map((item) => `line ${item.line}: ${presentationValue(item.value, f.entity, f.field, false, presentation)}`).join('; ')}` : ''}`,
-    );
+  for (const warning of report.warnings ?? []) lines.push(`  Warning: ${warning.message}`);
+  for (const [type, label] of Object.entries(typeLabels)) {
+    const count = report.findings.filter((finding) => finding.type === type).length;
+    if (count) lines.push(`  ${label}: ${count.toLocaleString('en-US')}`);
+  }
+  for (const group of reportGroups(report, presentation)) {
+    const words = patternWords(group, presentation);
+    lines.push(`  ${words.sentence} ${words.hint}`, `  Next step: ${words.nextStep}`);
+  }
+  for (const finding of presentationFindings(report, presentation).slice(0, 10)) {
+    const item = humanFinding(finding, presentation);
+    const detail =
+      finding.type === 'source_error'
+        ? item.details
+        : `Reference: ${item.reference}; Source value: ${item.sourceValue}; Difference: ${item.difference}${item.details ? `; ${item.details}` : ''}`;
+    lines.push(`  ${item.key} · ${item.source} · ${item.field}: ${detail}`);
+  }
   if (report.findings.length > 10)
-    lines.push(`  ... ${report.findings.length - 10} more ${report.findings.length === 11 ? 'finding' : 'findings'}.`);
+    lines.push(`  ${quantity(report.findings.length - 10, 'additional result')} in the complete report.`);
   return safeConsole(lines.join('\n') + '\n');
 }
 
@@ -59,7 +65,7 @@ export async function writeReports(
   const formats = {
     json: ['report.json', jsonReport],
     html: ['report.html', (r: Report) => htmlReport(r, presentation)],
-    junit: ['junit.xml', junitReport],
+    junit: ['junit.xml', (r: Report) => junitReport(r, new Date(), presentation)],
     markdown: ['report.md', (r: Report) => markdownReport(r, presentation)],
   } as const;
   for (const output of new Set(outputs)) {

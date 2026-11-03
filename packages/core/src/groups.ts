@@ -1,145 +1,198 @@
 import type { EntityConfig } from './config.js';
-import type { Finding, FindingGroup, NormalizedValue, Report } from './types.js';
-import { formatMoneyMajor, moneyUnits, type ReportPresentation } from './money-display.js';
+import type { Finding, FindingGroup, Report } from './types.js';
+import { durationValue, formatMoneyMajor, integerValue, type ReportPresentation } from './money-display.js';
 
-function integer(value: NormalizedValue | undefined): bigint | undefined {
-  if (typeof value === 'bigint' || (typeof value === 'string' && /^-?\d+$/.test(value))) return BigInt(value);
-  return typeof value === 'number' && Number.isSafeInteger(value) ? BigInt(value) : undefined;
+export interface PatternOptions {
+  minCount?: number;
 }
-function duration(value: bigint): string {
-  for (const [unit, factor] of [
-    ['h', 3600000n],
-    ['m', 60000n],
-    ['s', 1000n],
-    ['ms', 1n],
-  ] as const)
-    if (value % factor === 0n) return `${value > 0n ? '+' : ''}${value / factor}${unit}`;
-  return String(value);
+const compare = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
+const identity = (finding: Finding) => ({ entity: finding.entity, source: finding.source, field: finding.field });
+const quoted = (value: unknown) => (typeof value === 'string' ? JSON.stringify(value) : String(value));
+
+function strideSummary(
+  source: string,
+  count: number,
+  stride: bigint,
+  start: string,
+  end: string,
+  final?: string,
+): string {
+  const tail = final ? `; final reference key ${final} is also missing from the last page` : '';
+  return `${count.toLocaleString('en-US')} missing rows in ${source} follow a stride of ${stride}, from ${start} to ${end}${tail} (likely page boundary).`;
 }
-const label = (value: NormalizedValue) => (typeof value === 'string' ? JSON.stringify(value) : String(value));
+export function strideGroups(bucket: readonly Finding[], minCount: number, finalKey?: string): FindingGroup[] {
+  const first = bucket[0];
+  if (!first) return [];
+  const prefixes = new Map<string, { key: string; number: bigint }[]>();
+  for (const finding of bucket) {
+    const match = finding.key.match(/^(.*?)(\d+)$/);
+    if (!match?.[1] && !match?.[2]) continue;
+    const prefix = match[1] ?? '';
+    const number = match[2];
+    if (!number) continue;
+    const entries = prefixes.get(prefix) ?? [];
+    entries.push({ key: finding.key, number: BigInt(number) });
+    prefixes.set(prefix, entries);
+  }
+  const groups: FindingGroup[] = [];
+  for (const [prefix, entries] of prefixes) {
+    entries.sort((left, right) => (left.number < right.number ? -1 : left.number > right.number ? 1 : 0));
+    for (let start = 0; start + 2 < entries.length;) {
+      const begin = entries[start],
+        next = entries[start + 1];
+      if (!begin || !next) break;
+      const stride = next.number - begin.number;
+      if (stride <= 1n) {
+        start++;
+        continue;
+      }
+      let end = start + 2;
+      while (end < entries.length) {
+        const current = entries[end],
+          previous = entries[end - 1];
+        if (!current || !previous || current.number - previous.number !== stride) break;
+        end++;
+      }
+      const last = entries[end - 1];
+      if (!last || end - start < minCount) {
+        start++;
+        continue;
+      }
+      const keys = entries.slice(start, end).map((item) => item.key);
+      const finalMatch = finalKey?.match(/^(.*?)(\d+)$/);
+      const finalNumber = finalMatch?.[2] ? BigInt(finalMatch[2]) : undefined;
+      const includeFinal =
+        first.type === 'missing_in_source' &&
+        finalKey &&
+        finalMatch?.[1] === prefix &&
+        finalNumber !== undefined &&
+        finalNumber > last.number &&
+        finalNumber < last.number + stride &&
+        bucket.some((item) => item.key === finalKey);
+      if (includeFinal) keys.push(finalKey);
+      const summary = strideSummary(
+        first.source,
+        keys.length,
+        stride,
+        begin.key,
+        last.key,
+        includeFinal ? finalKey : undefined,
+      );
+      groups.push({
+        ...identity(first),
+        field: '',
+        count: keys.length,
+        keys,
+        kind: first.type === 'missing_in_source' ? 'missing_stride' : 'extra_stride',
+        stride: String(stride),
+        summary: first.type === 'extra_in_source' ? summary.replace('missing rows', 'extra rows') : summary,
+      });
+      start = end;
+    }
+  }
+  return groups;
+}
+function deltaSummary(first: Finding, count: number, delta: bigint, rule: EntityConfig['compare'][string]): string {
+  const difference =
+    rule.type === 'money' && rule.currency ? formatMoneyMajor(delta, rule.currency) : durationValue(delta);
+  const hint =
+    rule.type === 'money'
+      ? delta >= -3n && delta <= 3n
+        ? 'likely rounding'
+        : 'consistent fixed difference'
+      : 'likely timezone';
+  return `${count.toLocaleString('en-US')} ${first.field} values in ${first.source} differ by exactly ${difference} (${hint}).`;
+}
+export function deltaGroups(
+  bucket: readonly Finding[],
+  entities: readonly EntityConfig[],
+  minCount: number,
+): FindingGroup[] {
+  const first = bucket[0];
+  if (!first) return [];
+  const rule = entities.find((entity) => entity.name === first.entity)?.compare[first.field];
+  if (rule?.type !== 'money' && rule?.type !== 'datetime') return [];
+  const deltas = new Map<string, Finding[]>();
+  for (const finding of bucket) {
+    const expected = integerValue(finding.expected),
+      actual = integerValue(finding.actual);
+    if (expected === undefined || actual === undefined || expected === actual) continue;
+    const delta = String(actual - expected),
+      values = deltas.get(delta) ?? [];
+    values.push(finding);
+    deltas.set(delta, values);
+  }
+  return [...deltas].flatMap(([delta, values]) =>
+    values.length >= minCount
+      ? [
+          {
+            ...identity(first),
+            count: values.length,
+            kind: rule.type === 'money' ? ('money_delta' as const) : ('datetime_offset' as const),
+            delta,
+            summary: deltaSummary(first, values.length, BigInt(delta), rule),
+          },
+        ]
+      : [],
+  );
+}
+export function mappingGroups(bucket: readonly Finding[], minCount: number): FindingGroup[] {
+  const pairs = new Map<string, Finding[]>();
+  for (const finding of bucket) {
+    if (finding.expected === undefined || finding.actual === undefined) continue;
+    const key = JSON.stringify([finding.expected, finding.actual], (_, value: unknown) =>
+      typeof value === 'bigint' ? String(value) : value,
+    );
+    const entries = pairs.get(key) ?? [];
+    entries.push(finding);
+    pairs.set(key, entries);
+  }
+  return [...pairs.values()].flatMap((entries) => {
+    const first = entries[0];
+    if (!first || entries.length < minCount || first.expected === undefined || first.actual === undefined) return [];
+    const summary = `${entries.length.toLocaleString('en-US')} ${first.field} values in ${first.source} map ${quoted(first.expected)} to ${quoted(first.actual)}.`;
+    return [
+      {
+        ...identity(first),
+        count: entries.length,
+        kind: 'value_mapping' as const,
+        expected: first.expected,
+        actual: first.actual,
+        summary,
+      },
+    ];
+  });
+}
 export function groupFindings(
   findings: readonly Finding[],
   entities: readonly EntityConfig[] = [],
   finalReferenceKeys: Readonly<Record<string, string>> = {},
+  options: PatternOptions = {},
 ): FindingGroup[] {
+  const minCount = Math.max(3, options.minCount ?? 3);
   const buckets = new Map<string, Finding[]>();
-  for (const finding of findings)
-    if (!finding.reason && ['field_mismatch', 'missing_in_source', 'extra_in_source'].includes(finding.type)) {
-      const key = JSON.stringify([finding.entity, finding.source, finding.field, finding.type]);
-      const bucket = buckets.get(key) ?? [];
-      bucket.push(finding);
-      buckets.set(key, bucket);
-    }
+  for (const finding of findings) {
+    if (finding.reason || !['field_mismatch', 'missing_in_source', 'extra_in_source'].includes(finding.type)) continue;
+    const key = JSON.stringify([finding.entity, finding.source, finding.field, finding.type]);
+    const entries = buckets.get(key) ?? [];
+    entries.push(finding);
+    buckets.set(key, entries);
+  }
   const groups: FindingGroup[] = [];
   for (const bucket of buckets.values()) {
-    const first = bucket[0]!;
-    const { entity, source, field } = first;
-    if (first.type === 'missing_in_source' || first.type === 'extra_in_source') {
-      const prefixes = new Map<string, { key: string; number: bigint }[]>();
-      for (const finding of bucket) {
-        const match = finding.key.match(/^(.*?)(\d+)$/);
-        if (!match) continue;
-        const keys = prefixes.get(match[1]!) ?? [];
-        keys.push({ key: finding.key, number: BigInt(match[2]!) });
-        prefixes.set(match[1]!, keys);
-      }
-      for (const keys of prefixes.values()) {
-        keys.sort((a, b) => (a.number < b.number ? -1 : a.number > b.number ? 1 : 0));
-        for (let start = 0; start + 2 < keys.length;) {
-          const stride = keys[start + 1]!.number - keys[start]!.number;
-          if (stride <= 1n) {
-            start++;
-            continue;
-          }
-          let end = start + 2;
-          while (end < keys.length && keys[end]!.number - keys[end - 1]!.number === stride) end++;
-          const count = end - start;
-          if (count >= 3) {
-            const covered = keys.slice(start, end).map((item) => item.key);
-            const final = finalReferenceKeys[entity];
-            const finalMatch = final?.match(/^(.*?)(\d+)$/);
-            const firstMatch = keys[start]!.key.match(/^(.*?)(\d+)$/)!;
-            const last = keys[end - 1]!;
-            if (
-              first.type === 'missing_in_source' &&
-              final &&
-              finalMatch &&
-              finalMatch[1] === firstMatch[1] &&
-              BigInt(finalMatch[2]!) > last.number &&
-              BigInt(finalMatch[2]!) < last.number + stride &&
-              bucket.some((finding) => finding.key === final)
-            )
-              covered.push(final);
-            groups.push({
-              entity,
-              source,
-              field: '',
-              count: covered.length,
-              keys: covered,
-              kind: first.type === 'missing_in_source' ? 'missing_stride' : 'extra_stride',
-              stride: String(stride),
-              summary: `${covered.length.toLocaleString('en-US')} ${first.type} keys in ${source}: ${count} follow a stride of ${stride}, from ${keys[start]!.key} to ${last.key}${covered.length > count ? `; final reference key ${final} is also missing from the last page` : ''} (likely page boundary).`,
-            });
-            start = end;
-          } else start++;
-        }
-      }
+    const first = bucket[0];
+    if (!first || bucket.length < minCount) continue;
+    if (first.type !== 'field_mismatch') {
+      groups.push(...strideGroups(bucket, minCount, finalReferenceKeys[first.entity]));
       continue;
     }
-    const rule = entities.find((e) => e.name === entity)?.compare[field];
-    const count = bucket.length;
-    const prefix = `${count.toLocaleString('en-US')} ${field} ${count === 1 ? 'value' : 'values'} in ${source}`;
-    const verb = (plural: string, singular: string) => (count === 1 ? singular : plural);
-    if (rule?.type === 'money' || rule?.type === 'datetime') {
-      const deltas = bucket.map((f) => {
-        const expected = integer(f.expected);
-        const actual = integer(f.actual);
-        return expected === undefined || actual === undefined ? undefined : actual - expected;
-      });
-      const delta = deltas[0];
-      if (delta !== undefined && delta !== 0n && deltas.every((value) => value === delta)) {
-        const kind = rule.type === 'money' ? 'money_delta' : 'datetime_offset';
-        const difference =
-          kind === 'money_delta'
-            ? `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, rule.currency!, rule.locale)} (${moneyUnits(delta, rule.currency!)})`
-            : duration(delta);
-        const hint =
-          kind === 'money_delta'
-            ? delta >= -3n && delta <= 3n
-              ? 'likely rounding'
-              : 'consistent fixed difference'
-            : delta % 900000n === 0n
-              ? 'likely timezone'
-              : 'consistent datetime offset';
-        groups.push({
-          entity,
-          source,
-          field,
-          count,
-          kind,
-          delta: delta.toString(),
-          summary: `${prefix} ${verb('differ', 'differs')} by exactly ${difference} (${hint}).`,
-        });
-        continue;
-      }
-    }
-    if (
-      first.expected !== undefined &&
-      first.actual !== undefined &&
-      bucket.every((f) => f.expected === first.expected && f.actual === first.actual)
-    )
-      groups.push({
-        entity,
-        source,
-        field,
-        count,
-        kind: 'value_mapping',
-        expected: first.expected,
-        actual: first.actual,
-        summary: `${prefix} ${verb('map', 'maps')} ${label(first.expected)} -> ${label(first.actual)}.`,
-      });
+    const rule = entities.find((entity) => entity.name === first.entity)?.compare[first.field];
+    groups.push(
+      ...(rule?.type === 'money' || rule?.type === 'datetime'
+        ? deltaGroups(bucket, entities, minCount)
+        : mappingGroups(bucket, minCount)),
+    );
   }
-  const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   return groups.sort(
     (a, b) =>
       Number(!a.kind.endsWith('_stride')) - Number(!b.kind.endsWith('_stride')) ||
@@ -147,23 +200,16 @@ export function groupFindings(
       compare(a.source, b.source) ||
       compare(a.field, b.field) ||
       compare(a.kind, b.kind) ||
+      compare(a.delta ?? '', b.delta ?? '') ||
       compare(a.summary, b.summary),
   );
 }
 export function reportGroups(report: Report, presentation: ReportPresentation = {}): FindingGroup[] {
-  return report.groups ?? groupFindings(report.findings, presentation.entities);
+  const options = report.patterns ?? presentation.patterns;
+  return (report.groups ?? groupFindings(report.findings, presentation.entities, {}, options)).filter(
+    (group) => group.count >= Math.max(3, options?.minCount ?? 3),
+  );
 }
-
-// Keep findings with no matching explanation ahead of grouped rows in truncated presentations.
-export function presentationFindings(report: Report, presentation: ReportPresentation = {}): Finding[] {
-  const covered = new Set(groupMembership(report, presentation).flat());
-  return [
-    ...report.findings.filter((_, index) => !covered.has(index)),
-    ...report.findings.filter((_, index) => covered.has(index)),
-  ];
-}
-
-// Match actual values, not only a field name: unrelated deltas must remain unexplained.
 export function groupMembership(report: Report, presentation: ReportPresentation = {}): number[][] {
   return reportGroups(report, presentation).map((group) => {
     const keys = new Set(group.keys ?? []);
@@ -177,18 +223,30 @@ export function groupMembership(report: Report, presentation: ReportPresentation
       if (finding.type !== 'field_mismatch' || finding.field !== group.field) return [];
       if (group.kind === 'value_mapping')
         return finding.expected === group.expected && finding.actual === group.actual ? [index] : [];
-      const expected = integer(finding.expected),
-        actual = integer(finding.actual);
+      const expected = integerValue(finding.expected),
+        actual = integerValue(finding.actual);
       return expected !== undefined && actual !== undefined && String(actual - expected) === group.delta ? [index] : [];
     });
   });
 }
-
+export function accountedFindingIndexes(report: Report, presentation: ReportPresentation = {}): Set<number> {
+  return new Set([
+    ...groupMembership(report, presentation).flat(),
+    ...report.findings.flatMap((finding, index) => (finding.accounting?.remainder === '0' ? [index] : [])),
+  ]);
+}
+export function presentationFindings(report: Report, presentation: ReportPresentation = {}): Finding[] {
+  const covered = accountedFindingIndexes(report, presentation);
+  return [
+    ...report.findings.filter((_, index) => !covered.has(index)),
+    ...report.findings.filter((_, index) => covered.has(index)),
+  ];
+}
 export function attachGroupMembership(report: Report): void {
   const memberships = groupMembership(report);
   report.groups?.forEach((group, index) => {
-    group.findingIndexes = memberships[index]!;
+    group.findingIndexes = memberships[index] ?? [];
   });
-  const explained = new Set(memberships.flat()).size;
+  const explained = accountedFindingIndexes(report).size;
   report.coverage = { explained, needsReview: report.findings.length - explained };
 }

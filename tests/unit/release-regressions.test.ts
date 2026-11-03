@@ -52,9 +52,12 @@ it('flags blank money in a rollup and skips comparisons and aggregates that depe
     yield { load_id: 'L1', pay: '1.00', status: 'delivered' };
     if (name === 'lines') yield { load_id: 'L1', pay: '', status: 'delivered' };
   });
-  expect(report.findings).toHaveLength(1);
-  expect(report.findings[0]).toMatchObject({ reason: 'rollup_missing_value', actual: null });
-  expect(report.entities[0]?.aggregates?.[0]?.skippedSources).toEqual(['lines']);
+  expect(report.findings).toHaveLength(2);
+  expect(report.findings.find((f) => f.type === 'invalid_value')).toMatchObject({
+    reason: 'rollup_missing_value',
+    actual: null,
+  });
+  expect(report.entities[0]?.aggregates?.[0]?.uncertainKeys?.lines).toEqual(['L1']);
   expect(report.groups).toEqual([]);
 });
 it('identifies repeated charge lines before summing without labelling them as rounding', async () => {
@@ -79,10 +82,14 @@ it('identifies repeated charge lines before summing without labelling them as ro
       yield { load_id: 'L2', pay: '1.00', status: 'delivered', charge: 'fuel' };
     }
   });
-  expect(report.findings).toHaveLength(1);
-  expect(report.findings[0]).toMatchObject({ type: 'duplicate_key', reason: 'rollup_duplicate', key: 'L1' });
+  expect(report.findings).toHaveLength(2);
+  expect(report.findings.find((f) => f.type === 'duplicate_key')).toMatchObject({
+    type: 'duplicate_key',
+    reason: 'rollup_duplicate',
+    key: 'L1',
+  });
   expect(report.groups).toEqual([]);
-  expect(report.entities[0]?.aggregates?.[0]?.skippedSources).toEqual(['lines']);
+  expect(report.entities[0]?.aggregates?.[0]?.uncertainKeys?.lines).toEqual(['L1']);
   for (const by of [['charge'], ['load_id', 'missing'], ['load_id', 'load_id']])
     expect(
       entitySchema.safeParse({
@@ -146,22 +153,22 @@ it('uses singular grammar, meaningful money units and clean finding locations', 
   };
   const presentation = { entities: [entity] };
   const output = consoleReport(report, presentation);
-  expect(output).toContain('1 entity, 1 finding (1 blocking)');
-  expect(output).toContain('-$0.01 (1 cent)');
-  expect(output).toContain('Expected=$1.00 Actual=$0.99 Difference=-$0.01');
-  expect(markdownReport(report, presentation)).toContain('1 entity · 1 finding');
+  expect(output).toContain('1 finding (1 blocking finding)');
+  expect(output).toContain('−$0.01');
+  expect(output).toContain('Reference: $1.00; Source value: $0.99; Difference: −$0.01');
+  expect(markdownReport(report, presentation)).toContain('1 finding');
   const aggregate = consoleReport(
     { ...report, findings: [{ ...finding, type: 'aggregate_mismatch', field: 'total', key: '' }] },
     presentation,
   );
-  expect(aggregate).toContain('Expected=$1.00 Actual=$0.99 Difference=-$0.01');
-  expect(groupFindings([finding], [entity])[0]?.delta).toBe('-1');
+  expect(aggregate).toContain('Reference: $1.00; Source value: $0.99; Difference: −$0.01');
+  expect(groupFindings([finding], [entity])).toEqual([]);
   const error = consoleReport({
     ...report,
     findings: [{ type: 'source_error', entity: 'load', source: '', key: '', field: '', message: 'Invalid source' }],
   });
-  expect(error).toContain('1 entity, 0 findings (0 blocking), 1 configuration/source error');
+  expect(error).toContain('0 findings (0 blocking findings), 1 source error');
   expect(error).not.toMatch(/key=-|field=-|load\//);
   const html = htmlReport(report, presentation);
-  expect(html.indexOf('Patterns to investigate')).toBeLessThan(html.indexOf('id="findings-title"'));
+  expect(html.indexOf('Causes to investigate')).toBeLessThan(html.indexOf('id="findings-title"'));
 });

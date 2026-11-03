@@ -79,7 +79,8 @@ describe('aggregates', () => {
       [row('a', '1.01', 'delivered', null), row('a', '9.00')],
       [row('a', '1.01', 'delivered', null)],
     );
-    expect(duplicate.findings.map((f) => f.type)).toEqual(['duplicate_key']);
+    expect(duplicate.findings.filter((f) => f.type === 'duplicate_key')).toHaveLength(1);
+    expect(duplicate.entities[0]?.aggregates?.[1]?.uncertainKeys?.api).toEqual(['a']);
     expect(duplicate.entities[0]?.aggregates?.[2]?.values).toEqual({ api: 0, export: 0 });
   });
   it('uses aggregate-specific tolerances, including inclusive money boundaries', async () => {
@@ -170,7 +171,7 @@ describe('aggregates', () => {
     const report = await check(entity, [row('a')], [{ id: 'a', status: 'delivered', payout: '1.01' }]);
     expect(report.findings).toHaveLength(1);
     expect(report.findings[0]).toMatchObject({ type: 'source_error', blocking: true });
-    expect(report.findings[0]?.message).toContain('aggregate distance_total');
+    expect(report.findings[0]?.message).toContain('Aggregate distance_total');
     expect(report.entities[0]?.aggregates?.every((a) => !Object.hasOwn(a.values, 'export'))).toBe(true);
     expect(reportExitCode(report)).toBe(2);
   });
@@ -221,7 +222,12 @@ describe('failure policies', () => {
     expect(report.findings.every((f) => f.blocking === false)).toBe(true);
     expect(reportExitCode(report)).toBe(0);
     const broken = await check(entity, [row('a')], [{ id: '' }]);
-    expect(reportExitCode(broken)).toBe(2);
+    expect(reportExitCode(broken)).toBe(0);
+    const disconnected = await compareEntities([entity], async function* () {
+      yield* [];
+      throw new Error('connection refused');
+    });
+    expect(reportExitCode(disconnected)).toBe(2);
   });
   it('counts categories across sources but isolates each entity policy', async () => {
     const first = entitySchema.parse({

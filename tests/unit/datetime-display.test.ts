@@ -55,8 +55,8 @@ it('shows readable UTC only for configured datetime fields and preserves raw JSO
     );
   expect(jsonReport(report)).toBe(json);
   expect(json).not.toContain('2026-11-02');
-  expect(presentationValue(1793624460000, 'order', 'count', false, presentation)).toBe('1793624460000');
-  expect(presentationValue(null, 'order', 'at', false, presentation)).toBe('null');
+  expect(presentationValue(1793624460000, 'order', 'count', false, presentation)).toBe('1,793,624,460,000');
+  expect(presentationValue(null, 'order', 'at', false, presentation)).toBe('(blank)');
   expect(presentationValue(0, 'order', 'at', true, presentation)).toBe('0');
   expect(presentationValue(0, 'order', 'at', false)).toBe('0');
 });

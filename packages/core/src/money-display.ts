@@ -1,14 +1,16 @@
 import type { EntityConfig } from './config.js';
 import type { NormalizedValue } from './types.js';
-import { presentationRule } from './labels.js';
+import { humanize, presentationRule } from './labels.js';
 import { displayValue } from './report-utils.js';
 
 // Presentation context stays outside Report, preserving the JSON wire format.
 export interface ReportPresentation {
   entities?: readonly EntityConfig[];
+  patterns?: { minCount: number };
   environment?: string;
   configFile?: string;
   generatedAt?: string;
+  displayTimezone?: string;
 }
 
 export function formatDatetimeUtc(epoch: number): string | undefined {
@@ -36,7 +38,8 @@ export function formatMoneyMajor(minor: bigint, currency: string, locale = 'en-U
         return new Intl.NumberFormat(locale, { useGrouping: false }).format(0n);
       return part.value;
     })
-    .join('');
+    .join('')
+    .replace(/^-/, '−');
 }
 
 export function presentationValue(
@@ -46,10 +49,15 @@ export function presentationValue(
   aggregate: boolean,
   presentation: ReportPresentation = {},
 ): string {
-  const plain = displayValue(value);
+  const plain =
+    typeof value === 'number' || typeof value === 'bigint'
+      ? value.toLocaleString('en-US', { maximumFractionDigits: 12 }).replace(/^-/, '−')
+      : displayValue(value);
   const entity = presentation.entities?.find((e) => e.name === entityName);
   const rule = presentationRule(entity, field, aggregate);
-  if (rule?.type === 'datetime' && typeof value === 'number') return readableDatetime(value) ?? plain;
+  if (rule?.type === 'datetime' && typeof value === 'number')
+    return readableDatetime(value, presentation.displayTimezone) ?? plain;
+  if (rule?.type === 'enum' && typeof value === 'string') return humanize(value);
   if (rule?.type !== 'money' || !rule.currency || integerValue(value) === undefined) return plain;
   return formatMoneyMajor(integerValue(value)!, rule.currency);
 }
@@ -59,22 +67,26 @@ export function integerValue(value: NormalizedValue | undefined): bigint | undef
   return typeof value === 'number' && Number.isSafeInteger(value) ? BigInt(value) : undefined;
 }
 
-export function readableDatetime(epoch: number): string | undefined {
+export function readableDatetime(epoch: number, timeZone = 'UTC'): string | undefined {
   if (!formatDatetimeUtc(epoch)) return undefined;
   const date = new Date(epoch);
   const day = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'UTC',
+    timeZone,
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   }).format(date);
   const time = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'UTC',
+    timeZone,
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
   }).format(date);
-  return `${day}, ${time} UTC`;
+  const zone =
+    new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'short' })
+      .formatToParts(date)
+      .find((part) => part.type === 'timeZoneName')?.value ?? timeZone;
+  return `${day}, ${time} ${zone}`;
 }
 
 export function durationValue(delta: bigint): string {
@@ -84,8 +96,8 @@ export function durationValue(delta: bigint): string {
     ['s', 1000n],
     ['ms', 1n],
   ] as const)
-    if (delta % factor === 0n) return `${delta > 0n ? '+' : ''}${delta / factor}${unit}`;
-  return String(delta);
+    if (delta % factor === 0n) return `${delta > 0n ? '+' : ''}${delta / factor}${unit}`.replace(/^-/, '−');
+  return String(delta).replace(/^-/, '−');
 }
 
 export function presentationDifference(
@@ -107,11 +119,11 @@ export function presentationDifference(
     const delta = right - left;
     if (rule?.type === 'datetime') return durationValue(delta);
     if (rule?.type === 'money') return `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, rule.currency!)}`;
-    return `${delta > 0n ? '+' : ''}${delta.toLocaleString('en-US')}`;
+    return `${delta > 0n ? '+' : ''}${delta.toLocaleString('en-US')}`.replace(/^-/, '−');
   }
   if (typeof expected === 'number' && typeof actual === 'number') {
     const delta = actual - expected;
-    return `${delta > 0 ? '+' : ''}${delta.toLocaleString('en-US', { maximumFractionDigits: 12 })}`;
+    return `${delta > 0 ? '+' : ''}${delta.toLocaleString('en-US', { maximumFractionDigits: 12 })}`.replace(/^-/, '−');
   }
   return '—';
 }

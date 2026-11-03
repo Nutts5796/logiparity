@@ -10,6 +10,8 @@ const categories: Record<Exclude<FindingType, 'source_error'>, FindingCategory> 
   field_mismatch: 'mismatch',
   aggregate_mismatch: 'aggregate',
   duplicate_key: 'duplicate',
+  duplicate_value: 'duplicate',
+  invalid_value: 'mismatch',
 };
 
 export function isBlocking(finding: Finding): boolean {
