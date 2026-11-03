@@ -10,6 +10,15 @@ import { groupFindings, attachGroupMembership } from './groups.js';
 import { collectReconciliation, reconcileAggregates } from './reconciliation.js';
 import { keyText } from './keys.js';
 import { formatMoneyMajor } from './money-display.js';
+function displayZone(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return value;
+  } catch {
+    return undefined;
+  }
+}
 const order = (left: string, right: string) => left.localeCompare(right, 'en', { numeric: true });
 export function sortFindings(findings: Finding[]): Finding[] {
   return findings.sort(
@@ -18,6 +27,7 @@ export function sortFindings(findings: Finding[]): Finding[] {
       order(a.key, b.key) ||
       order(a.field, b.field) ||
       order(a.source, b.source) ||
+      order(a.currency ?? '', b.currency ?? '') ||
       order(a.type, b.type),
   );
 }
@@ -65,6 +75,36 @@ function rowDetails(
     ...(type === 'missing_in_source' ? { referencePosition: state.positions.get(key) ?? 1 } : {}),
   };
 }
+// A unique equal-amount pair on one composite-key load is a review hint, never an automatic match.
+function suggestChargeMappings(findings: Finding[], entities: readonly EntityConfig[]): void {
+  for (const entity of entities) {
+    if (keyFields(entity.key).length < 2) continue;
+    const missing = findings.filter((f) => f.entity === entity.name && f.type === 'missing_in_source');
+    const extra = findings.filter((f) => f.entity === entity.name && f.type === 'extra_in_source');
+    const signature = (f: Finding) =>
+      JSON.stringify([
+        f.source,
+        f.keyParts?.slice(0, -1),
+        f.amounts?.map((a) => [a.field, a.currency, String(a.amount)]),
+      ]);
+    const buckets = new Map<string, { missing: Finding[]; extra: Finding[] }>();
+    for (const [rows, side] of [
+      [missing, 'missing'],
+      [extra, 'extra'],
+    ] as const)
+      for (const f of rows) {
+        if (!f.keyParts?.length || f.amounts?.length !== 1) continue;
+        const key = signature(f),
+          bucket = buckets.get(key) ?? { missing: [], extra: [] };
+        bucket[side].push(f);
+        buckets.set(key, bucket);
+      }
+    for (const pair of buckets.values())
+      if (pair.missing.length === 1 && pair.extra.length === 1)
+        for (const f of [...pair.missing, ...pair.extra])
+          f.hint = 'Likely an unmapped charge code; compare the missing and extra line on this load.';
+  }
+}
 // Compare valid, certain cells; an invalid cell does not suppress unrelated rows or fields.
 function compareSource(
   entity: EntityConfig,
@@ -77,6 +117,11 @@ function compareSource(
   const config = entity.sources[source];
   if (!config) return;
   const keys = new Set(keyFields(entity.key));
+  const baselineInvalid = new Map(
+    baseline.issues
+      .filter((issue) => issue.type === 'invalid_value')
+      .map((issue) => [JSON.stringify([issue.key, issue.field]), issue]),
+  );
   const invalidIssues = new Map<string, Finding[]>();
   for (const issue of current.issues) {
     if (issue.type !== 'invalid_value') continue;
@@ -93,7 +138,17 @@ function compareSource(
       appendFinding(report, rowDetails(entity, source, reference, key, baseline, 'missing_in_source'));
       continue;
     }
-    for (const issue of invalidIssues.get(key) ?? []) issue.expected = expected[issue.field] ?? null;
+    for (const issue of invalidIssues.get(key) ?? []) {
+      if (baseline.uncertain.get(key)?.has(issue.field)) {
+        const invalid = baselineInvalid.get(JSON.stringify([key, issue.field]));
+        issue.evidence = {
+          ...issue.evidence,
+          ...(invalid
+            ? { referenceInvalid: true, ...(invalid.actual === undefined ? {} : { referenceValue: invalid.actual }) }
+            : { referenceUncertain: true }),
+        };
+      } else issue.expected = expected[issue.field] ?? null;
+    }
     const currencyFindings = new Set<string>();
     for (const [field, value] of Object.entries(expected)) {
       if (
@@ -119,7 +174,7 @@ function compareSource(
           key,
           field: entity.compare[field]?.currencyField ?? config.currencyField ?? field,
           reason: 'currency_mismatch',
-          ...(baseline.parts.has(key) ? { keyParts: baseline.parts.get(key) ?? [] } : {}),
+          keyParts: baseline.parts.get(key) ?? [key],
           expected: expectedCurrency,
           actual: actualCurrency,
           message: `Currency differs: ${expectedCurrency} on ${reference}, ${actualCurrency} on ${source}.`,
@@ -137,7 +192,13 @@ function compareSource(
           expected: value,
           actual: actualValue,
           ...(actualCurrency ? { currency: actualCurrency } : {}),
-          evidence: { offsetFree: current.offsetFree.get(key)?.has(field) ?? false },
+          evidence: {
+            offsetFree: current.offsetFree.get(key)?.has(field) ?? false,
+            ...(entity.compare[field]?.displayTimezoneField &&
+            displayZone(expected[entity.compare[field]!.displayTimezoneField!])
+              ? { timezone: displayZone(expected[entity.compare[field]!.displayTimezoneField!])! }
+              : {}),
+          },
           message: `${keyText(key, baseline.parts.get(key))}: ${field} differs from ${reference}.`,
         });
     }
@@ -301,7 +362,15 @@ export async function compareEntities(
         }
         summary.counts[source] = current.count;
         if (summary.uniqueCounts) summary.uniqueCounts[source] = current.rows.size;
-        for (const issue of current.issues) appendFinding(report, issue);
+        for (const issue of current.issues) {
+          if (source === reference && issue.type === 'invalid_value')
+            issue.evidence = {
+              ...issue.evidence,
+              referenceInvalid: true,
+              ...(issue.actual === undefined ? {} : { referenceValue: issue.actual }),
+            };
+          appendFinding(report, issue);
+        }
         publishAggregates(entity, source, reference, current, summary, report);
         if (source === reference) {
           baseline = current;
@@ -326,6 +395,7 @@ export async function compareEntities(
       }
     }
   }
+  suggestChargeMappings(report.findings, entities);
   sortFindings(report.findings);
   report.entities.sort((a, b) => order(a.entity, b.entity));
   applyFailurePolicies(report, entities);

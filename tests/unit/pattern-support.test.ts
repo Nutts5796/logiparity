@@ -1,3 +1,4 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import { compareEntities, entitySchema, configSchema, groupFindings, type Finding } from '@logiparity/core';
 const csv = { type: 'csv', file: 'unused.csv', fields: { id: 'ID', amount: 'Amount', status: 'Status' } };
@@ -18,13 +19,15 @@ const finding = (key: string, field: string, expected: Finding['expected'], actu
   message: 'Difference',
 });
 it('keeps one-off money and status defects in individual review', async () => {
-  const report = await compareEntities([entity], async function* (source) {
-    yield {
-      id: 'L1',
-      amount: source === 'api' ? '200.00' : '215.00',
-      status: source === 'api' ? 'delivered' : 'cancelled',
-    };
-  });
+  const report = await checkedReport(
+    compareEntities([entity], async function* (source) {
+      yield {
+        id: 'L1',
+        amount: source === 'api' ? '200.00' : '215.00',
+        status: source === 'api' ? 'delivered' : 'cancelled',
+      };
+    }),
+  );
   expect(report.groups).toEqual([]);
   expect(report.coverage).toEqual({ explained: 0, needsReview: 2 });
 });

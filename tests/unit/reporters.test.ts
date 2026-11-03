@@ -1,3 +1,4 @@
+import { parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -32,7 +33,7 @@ it('writes a versioned report with lossless money and bounded console details', 
   expect(text).toContain('Missing: 1');
   expect(text).toContain('3 additional results');
   expect(text).toContain('900,719,925,474,099,301');
-  const json = JSON.parse(jsonReport(report)) as { schemaVersion: number; findings: { expected: string }[] };
+  const json = parseCheckedJson(jsonReport(report)) as { schemaVersion: number; findings: { expected: string }[] };
   expect(json.schemaVersion).toBe(1);
   expect(json.findings[0]?.expected).toBe('900719925474099301');
   const directory = await mkdtemp(join(tmpdir(), 'logiparity-report-'));

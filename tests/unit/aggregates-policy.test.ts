@@ -1,3 +1,4 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { describe, expect, it } from 'vitest';
 import {
   compareEntities,
@@ -33,7 +34,7 @@ const row = (id: string, payout = '1.01', status = 'delivered', distance: string
   distance,
 });
 async function check(entity: EntityConfig, api: DataRow[], exported: DataRow[]) {
-  return compareEntities([entity], read({ api, export: exported }));
+  return checkedReport(compareEntities([entity], read({ api, export: exported })));
 }
 
 describe('aggregates', () => {
@@ -223,10 +224,12 @@ describe('failure policies', () => {
     expect(reportExitCode(report)).toBe(0);
     const broken = await check(entity, [row('a')], [{ id: '' }]);
     expect(reportExitCode(broken)).toBe(0);
-    const disconnected = await compareEntities([entity], async function* () {
-      yield* [];
-      throw new Error('connection refused');
-    });
+    const disconnected = await checkedReport(
+      compareEntities([entity], async function* () {
+        yield* [];
+        throw new Error('connection refused');
+      }),
+    );
     expect(reportExitCode(disconnected)).toBe(2);
   });
   it('counts categories across sources but isolates each entity policy', async () => {
@@ -236,9 +239,11 @@ describe('failure policies', () => {
       sources: { api: source, export: source, another: source },
     });
     const second = entitySchema.parse({ ...raw, name: 'another_entity', failOn: {} });
-    const report = await compareEntities(
-      [first, second],
-      read({ api: [row('a')], export: [row('a', '1.00')], another: [row('a', '1.00')] }),
+    const report = await checkedReport(
+      compareEntities(
+        [first, second],
+        read({ api: [row('a')], export: [row('a', '1.00')], another: [row('a', '1.00')] }),
+      ),
     );
     expect(report.findings.filter((f) => f.entity === 'shipment').every((f) => f.blocking)).toBe(true);
     expect(report.findings.filter((f) => f.entity === 'another_entity').every((f) => f.blocking === false)).toBe(true);

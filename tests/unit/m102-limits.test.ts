@@ -1,3 +1,4 @@
+import { checkedReport, parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import { compareEntities, entitySchema, reportExitCode, atomicReportFile } from '@logiparity/core';
 import { mkdtemp, readFile, rm, stat, writeFile, readdir } from 'node:fs/promises';
@@ -10,38 +11,44 @@ function entity() {
   return entitySchema.parse({ name: 'order', key: 'id', sources: { a: source, b: source } });
 }
 it('returns a report for 200,000 duplicate rows without spreading them as function arguments (sam)', async () => {
-  const config = entity();
-  for (const source of Object.values(config.sources)) Object.assign(source, { maxRows: 250001 });
-  const report = await compareEntities(
-    [config],
-    async function* (name) {
-      yield { id: 'O1' };
-      if (name === 'b') for (let i = 0; i < 200000; i++) yield { id: 'O1' };
-    },
-    {},
-    { maxFindings: 250001 },
+  const script = `import {createJiti} from 'jiti';
+    const jiti=createJiti(import.meta.url);
+    const {entitySchema,compareEntities}=await jiti.import(${JSON.stringify(resolve('packages/core/src/index.ts'))});
+    const {assertReport}=await import(${JSON.stringify(new URL('../../scripts/validate-report.mjs', import.meta.url).href)});
+    const source={type:'csv',file:'unused',fields:{id:'id'}};
+    const config=entitySchema.parse({name:'order',key:'id',sources:{a:source,b:source}});
+    for(const source of Object.values(config.sources))Object.assign(source,{maxRows:250001});
+    const report=await compareEntities([config],async function*(name){yield{id:'O1'};if(name==='b')for(let i=0;i<200000;i++)yield{id:'O1'};},{},{maxFindings:250001});
+    assertReport(report);
+    console.log(JSON.stringify({count:report.findings.length,duplicates:report.findings.every(f=>f.type==='duplicate_key')}));`;
+  // Isolate the stress run from coverage workers; stderr is returned immediately on failure.
+  const result = await promisify(execFile)(
+    process.execPath,
+    ['--max-old-space-size=512', '--input-type=module', '-e', script],
+    { timeout: 45000, maxBuffer: 2 * 1024 * 1024 },
   );
-  expect(report.findings).toHaveLength(200000);
-  expect(report.findings.every((f) => f.type === 'duplicate_key')).toBe(true);
-});
+  expect(parseCheckedJson(result.stdout)).toEqual({ count: 200000, duplicates: true });
+}, 60000);
 it('stops a source at its row limit and truncates excessive findings with a runtime notice (sam)', async () => {
   const config = entity();
   for (const source of Object.values(config.sources)) Object.assign(source, { maxRows: 3 });
   const rows = async function* () {
     for (let i = 0; i < 10; i++) yield { id: String(i) };
   };
-  const rowReport = await compareEntities([config], rows);
+  const rowReport = await checkedReport(compareEntities([config], rows));
   expect(reportExitCode(rowReport)).toBe(2);
   expect(rowReport.findings[0]?.message).toContain('maxRows');
   for (const source of Object.values(config.sources)) Object.assign(source, { maxRows: 100 });
-  const report = await compareEntities(
-    [config],
-    async function* (name) {
-      yield { id: 'O1' };
-      if (name === 'b') for (let i = 0; i < 30; i++) yield { id: 'O1' };
-    },
-    {},
-    { maxFindings: 5 },
+  const report = await checkedReport(
+    compareEntities(
+      [config],
+      async function* (name) {
+        yield { id: 'O1' };
+        if (name === 'b') for (let i = 0; i < 30; i++) yield { id: 'O1' };
+      },
+      {},
+      { maxFindings: 5 },
+    ),
   );
   expect(report.truncated).toBe(true);
   expect(report.findings).toHaveLength(6);
@@ -63,7 +70,7 @@ it('caps a many-row JSON response before parsing in a 192 MiB heap subprocess (s
     ['--max-old-space-size=192', '--input-type=module', '-e', script],
     { timeout: 30000, maxBuffer: 2 * 1024 * 1024 },
   );
-  const evidence = JSON.parse(result.stdout);
+  const evidence = parseCheckedJson(result.stdout);
   expect(evidence.sent).toBeLessThan(150000);
   expect(evidence.rss).toBeLessThan(384 * 1024 * 1024);
 });

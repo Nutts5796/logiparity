@@ -23,6 +23,7 @@ export function recordRawTotals(
   if (!config) return;
   for (const aggregate of entity.aggregates) {
     if (!matchesFilter(row, aggregate.where, entity, source)) continue;
+    if (aggregate.type === 'sum' && !['number', 'bigint'].includes(typeof row[aggregate.field])) continue;
     const qualifying = state.qualifyingRows.get(aggregate.name) ?? new Set<number>();
     qualifying.add(state.position);
     state.qualifyingRows.set(aggregate.name, qualifying);

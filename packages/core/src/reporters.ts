@@ -3,11 +3,11 @@ import { safeConsole, redactTree, secretValues } from './diagnostics.js';
 import { atomicReportFile } from './atomic-file.js';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { reportLabels } from './labels.js';
+import { reportLabels, uncertainKeyText, humanize } from './labels.js';
 import { errorText, type Config } from './config.js';
 import type { Report } from './types.js';
 import { reportGroups, presentationFindings } from './groups.js';
-import { humanFinding, reportCounts, quantity, mergedPatternWords, typeLabels } from './human.js';
+import { humanFinding, reportCounts, quantity, mergedPatternWords, typeLabels, matchingHeadline } from './human.js';
 import { isBlocking } from './policy.js';
 import { htmlReport } from './html.js';
 import { junitReport } from './junit.js';
@@ -36,7 +36,8 @@ export function consoleReport(report: Report, presentation: ReportPresentation =
   const counts = reportCounts(report);
   const labels = reportLabels(presentation);
   const lines = [
-    `LogiParity: ${quantity(counts.findings, 'finding')} (${quantity(counts.blocking, 'blocking finding')}), ${quantity(counts.errors, 'source error')}, ${quantity(counts.warnings, 'warning')}`,
+    ...(!report.findings.length ? [`LogiParity: ${matchingHeadline(report)}`] : []),
+    `${!report.findings.length ? '  ' : counts.errors ? 'LogiParity: Runtime error · ' : 'LogiParity: '}${quantity(counts.findings, 'finding')} (${quantity(counts.blocking, 'blocking finding')}), ${quantity(counts.errors, 'source error')}, ${quantity(counts.warnings, 'warning')}`,
   ];
   for (const warning of report.warnings ?? []) lines.push(`  Warning: ${warning.message}`);
   for (const [type, label] of Object.entries(typeLabels)) {
@@ -52,7 +53,7 @@ export function consoleReport(report: Report, presentation: ReportPresentation =
         const raw = rawAggregateDisplay(aggregate, source, entity.entity, presentation);
         if (raw)
           lines.push(
-            `  ${labels.field(entity.entity, aggregate.name, true)} · ${labels.source(entity.entity, source)}: raw source ${raw}; retained/certain lines ${aggregateDisplay(aggregate, source, entity.entity, presentation)}; excluded rows ${(aggregate.excludedRows?.[source] ?? []).join(', ') || 'none'}.`,
+            `  ${labels.entity(entity.entity)?.label ?? humanize(entity.entity)} · ${labels.field(entity.entity, aggregate.name, true)} · ${labels.source(entity.entity, source)}: raw source ${raw}; retained/certain lines ${aggregateDisplay(aggregate, source, entity.entity, presentation)}; excluded rows ${(aggregate.excludedRows?.[source] ?? []).join(', ') || 'none'}.${aggregate.uncertainKeys?.[source]?.length ? ` Uncertain lines: ${uncertainKeyText(aggregate.uncertainKeys[source])}.` : ''}`,
           );
       }
   for (const finding of presentationFindings(report, presentation).slice(0, 10)) {

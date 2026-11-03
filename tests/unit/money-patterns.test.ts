@@ -1,3 +1,4 @@
+import { checkedReport, parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import {
   compareEntities,
@@ -71,16 +72,16 @@ it('groups constant UTC offsets, exact large money deltas and one status mapping
   const groups = groupFindings(findings, [entity]);
   expect(groups.map((g) => g.kind)).toEqual(['datetime_offset', 'money_delta', 'value_mapping']);
   expect(groups[0]).toMatchObject({ count: 3, delta: '-21600000' });
-  expect(groups[0]?.summary).toContain('−6 h (repeated datetime offset)');
+  expect(groups[0]?.summary).toContain('−6 h. Repeated datetime offset.');
   expect(groups[1]?.delta).toBe('-1');
   const report: Report = { schemaVersion: 1, entities: [], findings, groups };
-  for (const text of [markdownReport(report), consoleReport(report)]) {
+  for (const text of [markdownReport(report, { entities: [entity] }), consoleReport(report, { entities: [entity] })]) {
     expect(text).toContain('Repeated datetime offset');
     expect(text.replaceAll('\\_', '_')).toContain('In transit');
   }
   expect(htmlReport(report).includes('9 findings')).toBe(true);
   expect(markdownReport(report)).toContain('## One example per cause');
-  const json = JSON.parse(jsonReport(report)) as Report;
+  const json = parseCheckedJson(jsonReport(report)) as Report;
   expect(json.schemaVersion).toBe(1);
   expect(json.groups).toHaveLength(3);
   expect(json.findings).toHaveLength(9);
@@ -121,16 +122,20 @@ it('escapes summaries, adds HTML counts, and shows ISO UTC alongside console epo
   ).toContain('+2 m');
 });
 it('emits groups through the comparison engine and never reports false extras after a source fails', async () => {
-  const report = await compareEntities([entity], async function* (name) {
-    if (name === 'api') throw new Error('REST page 1: requested size 200, received 20; cap detected.');
-    yield { id: 'A' };
-  });
+  const report = await checkedReport(
+    compareEntities([entity], async function* (name) {
+      if (name === 'api') throw new Error('REST page 1: requested size 200, received 20; cap detected.');
+      yield { id: 'A' };
+    }),
+  );
   expect(report.findings.map((f) => f.type)).toEqual(['source_error']);
   expect(report.groups).toEqual([]);
   expect(report.findings[0]?.message).not.toContain("Check this source's configuration");
-  const compared = await compareEntities([entity], async function* (name) {
-    for (const id of ['A', 'B', 'C']) yield { id, payout: name === 'api' ? '6.25' : '6.24' };
-  });
+  const compared = await checkedReport(
+    compareEntities([entity], async function* (name) {
+      for (const id of ['A', 'B', 'C']) yield { id, payout: name === 'api' ? '6.25' : '6.24' };
+    }),
+  );
   expect(compared.groups?.[0]?.kind).toBe('money_delta');
 });
 it('keeps rules optional and validates the new pagination and numeric-money properties', () => {

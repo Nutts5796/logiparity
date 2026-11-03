@@ -42,6 +42,7 @@ export interface Finding {
   currency?: string;
   field: string;
   message: string;
+  hint?: string;
   expected?: NormalizedValue;
   actual?: NormalizedValue;
   values?: { row: number; value: NormalizedValue }[];
@@ -49,7 +50,15 @@ export interface Finding {
   blocking?: boolean;
   screenshot?: string;
   referencePosition?: number;
-  evidence?: { offsetFree?: boolean; paginated?: boolean; pageSizes?: number[] };
+  evidence?: {
+    offsetFree?: boolean;
+    paginated?: boolean;
+    pageSizes?: number[];
+    referenceInvalid?: boolean;
+    referenceUncertain?: boolean;
+    referenceValue?: NormalizedValue;
+    timezone?: string;
+  };
   accounting?: { causes: string[]; remainder: string };
 }
 export interface AggregateReconciliation {

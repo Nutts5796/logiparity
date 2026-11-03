@@ -3,7 +3,15 @@ import { aggregateDisplay, rawAggregateDisplay, aggregateDifference, aggregateSt
 import { reportGroups, groupMembership, accountedFindingIndexes } from './groups.js';
 import { verdict } from './report-utils.js';
 import { reportLabels, uncertainKeyText } from './labels.js';
-import { humanFinding, reportCounts, quantity, typeLabels, mergedPatternWords, markdownCell as cell } from './human.js';
+import {
+  matchingHeadline,
+  humanFinding,
+  reportCounts,
+  quantity,
+  typeLabels,
+  mergedPatternWords,
+  markdownCell as cell,
+} from './human.js';
 import { type ReportPresentation } from './money-display.js';
 import type { Report, Finding } from './types.js';
 const row = (finding: Finding, presentation: ReportPresentation) => {
@@ -19,7 +27,7 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
   const lines = [
     '# LogiParity report',
     '',
-    `**${verdict(report)}** · ${quantity(counts.findings, 'finding')} · ${quantity(counts.blocking, 'blocking finding')} · ${quantity(counts.errors, 'source error')} · ${quantity(counts.warnings, 'warning')}`,
+    `**${verdict(report)}** · ${!report.findings.length ? matchingHeadline(report) + ' · ' : ''}${quantity(counts.findings, 'finding')} · ${quantity(counts.blocking, 'blocking finding')} · ${quantity(counts.errors, 'source error')} · ${quantity(counts.warnings, 'warning')}`,
     '',
     'Dates use ' +
       (presentation.displayTimezone ?? 'UTC') +

@@ -104,9 +104,9 @@ it('bumps only package identities and explicit install settings in a scratch 1.2
       history + 'npm install --save-dev --save-exact logiparity@1.2.0\n',
     );
     expect(parseCheckedJson(await readFile(join(dir, 'package.json'), 'utf8')).version).toBe('1.2.0');
-    expect(parseCheckedJson(await readFile(join(dir, 'package-lock.json'), 'utf8')).packages['packages/core'].version).toBe(
-      '1.2.0',
-    );
+    expect(
+      parseCheckedJson(await readFile(join(dir, 'package-lock.json'), 'utf8')).packages['packages/core'].version,
+    ).toBe('1.2.0');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

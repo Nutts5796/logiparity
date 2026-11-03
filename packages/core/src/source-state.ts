@@ -1,4 +1,5 @@
 import { appendFinding } from './finding-limit.js';
+import { humanize } from './labels.js';
 import { rowCurrency, recordRawTotals, measureCurrencies } from './source-totals.js';
 import { keyFields, errorText, type EntityConfig, type SourceConfig } from './config.js';
 import { sourceRule, normalize } from './normalize.js';
@@ -53,9 +54,13 @@ function readKey(
       (typeof value === 'number' && !Number.isSafeInteger(value))
     )
       throw new Error(`Key field ${field} must be a nonempty string or safe integer.`);
-    return String(
+    const normalized = String(
       normalize(value, sourceRule(entity.compare[field], entity.sources[source], source), source) ?? '',
     ).trim();
+    const currency =
+      entity.sources[source]?.currencyField === field ||
+      Object.values(entity.compare).some((rule) => rule.currencyField === field);
+    return currency ? normalized.toUpperCase() : normalized;
   });
   return typeof entity.key === 'string' ? { key: parts[0] ?? '' } : { key: JSON.stringify(parts), parts };
 }
@@ -355,7 +360,7 @@ export async function readSource(
       },
     })) {
       records++;
-      if (records > config.maxRows)
+      if (records > (config.maxRows ?? 100000))
         throw new Error(
           `Source ${source} exceeds maxRows (${config.maxRows}). Reduce the export or increase the reviewed limit.`,
         );
@@ -470,7 +475,7 @@ export async function readSource(
       report.warnings.push({
         entity: entity.name,
         source,
-        message: 'All rows were filtered out. Check the where values and source export.',
+        message: `${entity.label ?? humanize(entity.name)} · ${config.label ?? humanize(source)}: All rows were filtered out. Check the where values and source export.`,
       });
     }
     checkUniqueness(entity, source, config, state);

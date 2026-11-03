@@ -1,3 +1,4 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import {
   compareEntities,
@@ -56,13 +57,15 @@ it('accepts optional labels and resolves string and object mappings without chan
 });
 
 it('uses readable fixed en-US values with differences in all human reports, preserving JSON and JUnit', async () => {
-  const report = await compareEntities([entity], async function* (source) {
-    yield {
-      id: 'S1',
-      payout: source === 'api' ? '18.19' : '18.18',
-      delivered_at: source === 'api' ? '2026-11-02T13:01:00Z' : '2026-11-02T07:01:00Z',
-    };
-  });
+  const report = await checkedReport(
+    compareEntities([entity], async function* (source) {
+      yield {
+        id: 'S1',
+        payout: source === 'api' ? '18.19' : '18.18',
+        delivered_at: source === 'api' ? '2026-11-02T13:01:00Z' : '2026-11-02T07:01:00Z',
+      };
+    }),
+  );
   const json = jsonReport(report);
   for (const render of [markdownReport, consoleReport]) {
     const result = render(report, presentation);
@@ -89,16 +92,18 @@ it('uses readable fixed en-US values with differences in all human reports, pres
 });
 
 it('computes exact pattern coverage, merges cards, and reconciles missing rows and pattern deltas in minor units', async () => {
-  const report = await compareEntities([entity], async function* (source) {
-    for (let index = 1; index <= 750; index++) {
-      if (source === 'export' && [200, 400, 600, 750].includes(index)) continue;
-      yield {
-        id: `S${String(index).padStart(6, '0')}`,
-        payout: source === 'api' ? '18.19' : '18.18',
-        delivered_at: source === 'api' ? '2026-11-02T13:01:00Z' : '2026-11-02T07:01:00Z',
-      };
-    }
-  });
+  const report = await checkedReport(
+    compareEntities([entity], async function* (source) {
+      for (let index = 1; index <= 750; index++) {
+        if (source === 'export' && [200, 400, 600, 750].includes(index)) continue;
+        yield {
+          id: `S${String(index).padStart(6, '0')}`,
+          payout: source === 'api' ? '18.19' : '18.18',
+          delivered_at: source === 'api' ? '2026-11-02T13:01:00Z' : '2026-11-02T07:01:00Z',
+        };
+      }
+    }),
+  );
   expect(report.coverage).toEqual({ explained: 2998, needsReview: 0 });
   expect(report.groups?.find((group) => group.kind === 'missing_stride')?.findingIndexes).toHaveLength(4);
   const aggregate = report.entities[0]!.aggregates![0]!;
@@ -118,16 +123,20 @@ it('attributes extra rows and respects aggregate filters', async () => {
     ...entity,
     aggregates: [{ name: 'payout_total', type: 'sum', field: 'payout', where: { id: 'S1' } }],
   });
-  const report = await compareEntities([filtered], async function* (source) {
-    yield { id: 'S1', payout: '18.19' };
-    if (source === 'api') yield { id: 'S2', payout: '25.00' };
-    else yield { id: 'extra', payout: '12.00' };
-  });
+  const report = await checkedReport(
+    compareEntities([filtered], async function* (source) {
+      yield { id: 'S1', payout: '18.19' };
+      if (source === 'api') yield { id: 'S2', payout: '25.00' };
+      else yield { id: 'extra', payout: '12.00' };
+    }),
+  );
   expect(report.entities[0]!.aggregates![0]!.reconciliation?.export?.remainder).toBe(0n);
-  const extra = await compareEntities([entity], async function* (source) {
-    yield { id: 'S1', payout: '18.19' };
-    if (source !== 'api') yield { id: 'extra', payout: '12.00' };
-  });
+  const extra = await checkedReport(
+    compareEntities([entity], async function* (source) {
+      yield { id: 'S1', payout: '18.19' };
+      if (source !== 'api') yield { id: 'extra', payout: '12.00' };
+    }),
+  );
   expect(extra.entities[0]!.aggregates![0]!.reconciliation?.export?.remainder).toBe(0n);
   expect(extra.entities[0]!.aggregates![0]!.reconciliation?.export?.extraRows?.amount).toBe(1200n);
   expect(htmlReport(extra, presentation)).toContain('$0.00 · accounted for');
@@ -208,9 +217,11 @@ it('embeds only Latin font data, escapes labels, and adds under 300 KB to an emp
 });
 
 it('does not call a large fixed money difference rounding in cards or legends', async () => {
-  const report = await compareEntities([entity], async function* (source) {
-    for (const id of ['S1', 'S2', 'S3']) yield { id, payout: source === 'api' ? '45.00' : '20.00' };
-  });
+  const report = await checkedReport(
+    compareEntities([entity], async function* (source) {
+      for (const id of ['S1', 'S2', 'S3']) yield { id, payout: source === 'api' ? '45.00' : '20.00' };
+    }),
+  );
   const html = htmlReport(report, presentation);
   expect(html.includes('Fixed difference')).toBe(true);
   expect(html.includes('>Rounding<')).toBe(false);

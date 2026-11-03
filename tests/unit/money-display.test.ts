@@ -1,3 +1,4 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -100,10 +101,12 @@ it('shows readable currency for monetary fields and sum aggregates, with raw val
 });
 
 it('retains UI failure screenshot evidence without inventing metadata for other errors', async () => {
-  const report = await compareEntities([entity], async function* (name) {
-    if (name === 'export') throw new SourceError('UI table missing', 'screenshots/failed.png');
-    yield { id: '1', payout: '1.00' };
-  });
+  const report = await checkedReport(
+    compareEntities([entity], async function* (name) {
+      if (name === 'export') throw new SourceError('UI table missing', 'screenshots/failed.png');
+      yield { id: '1', payout: '1.00' };
+    }),
+  );
   expect(report.findings[0]?.screenshot).toBe('screenshots/failed.png');
   expect(new SourceError('launch failed').screenshot).toBeUndefined();
 });

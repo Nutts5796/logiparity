@@ -1,3 +1,4 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import {
   scenarioConsole,
@@ -55,11 +56,13 @@ it('groups a page stride across an unrelated lost key and counts every missing t
   });
   // The lost order is absent from both surfaces after the scenario, between two runs of page-boundary gaps.
   const rows: DataRow[] = Array.from({ length: 2750 }, (_, i) => ({ id: `S${String(i + 1).padStart(6, '0')}` }));
-  const report = await compareEntities([entity], async function* (name) {
-    yield* name === 'api'
-      ? rows
-      : rows.filter((r) => Number(String(r.id).slice(1)) % 200 !== 0 && r.id !== 'S002750' && r.id !== 'S000801');
-  });
+  const report = await checkedReport(
+    compareEntities([entity], async function* (name) {
+      yield* name === 'api'
+        ? rows
+        : rows.filter((r) => Number(String(r.id).slice(1)) % 200 !== 0 && r.id !== 'S002750' && r.id !== 'S000801');
+    }),
+  );
   expect(report.groups).toHaveLength(1);
   expect(report.groups?.[0]?.count).toBe(14);
   const card = patternCards(report, { entities: [entity] })[0];

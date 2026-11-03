@@ -1,3 +1,4 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import {
   compareEntities,
@@ -31,10 +32,12 @@ it.each(['reference', 'lines'])(
         lines: entity.sources.lines,
       },
     });
-    const report = await compareEntities([e], async function* (sourceName) {
-      yield { load_id: 'L1', pay: sourceName === name ? '1.00' : '2.00', status: 'delivered' };
-      if (sourceName === name) yield { load_id: 'L1', pay: '1.00', status: 'cancelled' };
-    });
+    const report = await checkedReport(
+      compareEntities([e], async function* (sourceName) {
+        yield { load_id: 'L1', pay: sourceName === name ? '1.00' : '2.00', status: 'delivered' };
+        if (sourceName === name) yield { load_id: 'L1', pay: '1.00', status: 'cancelled' };
+      }),
+    );
     expect(report.findings).toHaveLength(1);
     expect(report.findings[0]).toMatchObject({
       reason: 'rollup_conflict',
@@ -48,10 +51,12 @@ it.each(['reference', 'lines'])(
   },
 );
 it('flags blank money in a rollup and skips comparisons and aggregates that depend on it', async () => {
-  const report = await compareEntities([entity], async function* (name) {
-    yield { load_id: 'L1', pay: '1.00', status: 'delivered' };
-    if (name === 'lines') yield { load_id: 'L1', pay: '', status: 'delivered' };
-  });
+  const report = await checkedReport(
+    compareEntities([entity], async function* (name) {
+      yield { load_id: 'L1', pay: '1.00', status: 'delivered' };
+      if (name === 'lines') yield { load_id: 'L1', pay: '', status: 'delivered' };
+    }),
+  );
   expect(report.findings).toHaveLength(2);
   expect(report.findings.find((f) => f.type === 'invalid_value')).toMatchObject({
     reason: 'rollup_missing_value',
@@ -72,16 +77,18 @@ it('identifies repeated charge lines before summing without labelling them as ro
       },
     },
   });
-  const report = await compareEntities([e], async function* (name) {
-    if (name === 'reference') {
-      yield { load_id: 'L1', pay: '1.00', status: 'delivered' };
-      yield { load_id: 'L2', pay: '1.00', status: 'delivered' };
-    } else {
-      yield { load_id: 'L1', pay: '1.00', status: 'delivered', charge: 'fuel' };
-      yield { load_id: 'L1', pay: '1.00', status: 'delivered', charge: 'fuel' };
-      yield { load_id: 'L2', pay: '1.00', status: 'delivered', charge: 'fuel' };
-    }
-  });
+  const report = await checkedReport(
+    compareEntities([e], async function* (name) {
+      if (name === 'reference') {
+        yield { load_id: 'L1', pay: '1.00', status: 'delivered' };
+        yield { load_id: 'L2', pay: '1.00', status: 'delivered' };
+      } else {
+        yield { load_id: 'L1', pay: '1.00', status: 'delivered', charge: 'fuel' };
+        yield { load_id: 'L1', pay: '1.00', status: 'delivered', charge: 'fuel' };
+        yield { load_id: 'L2', pay: '1.00', status: 'delivered', charge: 'fuel' };
+      }
+    }),
+  );
   expect(report.findings).toHaveLength(2);
   expect(report.findings.find((f) => f.type === 'duplicate_key')).toMatchObject({
     type: 'duplicate_key',

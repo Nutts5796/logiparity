@@ -57,7 +57,10 @@ export function junitReport(report: Report, timestamp = new Date(), presentation
               const item = humanFinding(finding, presentation);
               return `${item.key} | ${item.source} | ${item.field} | Reference: ${item.reference} | Source value: ${item.sourceValue} | Difference: ${item.difference}${item.details ? ` | ${item.details}` : ''}`;
             })
-            .join('\n'),
+            .join('\n') +
+            (findings.length > 10
+              ? `\n+${findings.length - 10} more; see report.html or report.json (enable those report outputs for all details).`
+              : ''),
         )}</${tag}>`;
       }
       return `    <testcase name="${xml(typeLabels[type])}" classname="${xml(`logiparity.${entity}`)}" time="0">${result}</testcase>`;

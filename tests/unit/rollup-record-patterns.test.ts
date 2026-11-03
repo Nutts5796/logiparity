@@ -1,3 +1,4 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import {
   compareEntities,
@@ -23,24 +24,28 @@ const entity = entitySchema.parse({
   compare: { carrier_pay: { type: 'money', currency: 'USD' }, units: { type: 'number' }, status: { type: 'enum' } },
 });
 it('rolls up normalized money and exact numeric sums while keeping the first mapped value', async () => {
-  const report = await compareEntities([entity], async function* (name) {
-    if (name === 'tms') yield { load_id: 'L1', carrier_pay: '1150.25', units: 0.3, status: 'delivered' };
-    else {
-      yield { load_id: 'L1', carrier_pay: '1000.00', units: 0.1, status: 'delivered' };
-      yield { load_id: 'L1', carrier_pay: '100.00', units: 0.2, status: 'delivered' };
-      yield { load_id: 'L1', carrier_pay: '50.25', units: 0, status: 'delivered' };
-    }
-  });
+  const report = await checkedReport(
+    compareEntities([entity], async function* (name) {
+      if (name === 'tms') yield { load_id: 'L1', carrier_pay: '1150.25', units: 0.3, status: 'delivered' };
+      else {
+        yield { load_id: 'L1', carrier_pay: '1000.00', units: 0.1, status: 'delivered' };
+        yield { load_id: 'L1', carrier_pay: '100.00', units: 0.2, status: 'delivered' };
+        yield { load_id: 'L1', carrier_pay: '50.25', units: 0, status: 'delivered' };
+      }
+    }),
+  );
   expect(report.findings).toEqual([]);
   expect(report.entities[0]?.counts).toEqual({ tms: 1, settlement: 3 });
 });
 it('retains duplicate detection on sources without an explicit rollup', async () => {
-  const report = await compareEntities(
-    [{ ...entity, sources: { tms: entity.sources.tms!, settlement: entity.sources.tms! } }],
-    async function* () {
-      yield { load_id: 'L1' };
-      yield { load_id: 'L1' };
-    },
+  const report = await checkedReport(
+    compareEntities(
+      [{ ...entity, sources: { tms: entity.sources.tms!, settlement: entity.sources.tms! } }],
+      async function* () {
+        yield { load_id: 'L1' };
+        yield { load_id: 'L1' };
+      },
+    ),
   );
   expect(report.findings.map((f) => f.type)).toEqual(['duplicate_key', 'duplicate_key']);
 });
@@ -56,9 +61,11 @@ it('rejects rollup references that cannot be compared safely', () => {
     ).toBe(false);
 });
 it('reports invalid sum input without comparing partial rolled-up data', async () => {
-  const report = await compareEntities([entity], async function* (name) {
-    yield { load_id: 'L1', carrier_pay: name === 'tms' ? '1.00' : 'bad', units: 1, status: 'delivered' };
-  });
+  const report = await checkedReport(
+    compareEntities([entity], async function* (name) {
+      yield { load_id: 'L1', carrier_pay: name === 'tms' ? '1.00' : 'bad', units: 1, status: 'delivered' };
+    }),
+  );
   expect(report.findings.map((f) => f.type)).toEqual(['invalid_value']);
 });
 const missing = (key: string, type: Finding['type'] = 'missing_in_source'): Finding => ({
@@ -84,7 +91,7 @@ it.each(['missing_in_source', 'extra_in_source'] as const)(
       stride: '200',
       count: 3,
     });
-    expect(groups[0]?.summary).toContain('stride of 200');
+    expect(groups[0]?.summary).toContain('every 200th row');
     expect(groupFindings([...findings].reverse(), [entity])).toEqual(groups);
     const report = { schemaVersion: 1 as const, entities: [], findings, groups };
     for (const text of [markdownReport(report), consoleReport(report)]) {
@@ -110,6 +117,6 @@ it('keeps a regular page-boundary run when the final partial-page key is also mi
   const groups = groupFindings(findings);
   expect(groups).toHaveLength(1);
   expect(groups[0]).toMatchObject({ kind: 'missing_stride', count: 3, stride: '200' });
-  expect(groups[0]?.summary).toContain('L200 to L600');
+  expect(groups[0]?.keys).toEqual(['L200', 'L400', 'L600']);
   expect(findings).toHaveLength(4);
 });

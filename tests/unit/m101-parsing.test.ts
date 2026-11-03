@@ -1,27 +1,34 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import { compareEntities, entitySchema, normalize, ruleSchema } from '@logiparity/core';
 const csv = { type: 'csv', file: 'unused', fields: { id: 'id', at: 'at', amount: 'amount', status: 'status' } };
 const definition = (changes: Record<string, unknown> = {}) =>
   entitySchema.parse({ name: 'order', key: 'id', sources: { a: csv, b: csv }, ...changes });
 it('does not infer mappings from blank statuses (raj/t8)', async () => {
-  const report = await compareEntities([definition()], async function* (name) {
-    for (let i = 1; i <= 3; i++) yield { id: `O${i}`, status: name === 'a' ? 'delivered' : '' };
-  });
+  const report = await checkedReport(
+    compareEntities([definition()], async function* (name) {
+      for (let i = 1; i <= 3; i++) yield { id: `O${i}`, status: name === 'a' ? 'delivered' : '' };
+    }),
+  );
   expect(report.groups).toEqual([]);
 });
 it('does not infer page boundaries from CSV strides (raj/t3)', async () => {
-  const report = await compareEntities([definition()], async function* (name) {
-    for (let i = 1; i <= 20; i++) if (name === 'a' || ![4, 7, 10].includes(i)) yield { id: `O${i}` };
-  });
+  const report = await checkedReport(
+    compareEntities([definition()], async function* (name) {
+      for (let i = 1; i <= 20; i++) if (name === 'a' || ![4, 7, 10].includes(i)) yield { id: `O${i}` };
+    }),
+  );
   expect(report.findings.map((f) => f.key)).toEqual(['O4', 'O7', 'O10']);
   expect(report.groups?.[0]?.summary).not.toMatch(/page|pagination/i);
 });
 it('gates timezone explanations on offset-free source values and a quarter-hour delta (raj/t1)', async () => {
   const config = definition({ compare: { at: { type: 'datetime' } } });
-  const report = await compareEntities([config], async function* (name) {
-    for (let i = 1; i <= 3; i++)
-      yield { id: `O${i}`, at: name === 'a' ? '2026-03-01T10:00:00Z' : '2026-03-01T10:02:00Z' };
-  });
+  const report = await checkedReport(
+    compareEntities([config], async function* (name) {
+      for (let i = 1; i <= 3; i++)
+        yield { id: `O${i}`, at: name === 'a' ? '2026-03-01T10:00:00Z' : '2026-03-01T10:02:00Z' };
+    }),
+  );
   expect(report.groups?.[0]?.summary).not.toMatch(/timezone|local time/i);
 });
 it('accepts real numeric JSON scalars with scientific notation (raj/t6)', () => {
@@ -49,16 +56,20 @@ it('combines per-source formatting with field overrides (raj/t6)', async () => {
     sources: { a: csv, b: { ...csv, locale: 'de-DE' } },
     compare: { amount: { type: 'money', currency: 'EUR' } },
   });
-  const report = await compareEntities([config], async function* (name) {
-    yield { id: 'O1', amount: name === 'a' ? '1234.50' : '1.234,50' };
-  });
+  const report = await checkedReport(
+    compareEntities([config], async function* (name) {
+      yield { id: 'O1', amount: name === 'a' ? '1234.50' : '1.234,50' };
+    }),
+  );
   expect(report.findings).toEqual([]);
 });
 it('applies enum maps on key parts before matching (tom)', async () => {
   const config = definition({ compare: { id: { type: 'enum', map: { FSC: 'fuel' } } } });
-  const report = await compareEntities([config], async function* (name) {
-    yield { id: name === 'a' ? 'fuel' : 'FSC' };
-  });
+  const report = await checkedReport(
+    compareEntities([config], async function* (name) {
+      yield { id: name === 'a' ? 'fuel' : 'FSC' };
+    }),
+  );
   expect(report.findings).toEqual([]);
 });
 it('rejects projected-away uniqueness fields and accepts equivalent array rollup keys (raj/t7)', () => {
@@ -95,10 +106,12 @@ it('applies the same DST gap and overlap rules to tagged XLSX wall clocks', () =
 });
 it('permits timezone hints when every source value lacks an offset and the delta is a quarter-hour multiple', async () => {
   const config = definition({ compare: { at: { type: 'datetime', sourceTimezones: { b: 'UTC' } } } });
-  const report = await compareEntities([config], async function* (name) {
-    for (let i = 1; i <= 3; i++)
-      yield { id: `O${i}`, at: name === 'a' ? '2026-03-01T10:00:00Z' : '2026-03-01T11:00:00' };
-  });
+  const report = await checkedReport(
+    compareEntities([config], async function* (name) {
+      for (let i = 1; i <= 3; i++)
+        yield { id: `O${i}`, at: name === 'a' ? '2026-03-01T10:00:00Z' : '2026-03-01T11:00:00' };
+    }),
+  );
   expect(report.groups?.[0]?.cause).toBe('timezone');
 });
 it('uses a configured reference page size as page-boundary evidence for a file export', async () => {
@@ -114,17 +127,21 @@ it('uses a configured reference page size as page-boundary evidence for a file e
       b: csv,
     },
   });
-  const report = await compareEntities([config], async function* (source) {
-    for (let i = 1; i <= 12; i++) if (source === 'a' || i % 3 !== 0) yield { id: `O${i}` };
-  });
+  const report = await checkedReport(
+    compareEntities([config], async function* (source) {
+      for (let i = 1; i <= 12; i++) if (source === 'a' || i % 3 !== 0) yield { id: `O${i}` };
+    }),
+  );
   expect(report.groups?.[0]?.cause).toBe('pagination');
 });
 it('marks categories skipped when the reference failed instead of passing unperformed comparisons', async () => {
   const { junitReport } = await import('@logiparity/core');
-  const report = await compareEntities([definition()], async function* () {
-    throw new Error('Reference unavailable');
-    yield {};
-  });
+  const report = await checkedReport(
+    compareEntities([definition()], async function* () {
+      throw new Error('Reference unavailable');
+      yield {};
+    }),
+  );
   const xml = junitReport(report);
   expect(xml).toContain('skipped="7"');
   expect(xml.match(/<skipped /g)).toHaveLength(7);
@@ -134,9 +151,11 @@ it('flags blank numeric rollup sums instead of silently treating them as zero', 
     sources: { a: csv, b: { ...csv, rollup: { by: 'id', sum: ['amount'], first: ['at', 'status'] } } },
     compare: { amount: { type: 'number' } },
   });
-  const report = await compareEntities([config], async function* (source) {
-    yield { id: 'O1', amount: source === 'a' ? 1 : null };
-  });
+  const report = await checkedReport(
+    compareEntities([config], async function* (source) {
+      yield { id: 'O1', amount: source === 'a' ? 1 : null };
+    }),
+  );
   expect(report.findings.some((finding) => finding.type === 'invalid_value' && finding.field === 'amount')).toBe(true);
 });
 it('reports a misspelled key without a second required-key error', async () => {
@@ -157,8 +176,10 @@ it('keeps source date defaults when a field overrides only another source', asyn
       at: { type: 'datetime', format: { a: "yyyy-MM-dd'T'HH:mm:ss'Z'" }, sourceTimezones: { a: 'UTC', b: 'UTC' } },
     },
   });
-  const report = await compareEntities([config], async function* (name) {
-    yield { id: 'O1', at: name === 'a' ? '2026-11-02T13:01:00Z' : '11/02/2026 13:01' };
-  });
+  const report = await checkedReport(
+    compareEntities([config], async function* (name) {
+      yield { id: 'O1', at: name === 'a' ? '2026-11-02T13:01:00Z' : '11/02/2026 13:01' };
+    }),
+  );
   expect(report.findings).toEqual([]);
 });

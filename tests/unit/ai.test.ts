@@ -1,3 +1,4 @@
+import { parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { mkdtemp, readFile, rm, stat, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -114,7 +115,7 @@ it('summarizes complete report totals, explicitly samples findings, and redacts 
     { kind: 'explain', report: file },
     { ...settings, maxFindings: 1, redactFields: ['customer_email'] },
   );
-  const input = JSON.parse(prepared.messages[1]!.content) as {
+  const input = parseCheckedJson(prepared.messages[1]!.content) as {
     report: { findings: unknown[] };
     sampling: Record<string, unknown>;
   };
@@ -154,7 +155,7 @@ it('accepts additive report groups and redacts their values and summaries before
     { kind: 'explain', report: file },
     { ...settings, redactFields: ['customer_email'] },
   );
-  const input = JSON.parse(prepared.messages[1]!.content) as {
+  const input = parseCheckedJson(prepared.messages[1]!.content) as {
     report: { groups: { expected: string; actual: string; summary: string }[] };
   };
   expect(input.report.groups).toHaveLength(1);
@@ -198,7 +199,7 @@ it.each(['missing_stride', 'extra_stride'])(
       }),
     );
     const prepared = await prepareDraft({ kind: 'explain', report: file }, settings);
-    const input = JSON.parse(prepared.messages[1]!.content) as {
+    const input = parseCheckedJson(prepared.messages[1]!.content) as {
       report: { groups: { kind: string; field: string }[] };
       sampling: { totalFindings: number };
     };

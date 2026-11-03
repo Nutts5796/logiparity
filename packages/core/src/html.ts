@@ -1,3 +1,4 @@
+import { reportHeader, reportHero, findingDonut, findingsSection, reportDocument } from './html-layout.js';
 import { redactTree, secretValues } from './diagnostics.js';
 import { aggregateDisplay, rawAggregateDisplay, aggregateDifference, aggregateStatus } from './money-display.js';
 import { createHash } from 'node:crypto';
@@ -5,9 +6,17 @@ import { groupMembership, reportGroups, accountedFindingIndexes } from './groups
 import { reportLabels, humanize, uncertainKeyText } from './labels.js';
 import { formatMoneyMajor, readableDatetime, type ReportPresentation } from './money-display.js';
 import { escapeMarkup as escape } from './report-utils.js';
-import { humanFinding, reportCounts, quantity, numberText, typeLabels, patternWords } from './human.js';
+import {
+  matchingHeadline,
+  humanFinding,
+  reportCounts,
+  quantity,
+  numberText,
+  typeLabels,
+  patternWords,
+} from './human.js';
 import { patternCards, kindInfo, icon } from './html-patterns.js';
-import { brandMark, studioStyle, themeButton, themeScript } from './studio.js';
+import { themeScript } from './studio.js';
 import { isBlocking } from './policy.js';
 import type { Report, Finding, AggregateResult, EntitySummary } from './types.js';
 const columns = {
@@ -53,7 +62,7 @@ function render(){
  document.querySelector('#findings tbody').innerHTML=selected.slice(page*pageSize,(page+1)*pageSize).map(renderRow).join('');
  document.getElementById('visible-count').hidden=selected.length===0;
  document.getElementById('page-number').hidden=selected.length===0; document.getElementById('previous').hidden=selected.length===0; document.getElementById('next').hidden=selected.length===0;
- document.getElementById('no-matches').textContent=mode==='review'&&card===null&&!query&&!entity.value&&!type.value?'Nothing needs individual review. See All ('+rows.length.toLocaleString('en-US')+').':'No matching findings.';
+ document.getElementById('no-matches').textContent=rows.length===0?'No findings. All configured comparisons passed.':mode==='review'&&card===null&&!query&&!entity.value&&!type.value?'Nothing needs individual review. See All ('+rows.length.toLocaleString('en-US')+').':'No matching findings.';
  document.getElementById('visible-count').textContent='Showing '+(selected.length?page*pageSize+1:0)+'–'+Math.min(selected.length,(page+1)*pageSize)+' of '+selected.length.toLocaleString('en-US')+' results';
  document.getElementById('no-matches').hidden=selected.length!==0;
  document.getElementById('previous').disabled=page===0;document.getElementById('next').disabled=page+1>=pages;
@@ -92,7 +101,7 @@ function findingRow(finding: Finding, label: string, presentation: ReportPresent
     ['Reference', item.reference],
     ['Source value', item.sourceValue],
     ['Difference', item.difference],
-    ['Cause', label || 'Needs review'],
+    ['Cause', finding.reason === 'currency_mismatch' ? 'Currency difference' : label || 'Needs review'],
   ];
   return `<tr data-entity="${escape(finding.entity)}" data-type="${finding.type}">${cells.map(([name, value]) => `<td data-l="${name}">${escape(value ?? '')}${name === 'Key' && item.details ? `<span class="details">${escape(item.details)}</span>` : ''}${name === 'Key' ? screenshotLink(finding.screenshot) : ''}</td>`).join('')}</tr>`;
 }
@@ -134,7 +143,7 @@ function totals(report: Report, presentation: ReportPresentation): string {
               const uncertain = aggregate.uncertainKeys?.[source];
               const raw = rawAggregateDisplay(aggregate, source, entity.entity, presentation);
               const excluded = aggregate.excludedRows?.[source] ?? [];
-              return `<td class="num" data-l="${escape(labels.source(entity.entity, source))}">${span(aggregateValue(aggregate, entity, source, presentation))}${raw ? `<span class="sub-l">Raw source: ${escape(raw)}; retained/certain lines above.${excluded.length ? ` Excluded rows: ${excluded.join(', ')}` : ''}</span>` : ''}${difference ? `<span class="sub-l neg">${escape(difference)}</span>` : ''}${follows && difference ? `<span class="sub-l">${escape(follows)}</span>` : ''}${uncertain?.length ? `<span class="sub-l">Uncertain lines: ${escape(uncertainKeyText(uncertain))}</span>` : ''}</td>`;
+              return `<td class="num" data-l="${escape(labels.source(entity.entity, source))}">${span(aggregateValue(aggregate, entity, source, presentation))}${raw ? `<span class="sub-l">Raw source: ${escape(raw)}; retained/certain lines above.${excluded.length ? ` Excluded rows: ${excluded.join(', ')}` : ''}</span>` : ''}${difference ? `<span class="sub-l neg">${escape(difference)}</span>` : ''}${follows && difference && !uncertain?.length ? `<span class="sub-l">${escape(follows)}</span>` : ''}${uncertain?.length ? `<span class="sub-l">Uncertain lines: ${escape(uncertainKeyText(uncertain))}</span>` : ''}</td>`;
             })
             .join('');
           return `<tr><td>${span(labels.field(entity.entity, aggregate.name, true), aggregate.name)}</td>${values}</tr>`;
@@ -234,12 +243,17 @@ function sourceChips(report: Report, presentation: ReportPresentation): string {
         [...Object.entries(parts.source), ...Object.entries(parts.rollup)].map(([field, condition]) => {
           const inverse = condition !== null && typeof condition === 'object' && !Array.isArray(condition);
           const values = inverse ? condition.not : condition;
+          const textFilter =
+            ['string', 'enum'].includes(labels.entity(entity)?.compare[field]?.type ?? 'string') &&
+            (Array.isArray(values) ? values : [values]).some(
+              (value) => typeof value === 'string' && /\p{L}/u.test(value),
+            );
           const choices = (Array.isArray(values) ? values : [values])
             .map((value) =>
               value === null ? '(blank)' : parts.caseSensitive ? JSON.stringify(value) : humanize(String(value)),
             )
             .join(', ');
-          return `${labels.field(entity, field)} ${inverse ? 'is not' : 'is'} ${choices} (${parts.caseSensitive ? 'case-sensitive' : 'case-insensitive'})`;
+          return `${labels.field(entity, field)} ${inverse ? 'is not' : 'is'} ${choices}${textFilter ? ` (${parts.caseSensitive ? 'case-sensitive' : 'case-insensitive'})` : ''}`;
         }),
       )
       .join('; ');
@@ -326,10 +340,6 @@ export function htmlReport(report: Report, presentation: ReportPresentation = {}
   const hash = createHash('sha256').update(script).digest('base64');
   const code = counts.errors ? 2 : counts.blocking ? 1 : 0;
   const review = report.findings.length - accounted.size;
-  const ordinaryAccounted = report.findings.filter(
-    (finding, index) => finding.type !== 'source_error' && accounted.has(index),
-  ).length;
-  const percent = counts.findings ? Math.floor((ordinaryAccounted / counts.findings) * 100) : counts.errors ? 0 : 100;
   const legend = new Map<string, { count: number; color: string }>();
   groups.forEach((group, index) => {
     const words = patternWords(group, presentation),
@@ -370,19 +380,65 @@ export function htmlReport(report: Report, presentation: ReportPresentation = {}
     .slice(0, 50)
     .map((finding) => findingRow(finding, 'Needs review', presentation))
     .join('');
-  const matched = report.entities.reduce(
-    (sum, entity) => sum + (entity.uniqueCounts?.[entity.reference] ?? entity.counts[entity.reference] ?? 0),
-    0,
-  );
-  const headline = !report.findings.length
-    ? `All ${numberText(matched)} ${report.entities[0]?.pluralLabel ?? 'records'} match`
-    : !cards.length
-      ? `${quantity(review, 'finding')} ${review === 1 ? 'needs' : 'need'} review`
-      : `${quantity(cards.length, 'cause')} found`;
+  const headline = counts.errors
+    ? 'Comparison could not complete'
+    : !report.findings.length
+      ? matchingHeadline(report)
+      : !cards.length
+        ? `${quantity(review, 'finding')} ${review === 1 ? 'needs' : 'need'} review`
+        : `${quantity(cards.length, 'cause')} found`;
   const totalsHtml = totals(report, presentation),
     reconciliation = reconciliationCards(report, presentation);
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; font-src data:; img-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Parity report · LogiParity</title><style>${studioStyle}
- .totals th{white-space:nowrap}.num{white-space:nowrap}.t-info{background:var(--c-round-soft);color:var(--ink)}.next-step{font-size:12px}.detail-cell{font-size:12px;color:var(--muted)}
- @media(max-width:860px){.donut{justify-items:center}.legend{width:100%}}
- </style></head><body><main class="wrap"><header class="top"><div class="brand">${brandMark}LogiParity <span class="sub">/ Reconciliation report</span></div><div class="top-r"><span class="chip">${escape(header)}</span>${themeButton}</div></header><section class="hero"><div class="card"><span class="status ${code ? '' : 'passed'}" title="Exit code ${code}">${code ? 'Failed' : 'Passed'}</span><h1 class="big">${escape(headline)}</h1><div class="lead">${quantity(review, counts.errors ? 'result' : 'finding')} ${review === 1 ? 'needs' : 'need'} individual review.</div><p class="details">${counts.errors ? 'Runtime error · ' : ''}${quantity(counts.findings, 'finding')} · ${quantity(counts.errors, 'source error')}</p><div class="srcs">${sourceChips(report, presentation)}</div>${!report.findings.length ? '<p>All configured comparisons passed.</p>' : ''}</div><div class="card donut"><svg width="150" height="150" viewBox="0 0 150 150" role="img" aria-label="${percent}% of findings accounted for"><circle cx="75" cy="75" r="59" fill="none" stroke="var(--line)" stroke-width="15"/>${arcs}<text x="75" y="74" text-anchor="middle" font-size="24" font-weight="800" fill="var(--ink)">${counts.errors && !counts.findings ? 'N/A' : percent + '%'}</text><text x="75" y="93" text-anchor="middle" font-size="11" fill="var(--muted)">accounted for</text></svg><div class="legend">${[...legend].map(([name, item]) => `<div><span><i style="background:var(--c-${item.color})"></i>${escape(name)}</span><b>${numberText(item.count)}</b></div>`).join('')}</div></div></section>${causeCards ? `<h3>Causes to investigate</h3><section class="pats">${causeCards}</section>` : ''}${totalsHtml ? `<h3>Totals</h3><section class="card">${totalsHtml}</section>` : ''}${reconciliation ? `<section class="recon">${reconciliation}</section>` : ''}${cards.length || reconciliation ? '<p class="details">Accounted for means each difference is traced to a cause above. Each cause still needs a fix.</p>' : ''}${report.warnings?.length ? `<h3>Warnings (${numberText(report.warnings.length)})</h3><section class="card"><ul>${report.warnings.map((warning) => `<li>${escape(warning.message)}</li>`).join('')}</ul></section>` : ''}<h3 id="findings-title" tabindex="-1">Findings</h3><section class="card findings"><div class="toolbar"><div class="seg" role="group" aria-label="Finding view"><button type="button" data-mode="review" aria-pressed="true">Needs review (${numberText(review)})</button><button type="button" data-mode="all" aria-pressed="false">All (${numberText(report.findings.length)})</button></div><input id="search" type="search" placeholder="Search key, source or field" aria-label="Search findings"><select id="entity-filter" aria-label="Entity"${report.entities.length <= 1 ? ' hidden' : ''}><option value="">All entities</option>${options(report.entities.map((entity) => [entity.entity, labels.entity(entity.entity)?.label ?? humanize(entity.entity)]))}</select><select id="type-filter" aria-label="Finding type"><option value="">All finding types</option>${options((Object.keys(typeLabels) as Finding['type'][]).filter((type) => report.findings.some((finding) => finding.type === type)).map((type) => [type, typeLabels[type]]))}</select></div><span id="active-pattern" class="details" aria-live="polite"></span><button id="clear-pattern" class="btn btn-soft" type="button" hidden>Clear filter</button><table id="findings"><thead><tr><th>Key</th><th>Source</th><th>Field</th><th class="num">Reference</th><th class="num">Source value</th><th class="num">Difference</th><th>Cause</th></tr></thead><tbody>${fallback}</tbody></table><p id="no-matches" class="empty"${review ? ' hidden' : ''}>${report.findings.length ? 'No findings match these filters.' : 'No findings. All configured comparisons passed.'}</p><nav class="pager" aria-label="Finding pages"><span id="visible-count" aria-live="polite"></span><button id="previous" class="btn btn-soft" type="button">Previous</button><span id="page-number"></span><button id="next" class="btn btn-soft" type="button">Next</button></nav><noscript>The first 50 results needing review are shown. Enable JavaScript for filters and all pages. JSON contains every result.</noscript></section><footer>Generated locally by LogiParity · Report schema v${report.schemaVersion} · Dates in ${escape(presentation.displayTimezone ?? 'UTC')} · Raw values in JSON</footer></main><script>${script}</script></body></html>\n`;
+  const lead = counts.errors
+    ? 'Resolve the source errors below and run the comparison again.'
+    : cards.length
+      ? review
+        ? `${quantity(review, 'finding')} ${review === 1 ? 'needs' : 'need'} individual review.`
+        : 'Each finding is traced to a cause; each cause still needs a fix.'
+      : '';
+  const scope = counts.errors ? 'results' : 'findings';
+  const donut = counts.findings
+    ? findingDonut(Math.floor((accounted.size / report.findings.length) * 100), arcs, [...legend], scope)
+    : '';
+  const hero = reportHero({
+    code,
+    headline,
+    lead,
+    detail: `${counts.errors ? 'Runtime error · ' : ''}${quantity(counts.findings, 'finding')} · ${quantity(counts.errors, 'source error')}`,
+    sources: sourceChips(report, presentation),
+    donut,
+  });
+  const warnings = report.warnings?.length
+    ? `<h3>Warnings (${numberText(report.warnings.length)})</h3><section class="card"><ul>${report.warnings.map((warning) => `<li>${escape(warning.message)}</li>`).join('')}</ul></section>`
+    : '';
+  const findings = findingsSection({
+    review,
+    total: report.findings.length,
+    entityOptions: options(
+      report.entities.map((entity) => [entity.entity, labels.entity(entity.entity)?.label ?? humanize(entity.entity)]),
+    ),
+    typeOptions: options(
+      (Object.keys(typeLabels) as Finding['type'][])
+        .filter((type) => report.findings.some((finding) => finding.type === type))
+        .map((type) => [type, typeLabels[type]]),
+    ),
+    showEntities: report.entities.length > 1,
+    fallback,
+  });
+  const body = `${reportHeader(header)}${hero}
+${causeCards ? `<h3>Causes to investigate</h3><section class="pats">${causeCards}</section>` : ''}
+${totalsHtml ? `<h3>Totals</h3><section class="card">${totalsHtml}</section>` : ''}
+${reconciliation ? `<section class="recon">${reconciliation}</section>` : ''}
+${cards.length || reconciliation ? '<p class="details">Accounted for means each difference is traced to a cause above. Each cause still needs a fix.</p>' : ''}${warnings}${findings}`;
+  return reportDocument({
+    hash,
+    body,
+    script,
+    timezone: presentation.entities?.some((entity) =>
+      Object.values(entity.compare).some((rule) => rule.displayTimezoneField),
+    )
+      ? 'each facility’s time zone (shown beside each value)'
+      : (presentation.displayTimezone ?? 'UTC'),
+    version: report.schemaVersion,
+  });
 }

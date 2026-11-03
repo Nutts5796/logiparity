@@ -1,3 +1,4 @@
+import { parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { afterEach, expect, it, vi } from 'vitest';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -56,6 +57,21 @@ it.each([
   expect(output.code).toBe(2);
   expect(output.stderr).toContain('LogiParity:');
 });
+it.each([
+  { args: ['validate'], expected: 'logiparity validate --config' },
+  { args: ['validate', '--config'], expected: 'Option --config requires a value' },
+  {
+    args: ['check', '--config', 'a.yaml', '--config', 'b.yaml'],
+    expected: 'Option --config may be specified only once',
+  },
+  { args: ['check', '-c', 'a.yaml', '--config=b.yaml'], expected: 'Option --config may be specified only once' },
+  { args: ['--version', 'extra'], expected: '--version does not accept arguments' },
+])('gives a concise diagnostic for $args (maria, david)', async ({ args, expected }) => {
+  const output = await cli(args);
+  expect(output.code).toBe(2);
+  expect(output.stderr).toContain(expected);
+  expect(output.stderr).not.toContain("'-c, --config");
+});
 it('runs init, validates without source access and checks actual CSV files through the entry point', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'logiparity-cli-entry-'));
   temporary.push(directory);
@@ -85,5 +101,5 @@ it('runs init, validates without source access and checks actual CSV files throu
   await writeFile(join(directory, 'a.csv'), 'id\nO1\n');
   await writeFile(join(directory, 'b.csv'), 'id\nO1\n');
   expect((await cli(['check', '--config', config])).code).toBe(0);
-  expect(JSON.parse(await readFile(join(directory, 'report/report.json'), 'utf8')).findings).toEqual([]);
+  expect(parseCheckedJson(await readFile(join(directory, 'report/report.json'), 'utf8')).findings).toEqual([]);
 });

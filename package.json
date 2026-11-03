@@ -133,7 +133,9 @@
     "./ai": {
       "types": "./api/ai.d.ts",
       "import": "./api/ai.js"
-    }
+    },
+    "./report-schema.json": "./docs/report-schema.json",
+    "./scenario-report-schema.json": "./docs/scenario-report-schema.json"
   },
   "repository": {
     "type": "git",

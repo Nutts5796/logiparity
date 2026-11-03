@@ -1,3 +1,4 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import { compareEntities, entitySchema, markdownReport, type DataRow, type EntityConfig } from '@logiparity/core';
 import { humanFinding, patternWords } from '../../packages/core/src/human.js';
@@ -13,9 +14,11 @@ function definition(options: Record<string, unknown> = {}): EntityConfig {
   });
 }
 async function run(entity: EntityConfig, a: DataRow[], b: DataRow[]) {
-  return compareEntities([entity], async function* (name) {
-    yield* name === 'a' ? a : b;
-  });
+  return checkedReport(
+    compareEntities([entity], async function* (name) {
+      yield* name === 'a' ? a : b;
+    }),
+  );
 }
 it('never substitutes short field names inside diagnostics, paths, values or existing labels (raj n1, maria)', () => {
   const entity = definition({

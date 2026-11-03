@@ -1,3 +1,4 @@
+import { checkedReport, parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import { mkdtemp, rm, writeFile, symlink, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -24,7 +25,7 @@ it.each([
   const text = String((first.data as { message: string }).message);
   expect(text).not.toContain(secret);
   expect(first.scrub(text)).toBe(text);
-  if (input.startsWith('{"')) expect(JSON.parse(text)).toEqual({ password: '[REDACTED]', id: 'S1' });
+  if (input.startsWith('{"')) expect(parseCheckedJson(text)).toEqual({ password: '[REDACTED]', id: 'S1' });
 });
 it('tracks every environment interpolation through variables (sam)', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'logiparity-m101-env-'));
@@ -115,9 +116,11 @@ it('strips format characters before redacting values in every parity writer', as
   const source = { type: 'csv', file: 'unused', fields: { id: 'id', value: 'value' } };
   const entity = entitySchema.parse({ name: 'o', key: 'id', sources: { a: source, b: source } });
   rememberEnvironment(entity, { secrets: ['privatesecret99'], references: [] });
-  const report = await compareEntities([entity], async function* (name) {
-    yield { id: 'O1', value: name === 'a' ? 'ordinary' : 'private\u200bsecret99' };
-  });
+  const report = await checkedReport(
+    compareEntities([entity], async function* (name) {
+      yield { id: 'O1', value: name === 'a' ? 'ordinary' : 'private\u200bsecret99' };
+    }),
+  );
   for (const output of [
     jsonReport(report),
     consoleReport(report, { entities: [entity] }),

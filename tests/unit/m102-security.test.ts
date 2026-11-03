@@ -26,6 +26,11 @@ it.each(['\u034f', '\ufe0f', '\u3164', '\u2028'])(
     expect(redactSecrets(split, [secret])).toBe('[REDACTED]');
   },
 );
+it('normalizes known credentials before scrubbing unlabeled provider text', () => {
+  const redaction = redactInput({ password: 'SensitiveToken123456' });
+  expect(redaction.scrub('Sensitive\ufe0fToken123456')).toBe('[REDACTED]');
+  expect(redaction.scrub('Sensitive\u2028Token123456')).toBe('[REDACTED]');
+});
 it('removes C0/C1 controls and line separators in every report format (sam)', () => {
   const dirty = 'a\u001bb\u0007c\bD\u009bE\u2028F';
   const report: Report = {

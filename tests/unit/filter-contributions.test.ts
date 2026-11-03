@@ -1,3 +1,4 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import { compareEntities, entitySchema, reportExitCode, type DataRow, type EntityConfig } from '@logiparity/core';
 const source = {
@@ -15,9 +16,11 @@ function entity(options: Record<string, unknown> = {}): EntityConfig {
   });
 }
 async function compare(definition: EntityConfig, reference: DataRow[], actual: DataRow[]) {
-  return compareEntities([definition], async function* (name) {
-    yield* name === 'reference' ? reference : actual;
-  });
+  return checkedReport(
+    compareEntities([definition], async function* (name) {
+      yield* name === 'reference' ? reference : actual;
+    }),
+  );
 }
 it('matches numeric where values and numeric keys against canonical CSV text (raj/t1)', async () => {
   for (const where of [{ stops: 5 }, { id: 5 }]) {

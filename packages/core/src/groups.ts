@@ -1,3 +1,4 @@
+import { patternWords } from './human.js';
 import { ordinal } from './labels.js';
 import type { EntityConfig } from './config.js';
 import type { Finding, FindingGroup, Report } from './types.js';
@@ -231,6 +232,10 @@ export function groupFindings(
         ? deltaGroups(bucket, entities, minCount)
         : mappingGroups(bucket, minCount);
     for (const group of candidates) groups.push(group);
+  }
+  for (const group of groups) {
+    const words = patternWords(group, { entities });
+    group.summary = `${words.sentence} ${words.hint}`;
   }
   return groups.sort(
     (a, b) =>

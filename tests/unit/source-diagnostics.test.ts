@@ -1,3 +1,4 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import {
   compareEntities,
@@ -41,8 +42,8 @@ it('parses formats by source while keeping ISO offsets for unspecified sources',
   );
 });
 it.each([
-  [-1n, 'likely rounding'],
-  [3n, 'likely rounding'],
+  [-1n, 'rounding rule'],
+  [3n, 'rounding rule'],
   [4n, 'consistent fixed difference'],
   [1500n, 'consistent fixed difference'],
   [2500n, 'consistent fixed difference'],
@@ -60,14 +61,16 @@ it.each([
   expect(groupFindings(findings, [entity])[0]?.summary).toContain(hint);
 });
 it('includes a missing final reference key after a periodic page-boundary run', async () => {
-  const report = await compareEntities([entity], async function* (name) {
-    for (let i = 1; i <= 750; i++)
-      if (name === 'api' || ![200, 400, 600, 750].includes(i)) yield { id: `L${String(i).padStart(4, '0')}` };
-  });
+  const report = await checkedReport(
+    compareEntities([entity], async function* (name) {
+      for (let i = 1; i <= 750; i++)
+        if (name === 'api' || ![200, 400, 600, 750].includes(i)) yield { id: `L${String(i).padStart(4, '0')}` };
+    }),
+  );
   expect(report.findings).toHaveLength(4);
   expect(report.groups?.[0]?.count).toBe(4);
   expect(report.groups?.[0]?.keys).toContain('L0750');
-  expect(report.groups?.[0]?.summary).toContain('final reference key L0750');
+  expect(report.groups?.[0]?.keys).toEqual(['L0200', 'L0400', 'L0600', 'L0750']);
 });
 it('keeps unexplained findings before grouped rows when console and Markdown truncate', () => {
   const findings: Finding[] = Array.from({ length: 60 }, (_, i) => ({
@@ -96,10 +99,12 @@ it('keeps unexplained findings before grouped rows when console and Markdown tru
   expect(report.findings[0]?.key).toBe('L0');
 });
 it('reports source warnings in every format without counting them as findings', async () => {
-  const report = await compareEntities([entity], async function* (name, _config, context) {
-    if (name === 'export') context.warn('Only an unverified short first page was read.');
-    yield { id: 'L1' };
-  });
+  const report = await checkedReport(
+    compareEntities([entity], async function* (name, _config, context) {
+      if (name === 'export') context.warn('Only an unverified short first page was read.');
+      yield { id: 'L1' };
+    }),
+  );
   expect(report.findings).toEqual([]);
   expect(report.warnings).toHaveLength(1);
   const presentation = { entities: [entity] };
@@ -127,13 +132,15 @@ it('represents source-local conflicts as observed values with lines and reports 
     },
     compare: { pay: { type: 'money', currency: 'USD' } },
   });
-  const report = await compareEntities([rolled], async function* (name) {
-    yield { id: 'L103', pay: '200.00', status: 'delivered', ...(name === 'export' ? { charge: 'fuel' } : {}) };
-    if (name === 'export') {
-      yield { id: 'L103', pay: '200.00', status: 'cancelled', charge: 'other' };
-      yield { id: 'L103', pay: '200.00', status: 'delivered', charge: 'fuel' };
-    }
-  });
+  const report = await checkedReport(
+    compareEntities([rolled], async function* (name) {
+      yield { id: 'L103', pay: '200.00', status: 'delivered', ...(name === 'export' ? { charge: 'fuel' } : {}) };
+      if (name === 'export') {
+        yield { id: 'L103', pay: '200.00', status: 'cancelled', charge: 'other' };
+        yield { id: 'L103', pay: '200.00', status: 'delivered', charge: 'fuel' };
+      }
+    }),
+  );
   const conflict = report.findings.find((finding) => finding.reason === 'rollup_conflict')!;
   expect(conflict.expected).toBeUndefined();
   expect(conflict.actual).toBeUndefined();

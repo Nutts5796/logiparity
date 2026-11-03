@@ -1,4 +1,4 @@
-import { reportLabels, humanize, ordinal } from './labels.js';
+import { reportLabels, ordinal, sentenceLabel } from './labels.js';
 import { findingKey } from './keys.js';
 import {
   durationValue,
@@ -58,24 +58,33 @@ function findingDetails(finding: Finding, presentation: ReportPresentation): str
   return finding.message;
 }
 export function humanFinding(finding: Finding, presentation: ReportPresentation = {}) {
+  if (finding.evidence?.timezone) presentation = { ...presentation, displayTimezone: finding.evidence.timezone };
   const labels = reportLabels(presentation),
     aggregate = finding.type === 'aggregate_mismatch';
   const shown = (value: Finding['actual']) =>
     finding.currency && (typeof value === 'bigint' || (typeof value === 'string' && /^-?\d+$/.test(value)))
       ? formatMoneyMajor(BigInt(value), finding.currency)
       : presentationValue(value, finding.entity, finding.field, aggregate, presentation);
-  const reference =
-    finding.type === 'missing_in_source'
-      ? 'Present'
-      : finding.type === 'extra_in_source'
-        ? 'Absent'
-        : shown(finding.expected);
-  const sourceValue =
-    finding.type === 'missing_in_source'
-      ? 'Missing'
-      : finding.type === 'extra_in_source'
+  const invalidReference = finding.evidence?.referenceInvalid;
+  const reference = invalidReference
+    ? finding.evidence?.referenceValue === undefined
+      ? 'Invalid reference'
+      : `Invalid: ${shown(finding.evidence.referenceValue)}`
+    : finding.evidence?.referenceUncertain
+      ? 'Uncertain reference'
+      : finding.type === 'missing_in_source'
         ? 'Present'
-        : shown(finding.actual);
+        : finding.type === 'extra_in_source'
+          ? 'Absent'
+          : shown(finding.expected);
+  const sourceValue =
+    invalidReference && finding.source === Object.keys(labels.entity(finding.entity)?.sources ?? {})[0]
+      ? 'Not compared'
+      : finding.type === 'missing_in_source'
+        ? 'Missing'
+        : finding.type === 'extra_in_source'
+          ? 'Present'
+          : shown(finding.actual);
   return {
     key: finding.key
       ? finding.keyParts?.length
@@ -101,19 +110,19 @@ export function humanFinding(finding: Finding, presentation: ReportPresentation 
           ),
     type: finding.reason === 'currency_mismatch' ? 'Currency difference' : typeLabels[finding.type],
     details:
-      finding.values
+      (finding.values
         ?.map(
           (item) =>
             `Row ${numberText(item.row)}: ${presentationValue(item.value, finding.entity, finding.field, false, presentation)}`,
         )
         .map((value, index) => (index === 0 ? `${findingDetails(finding, presentation)} ${value}` : value))
-        .join('; ') ?? findingDetails(finding, presentation),
+        .join('; ') ?? findingDetails(finding, presentation)) + (finding.hint ? ` ${finding.hint}` : ''),
   };
 }
 export function patternWords(group: FindingGroup, presentation: ReportPresentation = {}) {
   const labels = reportLabels(presentation),
     source = labels.source(group.entity, group.source),
-    field = labels.field(group.entity, group.field),
+    field = sentenceLabel(labels.field(group.entity, group.field)),
     delta = BigInt(group.delta ?? 0);
   if (group.kind.endsWith('_stride'))
     return group.cause !== 'pagination'
@@ -163,7 +172,7 @@ export function patternWords(group: FindingGroup, presentation: ReportPresentati
   }
   return {
     label: 'Value mapping',
-    sentence: `${numberText(group.count)} ${field} values in ${source} map ${humanize(String(group.expected))} to ${humanize(String(group.actual))}.`,
+    sentence: `${numberText(group.count)} ${field} values in ${source} map ${String(group.expected)} to ${String(group.actual)}.`,
     nextStep: `Check the ${field} mapping for ${source}.`,
     hint: 'Likely a different vocabulary for the same field.',
   };
@@ -208,7 +217,7 @@ export function mergedPatternWords(groups: readonly FindingGroup[], presentation
         values
           .map(
             (group) =>
-              `${numberText(group.count)} ${group.kind.endsWith('_stride') ? (group.kind === 'missing_stride' ? 'missing rows' : 'extra rows') : labels.field(group.entity, group.field) + ' values'} in ${labels.source(group.entity, group.source)}`,
+              `${numberText(group.count)} ${group.kind.endsWith('_stride') ? (group.kind === 'missing_stride' ? 'missing rows' : 'extra rows') : sentenceLabel(labels.field(group.entity, group.field)) + ' values'} in ${labels.source(group.entity, group.source)}`,
           )
           .join(' and ') +
         ` ${first.kind.endsWith('_stride') ? `follow ${first.cause === 'pagination' ? 'page boundaries' : `every ${ordinal(first.stride ?? 0)} row`}` : `differ by ${durationOrMoney(first, presentation)}`}.`,
@@ -226,4 +235,14 @@ function durationOrMoney(group: FindingGroup, presentation: ReportPresentation):
   return group.kind === 'money_delta'
     ? formatMoneyMajor(BigInt(group.delta ?? 0), group.currency ?? rule?.currency ?? 'USD')
     : durationValue(BigInt(group.delta ?? 0));
+}
+
+export function matchingHeadline(report: Report): string {
+  const parts = report.entities.map((entity) => ({
+    count: entity.uniqueCounts?.[entity.reference] ?? entity.counts[entity.reference] ?? 0,
+    label: entity.pluralLabel ?? 'records',
+  }));
+  if (!parts.length) return 'All configured comparisons match';
+  if (parts.every((part) => part.count === 0)) return 'No records were compared';
+  return `All ${parts.map((part) => `${numberText(part.count)} ${part.label}`).join(' and ')} match`;
 }

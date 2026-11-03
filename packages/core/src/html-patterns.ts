@@ -1,7 +1,13 @@
 import { patternWords, mergedPatternWords } from './human.js';
 import { groupMembership, reportGroups } from './groups.js';
-import { reportLabels, presentationRule, humanize, ordinal } from './labels.js';
-import { durationValue, formatMoneyMajor, readableDatetime, type ReportPresentation } from './money-display.js';
+import { reportLabels, presentationRule, ordinal } from './labels.js';
+import {
+  durationPhrase,
+  durationValue,
+  formatMoneyMajor,
+  readableDatetime,
+  type ReportPresentation,
+} from './money-display.js';
 import { escapeMarkup as escape } from './report-utils.js';
 import type { FindingGroup, Report } from './types.js';
 
@@ -82,13 +88,7 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
         headline: group.kind.endsWith('_stride')
           ? `Every ${ordinal(group.stride ?? 0)} row`
           : group.kind === 'datetime_offset'
-            ? `${durationValue(delta < 0n ? -delta : delta)
-                .replace(/^\+/, '')
-                .replace(
-                  / (ms|s|m|h|d)$/,
-                  (_, unit: string) =>
-                    ` ${{ ms: 'milliseconds', s: 'seconds', m: 'minutes', h: 'hours', d: 'days' }[unit]}`,
-                )} ${delta < 0n ? 'earlier' : 'later'}`
+            ? durationPhrase(delta)
             : group.kind === 'money_delta' && rule?.currency
               ? `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, group.currency ?? rule.currency)}`.replace('-', '−')
               : 'Consistent mapping',
@@ -121,7 +121,7 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
       const size = Number(first.stride);
       const count = size > 0 && Number.isSafeInteger(size) ? Math.ceil(rows / size) : 0;
       // One page per reference page. A scrollable chart accommodates long runs.
-      const columns = Math.min(7, Math.max(1, count));
+      const columns = Math.min(5, Math.max(1, count));
       const height = Math.max(60, Math.ceil(count / columns) * 60);
       const missing = new Map<number, number>();
       for (const finding of report.findings) {
@@ -152,8 +152,8 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
           `Rows kept per ${fmt(size)}-row reference page in ${labels.source(first.entity, first.source)}. Highlighted pages include all missing rows.`,
         );
     } else if (first.kind === 'datetime_offset') {
-      const zone = presentation.displayTimezone ?? 'UTC';
       const example = report.findings[members[0] ?? -1];
+      const zone = example?.evidence?.timezone ?? presentation.displayTimezone ?? 'UTC';
       const sampleHour = (field: 'expected' | 'actual') => {
         const value = example?.[field];
         if (typeof value !== 'number') return 0;
@@ -193,13 +193,18 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
           shapes,
         ) +
         caption(
-          card.groups
-            .map((groupIndex) => {
-              const member = report.findings[memberships[groupIndex]?.[0] ?? -1];
-              if (!member || typeof member.expected !== 'number' || typeof member.actual !== 'number') return '';
-              return `${labels.source(first.entity, reference)}: ${readableDatetime(member.expected, zone)}. ${labels.source(first.entity, groups[groupIndex]?.source ?? first.source)}: ${readableDatetime(member.actual, zone)}.`;
-            })
-            .join(' '),
+          [
+            ...new Set(
+              card.groups.flatMap((groupIndex) => {
+                const member = report.findings[memberships[groupIndex]?.[0] ?? -1];
+                if (!member || typeof member.expected !== 'number' || typeof member.actual !== 'number') return [];
+                return [
+                  `${labels.source(first.entity, reference)}: ${readableDatetime(member.expected, member.evidence?.timezone ?? zone)}.`,
+                  `${labels.source(first.entity, groups[groupIndex]?.source ?? first.source)}: ${readableDatetime(member.actual, member.evidence?.timezone ?? zone)}.`,
+                ];
+              }),
+            ),
+          ].join(' '),
         );
     } else if (first.kind === 'money_delta') {
       const total = summary?.uniqueCounts?.[first.source] ?? summary?.counts[first.source] ?? rows;
@@ -212,7 +217,7 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
       const currency =
         first.currency ?? presentationRule(labels.entity(first.entity), first.field, false)?.currency ?? 'USD';
       const extra = example
-        ? ` Example: ${example.keyParts?.map((part, index) => (index ? humanize(part) : part)).join(' · ') ?? example.key} is ${formatMoneyMajor(BigInt(String(example.expected)), currency)} in ${labels.source(first.entity, reference)} and ${formatMoneyMajor(BigInt(String(example.actual)), currency)} in ${labels.source(first.entity, first.source)}.`
+        ? ` Example: ${example.keyParts?.join(' · ') ?? example.key} is ${formatMoneyMajor(BigInt(String(example.expected)), currency)} in ${labels.source(first.entity, reference)} and ${formatMoneyMajor(BigInt(String(example.actual)), currency)} in ${labels.source(first.entity, first.source)}.`
         : '';
       card.chart =
         caption(`Share of rows: ${labels.source(first.entity, first.source)}. 1 square = 1% of rows.`) +

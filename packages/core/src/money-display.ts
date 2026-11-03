@@ -238,3 +238,14 @@ export function aggregateStatus(aggregate: AggregateResult, source: string, refe
     ? 'Accounted for'
     : 'Needs review';
 }
+
+export function durationPhrase(delta: bigint): string {
+  const value = durationValue(delta < 0n ? -delta : delta).replace(/^\+/, '');
+  const match = value.match(/^(.*?) (ms|s|m|h|d)$/);
+  if (!match) return value;
+  const count = Number((match[1] ?? '').replaceAll(',', ''));
+  const unit =
+    ({ ms: 'millisecond', s: 'second', m: 'minute', h: 'hour', d: 'day' } as Record<string, string>)[match[2] ?? ''] ??
+    '';
+  return `${match[1]} ${unit}${count === 1 ? '' : 's'} ${delta < 0n ? 'earlier' : 'later'}`;
+}

@@ -35,13 +35,18 @@ const numberFormat = z
   .strict()
   .refine((value) => value.decimal !== value.group, 'Decimal and grouping separators must differ');
 const datetimeFormat = name.refine((format) => {
-  const tokens = DateTime.fromFormatExplain('', format).tokens;
-  const supported =
-    /^(?:S{1,3}|u{1,3}|s{1,2}|m{1,2}|h{1,2}|H{1,2}|Z{1,5}|z|a|d{1,2}|c{1,5}|E{1,5}|L{1,5}|M{1,5}|y{1,6}|G{1,5}|k{2,4}|W{1,2}|o{1,3}|q{1,2}|X|x|D{1,4}|t{1,4}|T{1,4}|f{1,4}|F{1,4})$/;
-  return (
-    tokens.some((token) => !token.literal && supported.test(token.val)) &&
-    tokens.every((token) => token.literal || !/[A-Za-z]/.test(token.val) || supported.test(token.val))
-  );
+  try {
+    if ((format.match(/'/g)?.length ?? 0) % 2) return false;
+    const tokens = DateTime.fromFormatExplain('', format).tokens;
+    const supported =
+      /^(?:S{1,3}|u{1,3}|s{1,2}|m{1,2}|h{1,2}|H{1,2}|Z{1,5}|z|a|d{1,2}|c{1,5}|E{1,5}|L{1,5}|M{1,5}|y{1,6}|G{1,5}|k{2,4}|W{1,2}|o{1,3}|q{1,2}|X|x|D{1,4}|t{1,4}|T{1,4}|f{1,4}|F{1,4})$/;
+    return (
+      tokens.some((token) => !token.literal && supported.test(token.val)) &&
+      tokens.every((token) => token.literal || !/[A-Za-z]/.test(token.val) || supported.test(token.val))
+    );
+  } catch {
+    return false;
+  }
 }, 'Use supported datetime format tokens, e.g. yyyy-MM-dd HH:mm; quote literal text');
 export const reportFileMode = z
   .union([
@@ -279,6 +284,7 @@ export const ruleSchema = z
     tolerance: z.number().finite().nonnegative().default(0),
     toleranceSeconds: z.number().finite().nonnegative().default(0),
     sourceTimezones: z.record(name, timezone).default({}),
+    displayTimezoneField: name.optional(),
     map: z.record(z.string(), z.string()).default({}),
   })
   .strict()
@@ -426,11 +432,24 @@ export const entitySchema = z
               ctx.addIssue({
                 code: 'custom',
                 path: ['sources', source, 'where', field],
-                message: `Filter value must match the ${v.compare[field]?.type ?? 'string'} field type`,
+                message:
+                  v.compare[field]?.type === 'money' && typeof value === 'number'
+                    ? 'Quote money filter values in major units, e.g. "10.00"'
+                    : `Filter value must match the ${v.compare[field]?.type ?? 'string'} field type`,
               });
             }
           }
         }
+    }
+    for (const [field, rule] of Object.entries(v.compare)) {
+      if (!rule.displayTimezoneField) continue;
+      for (const [source, config] of Object.entries(v.sources))
+        if (!Object.hasOwn(config.fields, rule.displayTimezoneField))
+          ctx.addIssue({
+            code: 'custom',
+            path: ['compare', field, 'displayTimezoneField'],
+            message: `Map the display time zone field ${rule.displayTimezoneField} in ${source}`,
+          });
     }
     const reference = Object.values(v.sources)[0];
     const names = new Set<string>();
@@ -476,7 +495,13 @@ export const configSchema = z
       .min(1)
       .optional(),
     patterns: z
-      .object({ minCount: z.number().int().min(3).default(3) })
+      .object({
+        minCount: z
+          .number()
+          .int()
+          .min(3, 'patterns.minCount must be at least 3; single differences are never patterns')
+          .default(3),
+      })
       .strict()
       .default({ minCount: 3 }),
     environment: z.enum(['test', 'staging']).default('test'),
@@ -720,7 +745,7 @@ export function formatConfigIssues(schema: z.ZodType, raw: unknown, error: z.Zod
       }
       current = unwrap(current, value);
       const keys = current instanceof z.ZodObject ? Object.keys(current.shape).sort() : [];
-      return `  ${issue.path.map((part, index) => (typeof part === 'number' ? `[${part}]` : `${index ? '.' : ''}${String(part)}`)).join('') || '<root>'}: ${issue.path.includes('failOn') ? `Choose failOn categories: ${findingCategories.join(', ')}` : issue.message}${issue.code === 'unrecognized_keys' && keys.length ? `. Valid keys: ${keys.join(', ')}` : ''}`;
+      return `  ${issue.path.map((part, index) => (typeof part === 'number' ? `[${part}]` : `${index ? '.' : ''}${String(part)}`)).join('') || '<root>'}: ${issue.path.includes('failOn') ? `Choose failOn categories: ${findingCategories.join(', ')}` : issue.path.includes('sources') && issue.path.at(-1) === 'type' ? 'Choose a source type: rest, csv, xlsx, ui or sql' : issue.message}${issue.code === 'unrecognized_keys' && keys.length ? `. Valid keys: ${keys.join(', ')}` : ''}`;
     })
     .join('\n');
 }
