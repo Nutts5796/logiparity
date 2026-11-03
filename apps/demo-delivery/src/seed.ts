@@ -54,7 +54,13 @@ export function seedData(date = DEMO_DATE): DemoData {
   const shipments: Shipment[] = Array.from({ length: 2750 }, (_, i) => {
     const driver = drivers[Math.floor(i / 50)];
     if (!driver) throw new Error('Synthetic seed driver index is invalid.');
-    const milli = 18005 + ((i + 18) % 2700) * 10;
+    const zone = (i * 7 + Math.floor(i / 11)) % 5;
+    const distanceTenths = 20 + ((i * 37) % 170);
+    const milli = 16500 + zone * 2250 + distanceTenths * 80 + (i % 5 === 0 ? 5 : 0);
+    const snapshot = Date.parse(`${date}T14:00:00Z`);
+    const arrivalEstimate = Date.parse(`${date}T10:00:00Z`) + ((i * 13) % 240) * 60000;
+    const deliveredTime = Math.min(snapshot - 60000, arrivalEstimate + (((i * 7) % 15) - 6) * 60000);
+    const etaTime = i % 3 === 0 ? snapshot + (20 + ((i * 17) % 300)) * 60000 : arrivalEstimate;
     const delivered = i % 3 !== 0;
     return {
       id: `S${String(i + 1).padStart(6, '0')}`,
@@ -64,10 +70,10 @@ export function seedData(date = DEMO_DATE): DemoData {
       status: delivered ? 'delivered' : 'in_transit',
       driver_payout: majorUnits(Math.floor((milli + 5) / 10)),
       payout_basis: `${Math.floor(milli / 1000)}.${String(milli % 1000).padStart(3, '0')}`,
-      delivered_at: delivered ? `${date}T13:${String(i % 60).padStart(2, '0')}:00Z` : null,
+      delivered_at: delivered ? new Date(deliveredTime).toISOString().replace('.000Z', 'Z') : null,
       units: 1,
-      zone: `Z${(i % 5) + 1}`,
-      eta: new Date(Date.parse(`${date}T10:00:00Z`) + (i % 480) * 60000).toISOString(),
+      zone: `Z${zone + 1}`,
+      eta: new Date(etaTime).toISOString(),
       delivery_window: { start: `${date}T08:00:00Z`, end: `${date}T20:00:00Z` },
     };
   });

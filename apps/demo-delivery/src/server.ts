@@ -1,6 +1,6 @@
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import { once } from 'node:events';
-import ExcelJS from 'exceljs';
+import { demoWorkbook } from './xlsx-export.js';
 import { DEMO_DATE, seedData, type DemoData, type Shipment } from './seed.js';
 import { createOperations } from './operations.js';
 import { createDispatcher } from './dispatcher.js';
@@ -122,19 +122,15 @@ export function createDemoServer(options: { bugs?: Partial<DemoBugs>; date?: str
           'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           'content-disposition': 'attachment; filename="shipments.xlsx"',
         });
-        const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
-          stream: response,
-          useSharedStrings: false,
-          useStyles: false,
-        });
-        const sheet = workbook.addWorksheet('Shipments');
-        sheet.addRow(headers).commit();
-        for (const [i, shipment] of data.shipments.entries()) {
-          if (bugs.dropLastRow && ((i + 1) % exportPageSize === 0 || i === data.shipments.length - 1)) continue;
-          sheet.addRow(exportValues(shipment, bugs)).commit();
-        }
-        sheet.commit();
-        await workbook.commit();
+        const rows = [
+          headers,
+          ...data.shipments.flatMap((shipment, index) =>
+            bugs.dropLastRow && ((index + 1) % exportPageSize === 0 || index === data.shipments.length - 1)
+              ? []
+              : [exportValues(shipment, bugs)],
+          ),
+        ];
+        response.end(demoWorkbook(rows));
         return;
       }
       const match = url.pathname.match(/^\/api\/([a-z]+)(?:\/([^/]+))?$/);

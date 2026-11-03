@@ -1,24 +1,28 @@
-# Freight settlement lines
+# Freight settlement reconciliation
 
-This synthetic closed-day example compares three TMS load totals with nine carrier settlement lines. Each load has linehaul, fuel and detention charges. Both exports describe the closed day of 2026-11-01.
+This is a synthetic closed day of 40 loads: 149 rate confirmation charge lines and 151 posted settlement lines. One additional void row is filtered out. No production data is included.
 
-From a source checkout after installing and building:
-
-```sh
-./node_modules/.bin/logiparity validate --config examples/freight/parity.yaml
-./node_modules/.bin/logiparity check --config examples/freight/parity.yaml
-```
-
-From a project with LogiParity installed through npm, copy the packaged example into your own folder first:
+From a project with LogiParity installed:
 
 ```sh
 cp -R node_modules/logiparity/examples/freight ./freight-example
-./node_modules/.bin/logiparity validate --config freight-example/parity.yaml
-./node_modules/.bin/logiparity check --config freight-example/parity.yaml
+npx logiparity validate --config freight-example/parity.yaml
+npx logiparity check --config freight-example/parity.yaml
 ```
 
-Expected: exit 0 and zero findings. Reports are written under the example's own `logiparity-report/` directory. JSON counts show three TMS rows and nine settlement rows; comparison uses three rolled-up load keys in each source.
+From a checkout:
 
-The settlement source sums `carrier_pay` by `load_id`, checks agreement on `status` and `delivered_at`, and declares `duplicates: {by: [load_id, charge]}`. Repeated load IDs are expected; repeated load and charge pairs are duplicate findings and are excluded before summing. If real data permits several lines for one charge type, add a line identifier to the duplicate identity.
+```sh
+npm ci
+npm run build
+node packages/cli/dist/main.js validate --config examples/freight/parity.yaml
+node packages/cli/dist/main.js check --config examples/freight/parity.yaml
+```
 
-Money uses exact integer minor units. Blank money or conflicting first values produce findings. Comparisons and aggregates that depend on uncertain values are skipped. Duplicate messages state the amount excluded. Change L001's detention from 50.25 to 50.24 to see a one-cent finding. Restore the fixture afterwards. For staging data, export and query at the same cutoff time or compare a closed day.
+Expected: validation exits 0; the check exits 1 because the fixture includes intentional defects. Open `freight-example/logiparity-report/report.html` (or `examples/freight/logiparity-report/report.html` in a checkout).
+
+The load comparison sums 151 settlement rows into 40 load keys, against 40 TMS totals. Its non-key uniqueness check finds tender T9006 on L106 and L107 and reports the amount paid more than once. The charge comparison uses `[load_id, charge]` to distinguish each accessorial. L102's $15 detention is absent from its rate confirmation and stays an individual finding. It must not become a rounding pattern.
+
+Other intentional defects are a repeated fuel row on L103, a blank fuel amount on L104 and a conflicting status on L105. Duplicate identities are excluded before summing. Uncertain loads are listed separately while certain loads still reconcile. Source `where` excludes void rows; rollup `where` accepts only the listed charge types. Row numbers count the CSV header.
+
+Reports are generated locally and are excluded from the published package. For staging data, export and query at the same cutoff time, or reconcile a closed day. Extend the duplicate identity with a line identifier if a load can legitimately have several lines for one charge type.

@@ -1,3 +1,4 @@
+# Synthetic closed day. Defects are intentional; no production data.
 version: 1
 environment: test
 entities:
@@ -6,35 +7,70 @@ entities:
     pluralLabel: loads
     key: load_id
     sources:
-      tms:
-        label: TMS
+      rate:
         type: csv
+        label: TMS load total
         file: ./tms-loads.csv
+        where: { posting: posted }
         fields:
-          {
-            load_id: 'Load ID',
-            carrier_pay: { path: 'Carrier pay', label: Carrier pay },
-            status: Status,
-            delivered_at: { path: 'Delivered at', label: Delivery time },
-          }
+          load_id: Load ID
+          tender_id: { path: Tender ID, label: Tender }
+          carrier_pay: { path: Carrier pay, label: Carrier pay }
+          status: Status
+          delivered_at: { path: Delivered at, label: Delivery time }
+          posting: Posting
       settlement:
-        label: Carrier settlement
         type: csv
+        label: Carrier settlement
         file: ./carrier-settlement-lines.csv
+        where: { posting: { not: [void] } }
         fields:
-          {
-            load_id: 'Load ID',
-            carrier_pay: Amount,
-            charge: Charge,
-            status: Status,
-            delivered_at: { path: 'Delivered at', label: Delivery time },
-          }
+          load_id: Load ID
+          tender_id: Tender ID
+          charge: Charge
+          carrier_pay: Amount
+          status: Status
+          delivered_at: Delivered at
+          posting: Posting
+        unique: [tender_id]
         rollup:
-          { by: load_id, sum: [carrier_pay], first: [status, delivered_at], duplicates: { by: [load_id, charge] } }
+          by: load_id
+          sum: [carrier_pay]
+          first: [tender_id, status, delivered_at]
+          where: { charge: [linehaul, fuel, detention, stop] }
+          duplicates: { by: [load_id, charge] }
     compare:
       carrier_pay: { type: money, currency: USD }
       status: { type: enum }
       delivered_at: { type: datetime }
+    aggregates:
+      - { name: total, label: Total carrier pay, type: sum, field: carrier_pay }
+      - { name: delivered_count, label: Delivered loads, type: count, where: { status: delivered } }
+  - name: charge_line
+    label: Charge
+    pluralLabel: charges
+    key: [load_id, charge]
+    sources:
+      confirmation:
+        label: Rate confirmation
+        type: csv
+        file: ./rate-confirmation-lines.csv
+        fields: { load_id: Load ID, charge: Charge, amount: { path: Amount, label: Charge amount }, posting: Posting }
+        where: { posting: posted }
+      settlement:
+        label: Settlement lines
+        type: csv
+        file: ./carrier-settlement-lines.csv
+        fields: { load_id: Load ID, charge: Charge, amount: Amount, posting: Posting }
+        where: { posting: { not: void } }
+        rollup:
+          by: [load_id, charge]
+          sum: [amount]
+          duplicates: { by: [load_id, charge] }
+    compare:
+      amount: { type: money, currency: USD }
+    aggregates:
+      - { name: total, label: Total charges, type: sum, field: amount }
 report:
   outputs: [console, html, json, markdown, junit]
   dir: ./logiparity-report
