@@ -44,12 +44,21 @@ export interface Finding {
   expected?: NormalizedValue;
   actual?: NormalizedValue;
   values?: { row: number; value: NormalizedValue }[];
-  reason?: 'rollup_conflict' | 'rollup_missing_value' | 'rollup_duplicate';
+  reason?: 'rollup_conflict' | 'rollup_missing_value' | 'rollup_duplicate' | 'currency_mismatch';
   blocking?: boolean;
   screenshot?: string;
   referencePosition?: number;
   evidence?: { offsetFree?: boolean; paginated?: boolean; pageSizes?: number[] };
   accounting?: { causes: string[]; remainder: string };
+}
+export interface AggregateReconciliation {
+  missingRows: { count: number; amount: bigint | string };
+  extraRows?: { count: number; amount: bigint | string };
+  valueDifferences?: { count: number; amount: bigint | string };
+  patterns: { group: number; count: number; amount: bigint | string }[];
+  remainder: bigint | string;
+  uncertain?: { keys: string[][]; amount: bigint | string };
+  causes?: string[];
 }
 export interface AggregateResult {
   name: string;
@@ -62,18 +71,8 @@ export interface AggregateResult {
   skippedSources: string[];
   sourceStatus?: Record<string, 'certain' | 'uncertain' | 'not_mapped' | 'not_read'>;
   uncertainKeys?: Record<string, string[][]>;
-  reconciliation?: Record<
-    string,
-    {
-      missingRows: { count: number; amount: bigint | string };
-      extraRows?: { count: number; amount: bigint | string };
-      valueDifferences?: { count: number; amount: bigint | string };
-      patterns: { group: number; count: number; amount: bigint | string }[];
-      remainder: bigint | string;
-      uncertain?: { keys: string[][]; amount: bigint | string };
-      causes?: string[];
-    }
-  >;
+  reconciliation?: Record<string, AggregateReconciliation>;
+  reconciliationByCurrency?: Record<string, Record<string, AggregateReconciliation>>;
 }
 export interface EntitySummary {
   entity: string;

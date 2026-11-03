@@ -12,6 +12,7 @@ export type Row = Record<string, NormalizedValue>;
 export interface SourceState {
   rows: Map<string, Row>;
   currencies: Map<string, Map<string, string>>;
+  qualifyingRows: Map<string, Set<number>>;
   rawMeasurements: Map<string, number | bigint>;
   rawCurrencies: Map<string, Record<string, bigint>>;
   currencyMeasurements: Map<string, Record<string, bigint>>;
@@ -103,6 +104,10 @@ function normalizeRow(
       const config = entity.sources[source];
       if (rule?.type === 'money' && config) rule = { ...rule, currency: rowCurrency(rule, config, raw) };
       row[field] = normalize(value, rule, source);
+      if (field === config?.currencyField || Object.values(entity.compare).some((item) => item.currencyField === field))
+        row[field] = String(row[field] ?? '')
+          .trim()
+          .toUpperCase();
       if (keys.has(field)) row[field] = String(row[field] ?? '');
     } catch (error) {
       row[field] = null;
@@ -147,13 +152,6 @@ function duplicateLine(
     state.identities.set(id, state.position);
     return false;
   }
-  const amounts = (config.rollup?.sum ?? []).flatMap((field) => {
-    const rule = entity.compare[field],
-      value = row[field];
-    return rule?.type === 'money' && typeof value === 'bigint'
-      ? [`excluded ${formatMoneyMajor(value, rule.currency ?? 'USD')} from ${keyText(key, state.parts.get(key))}`]
-      : [];
-  });
   state.issues.push({
     type: 'duplicate_key',
     reason: 'rollup_duplicate',
@@ -161,7 +159,7 @@ function duplicateLine(
     source,
     field: keyFields(entity.key).join(', '),
     row: state.position,
-    message: `Duplicate key ${fields.map((field) => formattedIdentity(field, row[field], entity)).join(', ')} at rows ${state.identities.get(id)} and ${state.position}; ${amounts.join('; ') || 'the repeated row is excluded'}.`,
+    message: `Duplicate key ${fields.map((field) => formattedIdentity(field, row[field], entity)).join(', ')} at rows ${state.identities.get(id)} and ${state.position}; the repeated row is not added; all amounts for ${keyText(key, state.parts.get(key))} are excluded from certain totals.`,
   });
   uncertain(state, key, config.rollup?.sum ?? []);
   return true;
@@ -320,6 +318,7 @@ export async function readSource(
     offsetFree: new Map(),
     currencies: new Map(),
     rawMeasurements: new Map(),
+    qualifyingRows: new Map(),
     rawCurrencies: new Map(),
     currencyMeasurements: new Map(),
     rawSums: new Map(),
@@ -473,7 +472,8 @@ export async function readSource(
     return state;
   } catch (error) {
     const diagnostic = redactSecrets(errorText(error), secrets);
-    report.findings.push(...state.issues, {
+    for (const issue of state.issues) report.findings.push(issue);
+    report.findings.push({
       type: 'source_error',
       entity: entity.name,
       source,

@@ -23,6 +23,9 @@ export function recordRawTotals(
   if (!config) return;
   for (const aggregate of entity.aggregates) {
     if (!matchesFilter(row, aggregate.where, entity, source)) continue;
+    const qualifying = state.qualifyingRows.get(aggregate.name) ?? new Set<number>();
+    qualifying.add(state.position);
+    state.qualifyingRows.set(aggregate.name, qualifying);
     if (aggregate.type === 'count') {
       state.rawMeasurements.set(aggregate.name, Number(state.rawMeasurements.get(aggregate.name) ?? 0) + 1);
       continue;

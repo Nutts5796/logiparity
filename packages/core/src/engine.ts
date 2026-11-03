@@ -76,17 +76,28 @@ function compareSource(
   const config = entity.sources[source];
   if (!config) return;
   const keys = new Set(keyFields(entity.key));
+  const invalidIssues = new Map<string, Finding[]>();
+  for (const issue of current.issues) {
+    if (issue.type !== 'invalid_value') continue;
+    const entries = invalidIssues.get(issue.key) ?? [];
+    entries.push(issue);
+    invalidIssues.set(issue.key, entries);
+  }
+  const currencyFields = new Set(
+    [config.currencyField, ...Object.values(entity.compare).map((rule) => rule.currencyField)].filter(Boolean),
+  );
   for (const [key, expected] of baseline.rows) {
     const actual = current.rows.get(key);
     if (!actual) {
       report.findings.push(rowDetails(entity, source, reference, key, baseline, 'missing_in_source'));
       continue;
     }
-    for (const issue of current.issues)
-      if (issue.key === key && issue.type === 'invalid_value') issue.expected = expected[issue.field] ?? null;
+    for (const issue of invalidIssues.get(key) ?? []) issue.expected = expected[issue.field] ?? null;
+    const currencyFindings = new Set<string>();
     for (const [field, value] of Object.entries(expected)) {
       if (
         keys.has(field) ||
+        currencyFields.has(field) ||
         !Object.hasOwn(config.fields, field) ||
         (config.rollup && !config.rollup.sum.includes(field) && !config.rollup.first.includes(field)) ||
         current.uncertain.get(key)?.has(field) ||
@@ -97,12 +108,17 @@ function compareSource(
       const expectedCurrency = baseline.currencies.get(key)?.get(field),
         actualCurrency = current.currencies.get(key)?.get(field);
       if (expectedCurrency && actualCurrency && expectedCurrency !== actualCurrency) {
+        const currencyField = entity.compare[field]?.currencyField ?? config.currencyField ?? field;
+        if (currencyFindings.has(currencyField)) continue;
+        currencyFindings.add(currencyField);
         report.findings.push({
           type: 'field_mismatch',
           entity: entity.name,
           source,
           key,
           field: entity.compare[field]?.currencyField ?? config.currencyField ?? field,
+          reason: 'currency_mismatch',
+          ...(baseline.parts.has(key) ? { keyParts: baseline.parts.get(key) ?? [] } : {}),
           expected: expectedCurrency,
           actual: actualCurrency,
           message: `Currency differs: ${expectedCurrency} on ${reference}, ${actualCurrency} on ${source}.`,
@@ -155,13 +171,13 @@ function publishAggregates(
     aggregate.rawValues ??= {};
     aggregate.rawValues[source] = state.rawMeasurements.get(definition.name) ?? actual;
     aggregate.excludedRows ??= {};
-    aggregate.excludedRows[source] = [
-      ...new Set([
-        ...state.excludedRows,
-        ...state.invalidRows,
-        ...[...excluded].flatMap((key) => state.rowNumbers.get(key) ?? []),
-      ]),
-    ].sort((a, b) => a - b);
+    const qualifies = state.qualifyingRows.get(definition.name) ?? new Set<number>();
+    aggregate.excludedRows[source] =
+      definition.type === 'count'
+        ? []
+        : [...new Set([...state.excludedRows, ...[...excluded].flatMap((key) => state.rowNumbers.get(key) ?? [])])]
+            .filter((row) => qualifies.has(row))
+            .sort((a, b) => a - b);
     const currencies = state.currencyMeasurements.get(definition.name);
     if (currencies) {
       aggregate.valuesByCurrency ??= {};
@@ -273,7 +289,7 @@ export async function compareEntities(
       }
       summary.counts[source] = current.count;
       if (summary.uniqueCounts) summary.uniqueCounts[source] = current.rows.size;
-      report.findings.push(...current.issues);
+      for (const issue of current.issues) report.findings.push(issue);
       publishAggregates(entity, source, reference, current, summary, report);
       if (source === reference) {
         baseline = current;

@@ -32,7 +32,7 @@ it('partitions totals by currency and flags cross-currency row comparisons (tom)
   expect(report.findings.some((f) => f.message.includes('Currency'))).toBe(true);
   expect(htmlReport(report, { entities: [config] })).toContain('CA$20.00');
   expect(markdownReport(report, { entities: [config] })).toContain('CA$20.00');
-  expect(report.findings.filter((f) => f.accounting)).toEqual([]);
+  expect(report.findings.filter((f) => f.accounting)).toHaveLength(2);
 });
 it('shows the reference amount beside an invalid over-precise money cell (tom)', async () => {
   const config = entity();

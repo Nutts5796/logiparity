@@ -142,7 +142,7 @@ it('represents source-local conflicts as observed values with lines and reports 
     { row: 2, value: 'cancelled' },
   ]);
   expect(report.findings.find((finding) => finding.reason === 'rollup_duplicate')?.message).toContain(
-    'excluded $200.00 from L103',
+    'all amounts for L103 are excluded from certain totals',
   );
 });
 it('renders the scenario replan warning in every report format', () => {

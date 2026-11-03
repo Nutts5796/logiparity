@@ -103,8 +103,11 @@ it('keeps aggregate accounting equal to independently computed qualifying contri
         if (status === 'delivered') missing -= BigInt(amount);
         continue;
       }
-      actual.push({ ...baseline, amount: money(amount + delta) });
-      if (status === 'delivered') {
+      const actualStatus = random(3) === 0 ? (status === 'delivered' ? 'in_transit' : 'delivered') : status;
+      actual.push({ ...baseline, status: actualStatus, amount: money(amount + delta) });
+      if (actualStatus !== status)
+        listed += BigInt((actualStatus === 'delivered' ? amount + delta : 0) - (status === 'delivered' ? amount : 0));
+      else if (status === 'delivered') {
         if (Math.abs(delta) > 1) listed += BigInt(delta);
         else unmatched += BigInt(delta);
       }

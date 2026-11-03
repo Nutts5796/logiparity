@@ -111,10 +111,7 @@ it('reconciles certain totals and records uncertain keys instead of dropping an 
   expect(aggregate?.values).toEqual({ rate: 30000n, settlement: 20000n });
   expect(aggregate?.reconciliation?.settlement?.uncertain).toEqual({ keys: [['L2']], amount: -10000n });
   expect(aggregate?.reconciliation?.settlement?.remainder).toBe(0n);
-  expect(report.findings.find((f) => f.type === 'aggregate_mismatch')?.accounting).toMatchObject({
-    remainder: '0',
-    causes: ['uncertain lines'],
-  });
+  expect(report.findings.find((f) => f.type === 'aggregate_mismatch')?.accounting).toBeUndefined();
 });
 it('accounts for money and filtered count aggregates that follow from missing rows', async () => {
   const entity = entitySchema.parse({
