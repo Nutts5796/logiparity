@@ -1,0 +1,16 @@
+node_modules/
+**/node_modules/
+**/dist/
+**/*.tsbuildinfo
+coverage/
+output/
+.playwright-cli/
+logiparity-report/
+logiparity-scenario-report/
+logiparity-ai-drafts/
+examples/demo/auth/
+examples/demo/out/
+examples/freight/logiparity-report/
+# Verified upstream bytes are intentionally unchanged.
+tests/fixtures/junit/JUnit.xsd
+tests/fixtures/junit/LICENSE

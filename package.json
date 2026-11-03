@@ -28,7 +28,9 @@
     "test:docker": "node scripts/check-docker.mjs",
     "check:docs": "node scripts/check-docs.mjs",
     "release:prepare": "npm run build && node scripts/prepare-release.mjs",
-    "check:third-party": "node scripts/check-third-party.mjs"
+    "check:third-party": "node scripts/check-third-party.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
@@ -38,16 +40,17 @@
     "@types/unzipper": "0.10.11",
     "@vitest/coverage-v8": "4.1.12",
     "eslint": "9.39.5",
-    "playwright": "1.64.1",
+    "exceljs": "4.4.0",
+    "jszip": "3.10.1",
     "pg": "8.23.1",
+    "playwright": "1.64.1",
+    "prettier": "3.9.10",
+    "saxes": "6.0.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.72.1",
     "vite": "6.4.5",
     "vitest": "4.1.12",
-    "yaml": "2.9.1",
-    "exceljs": "4.4.0",
-    "saxes": "6.0.0",
-    "jszip": "3.10.1"
+    "yaml": "2.9.1"
   },
   "description": "Test/staging logistics data parity and disruption scenario checks, with optional AI drafts.",
   "bin": {
@@ -73,13 +76,19 @@
     "examples/freight/"
   ],
   "dependencies": {
+    "@logiparity/adapters": "1.0.1",
+    "@logiparity/ai": "1.0.1",
     "@logiparity/cli": "1.0.1",
     "@logiparity/core": "1.0.1",
-    "@logiparity/adapters": "1.0.1",
-    "@logiparity/scenarios": "1.0.1",
-    "@logiparity/ai": "1.0.1"
+    "@logiparity/scenarios": "1.0.1"
   },
-  "bundleDependencies": true,
+  "bundleDependencies": [
+    "@logiparity/cli",
+    "@logiparity/core",
+    "@logiparity/adapters",
+    "@logiparity/scenarios",
+    "@logiparity/ai"
+  ],
   "publishConfig": {
     "access": "public"
   },
