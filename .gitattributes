@@ -1,2 +1,0 @@
-# Preserve the verified upstream vendor bytes, including existing whitespace.
-vendor/exceljs/** -whitespace

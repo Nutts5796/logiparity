@@ -9,7 +9,6 @@ COPY packages/scenarios/package.json packages/scenarios/package.json
 COPY packages/ai/package.json packages/ai/package.json
 COPY packages/cli/package.json packages/cli/package.json
 COPY apps/demo-delivery/package.json apps/demo-delivery/package.json
-COPY vendor/exceljs vendor/exceljs
 RUN npm ci --ignore-scripts --no-audit --no-fund
 
 FROM dependencies AS build

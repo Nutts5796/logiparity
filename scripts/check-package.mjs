@@ -10,9 +10,9 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const run = promisify(execFile);
 const temporary = await mkdtemp(join(tmpdir(), 'logiparity-package-'));
 const npmCli = process.env.npm_execpath;
-const npm = (args, cwd = root) => run(npmCli ? process.execPath : 'npm', npmCli ? [npmCli, ...args] : args, { cwd, env: { ...process.env, npm_config_cache: join(temporary, 'cache') }, maxBuffer: 16 * 1024 * 1024, timeout: 120000 });
+const npm = (args, cwd = root) => run(npmCli ? process.execPath : 'npm', npmCli ? [npmCli, ...args] : args, { cwd, env: { ...process.env, npm_config_audit: 'true', npm_config_cache: join(temporary, 'cache') }, maxBuffer: 16 * 1024 * 1024, timeout: 120000 });
 try {
-  const args = ['--ignore-scripts', '--json', '--offline', '--no-audit', '--no-fund'];
+  const args = ['--ignore-scripts', '--json', '--offline', '--no-fund'];
   const dry = JSON.parse((await npm(['pack', '--dry-run', ...args])).stdout)[0];
   assert.equal(dry.name, 'logiparity'); assert.equal(dry.version, '1.0.1');
   const files = new Set(dry.files.map((file) => file.path));
@@ -29,12 +29,18 @@ try {
     assert(!/(?:^|\/)\.env(?:\.|$)/.test(file), `Environment file ${file}`);
   }
   const packed = JSON.parse((await npm(['pack', '--pack-destination', temporary, ...args])).stdout)[0];
+  const offline = join(temporary, 'offline-consumer'); await mkdir(offline);
+  await npm(['install', join(temporary, packed.filename), ...args], offline);
   const install = join(temporary, 'consumer'); await mkdir(install);
-  await npm(['install', join(temporary, packed.filename), ...args], install);
+  await npm(['init', '-y'], install);
+  await npm(['install', join(temporary, packed.filename)], install);
   const consumerLock = await readFile(join(install, 'package-lock.json'), 'utf8');
-  await npm(['ci', ...args.filter((arg) => arg !== '--offline')], install);
+  await rm(join(install, 'node_modules'), {recursive:true,force:true});
+  await npm(['ci'], install);
   assert.equal(await readFile(join(install, 'package-lock.json'), 'utf8'), consumerLock);
-  await npm(['ci', ...args], install);
+  const audit = await npm(['audit'], install);
+  assert.match(audit.stdout, /found 0 vulnerabilities/);
+  const npmVersion = (await npm(['--version'])).stdout.trim();
   const publicProbe = `for (const [name,symbol] of [['core','compareEntities'],['adapters','adapters'],['scenarios','runScenario'],['ai','prepareDraft']]) { const m = await import('logiparity/'+name); if (!m[symbol]) throw new Error('Missing public API '+name); }`;
   await run(process.execPath, ['--input-type=module', '-e', publicProbe], { cwd: install });
   await writeFile(join(install, 'types.mts'), `import type {EntityConfig} from 'logiparity/core';
@@ -73,7 +79,7 @@ export {provider};
   let errorCode; try { await cli(['scenario', 'run', 'scenario.yaml', '--target', 'missing-target.yaml']); } catch (error) { errorCode = error.code; } assert.equal(errorCode, 2);
   if (process.env.LOGIPARITY_PACK_OUTPUT) {
     const output = resolve(process.env.LOGIPARITY_PACK_OUTPUT); await mkdir(dirname(output), { recursive: true });
-    await writeFile(output, JSON.stringify({ name: dry.name, version: dry.version, compressedBytes: packed.size, entries: dry.entryCount, bundledPackages: dry.bundled.length, offlineInstall: true, consumerCi: true, cliSmoke: true, files: [...files] }, null, 2) + '\n');
+    await writeFile(output, JSON.stringify({ name: dry.name, version: dry.version, compressedBytes: packed.size, entries: dry.entryCount, bundledPackages: dry.bundled.length, offlineInstall: true, consumerCi: true, consumerAudit: true, npm: npmVersion, cliSmoke: true, files: [...files] }, null, 2) + '\n');
   }
-  console.log(`Package verified: ${dry.name}@${dry.version}, ${dry.entryCount} entries, ${dry.bundled.length} bundled packages, ${packed.size} bytes; empty-cache offline install, consumer npm ci and CLI checks passed.`);
+  console.log(`Package verified: ${dry.name}@${dry.version}, ${dry.entryCount} entries, ${dry.bundled.length} bundled packages, ${packed.size} bytes; empty-cache offline install, plain consumer install/npm ci/npm audit (zero vulnerabilities) on npm ${npmVersion}, and CLI checks passed.`);
 } finally { await rm(temporary, { recursive: true, force: true }); }

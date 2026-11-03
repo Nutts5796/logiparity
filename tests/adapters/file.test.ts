@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import ExcelJS from '@logiparity/exceljs';
+import ExcelJS from 'exceljs';
 import { sourceSchema, type FileConfig } from '@logiparity/core';
 import { readFileSource } from '@logiparity/adapters';
 import { collect } from '../helpers.js';

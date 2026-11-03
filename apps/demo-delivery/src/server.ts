@@ -1,6 +1,6 @@
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import { once } from 'node:events';
-import ExcelJS from '@logiparity/exceljs';
+import ExcelJS from 'exceljs';
 import { DEMO_DATE, seedData, type DemoData, type Shipment } from './seed.js';
 import { createOperations } from './operations.js';
 import { createDispatcher } from './dispatcher.js';

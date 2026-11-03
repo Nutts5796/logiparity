@@ -2,7 +2,6 @@ import { createReadStream } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parse } from 'csv-parse';
-import ExcelJS from '@logiparity/exceljs';
 import type { AdapterContext, DataRow, FileConfig } from '@logiparity/core';
 import { xlsxRows } from './xlsx.js';
 
@@ -17,15 +16,9 @@ function headerIndexes(headers: unknown[], fields: Record<string, string>): [str
   });
 }
 
-function excelValue(cell: ExcelJS.CellValue): unknown {
-  if (!cell || typeof cell !== 'object' || cell instanceof Date) return cell;
-  if ('richText' in cell) return cell.richText.map((t) => t.text).join('');
-  if ('formula' in cell || 'sharedFormula' in cell) {
-    if (cell.result === undefined) throw new Error('Formula has no cached result; recalculate and save the workbook.');
-    return excelValue(cell.result);
-  }
-  if ('text' in cell) return cell.text;
-  throw new Error('Unsupported or error XLSX cell; export a scalar value.');
+function excelValue(value: unknown): unknown {
+  if (value instanceof Error) throw value;
+  return value;
 }
 
 export async function* readFileSource(config: FileConfig, context: AdapterContext): AsyncIterable<DataRow> {
@@ -53,8 +46,8 @@ export async function* readFileSource(config: FileConfig, context: AdapterContex
       for await (const row of xlsxRows(file, config.sheet)) {
         location = `sheet ${config.sheet}, row ${row.number}`;
         if (row.number < config.headerRow) continue;
-        if (!indexes) { indexes = headerIndexes(Array.from({ length: row.cellCount }, (_, i) => excelValue(row.getCell(i + 1).value)), config.fields); continue; }
-        yield Object.fromEntries(indexes.map(([field, index]) => [field, excelValue(row.getCell(index + 1).value)]));
+        if (!indexes) { indexes = headerIndexes(Array.from({ length: row.values.length }, (_, i) => excelValue(row.values[i])), config.fields); continue; }
+        yield Object.fromEntries(indexes.map(([field, index]) => [field, excelValue(row.values[index] ?? null)]));
       }
     }
     if (!indexes) throw new Error(`Header was not found${config.type === 'xlsx' ? ` in sheet "${config.sheet}"` : ''}; check sheet, headerRow and file contents.`);
