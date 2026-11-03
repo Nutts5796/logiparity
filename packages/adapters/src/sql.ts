@@ -24,7 +24,7 @@ export async function* readSql(config: SqlConfig, context: AdapterContext): Asyn
       throw new Error('Invalid URL');
   } catch {
     throw new SourceError(
-      `${config.connectionEnv} requires a postgres:// or postgresql:// URL with an explicit host and database.`,
+      `${config.connectionEnv} requires an explicit postgres:// or postgresql:// host/database URL.`,
     );
   }
   for (const key of new URL(connection).searchParams.keys())

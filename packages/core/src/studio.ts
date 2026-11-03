@@ -103,6 +103,8 @@ input, select { font: inherit; font-size: 14px; padding: 8px 12px; border: 1px s
 .recon .bar i { display: block; height: 100%; }
 .recon .rows { margin-top: 12px; display: grid; gap: 6px; }
 .recon .rows div { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.recon .rows b { white-space:nowrap; flex-shrink:0; }
+.recon .rows span { min-width:0; overflow-wrap:anywhere; }
 .recon .rows span i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; }
 .recon .ok { color: var(--ok); font-weight: 700; }
 @media (max-width: 860px) { .recon { grid-template-columns: 1fr; } }

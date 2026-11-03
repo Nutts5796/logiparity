@@ -182,6 +182,14 @@ it('honors system theme and toggles safely when localStorage is unavailable, wit
     await page.locator('#theme').click();
     expect(await page.locator('html').getAttribute('data-theme')).toBe('dark');
     expect(await page.locator('#findings thead').isVisible()).toBe(false);
+    const accountedValue = page.locator('.recon .rows b').filter({ hasText: 'accounted for' }).first();
+    expect(
+      await accountedValue.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return range.getClientRects().length;
+      }),
+    ).toBe(1);
     await page.locator('[data-mode=all]').click();
     expect(
       await page
