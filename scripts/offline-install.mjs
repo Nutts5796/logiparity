@@ -37,7 +37,7 @@ try {
     .filter((path) => path.startsWith('tarballs/') && path.endsWith('.tgz'))
     .map((path) => join(root, path));
   await npm(['cache', 'add', '--offline', ...tarballs]);
-  const result = await npm(['ci', '--offline', '--ignore-scripts', '--no-fund']);
+  const result = await npm(['ci', '--offline', '--ignore-scripts', '--no-fund', '--no-audit']);
   process.stdout.write(
     result.stdout
       .replace(/^found \d+ vulnerabilities.*$/gm, '')

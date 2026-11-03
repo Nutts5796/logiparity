@@ -23,5 +23,8 @@
     "LICENSE",
     "dist/**/*.js",
     "dist/**/*.d.ts"
-  ]
+  ],
+  "engines": {
+    "node": ">=22"
+  }
 }

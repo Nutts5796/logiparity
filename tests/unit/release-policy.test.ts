@@ -5,7 +5,8 @@ it('keeps release authority separate and only publishes npm on tag pushes', asyn
   const release = parse(await readFile('.github/workflows/release.yml', 'utf8'));
   expect(release.permissions).toEqual({});
   expect(release.concurrency.group).toBe('release-${{ inputs.tag || github.ref_name }}');
-  expect(release.jobs.build.permissions).toEqual({ contents: 'write' });
+  expect(release.jobs.build.permissions).toEqual({ contents: 'read' });
+  expect(release.jobs.lookup.permissions).toEqual({ contents: 'write' });
   expect(release.jobs.npm.permissions).toEqual({ 'id-token': 'write' });
   expect(release.jobs.npm.if).toBe("github.event_name == 'push'");
   expect(release.jobs.notes.needs).toContain('images');
@@ -25,7 +26,7 @@ it('keeps release authority separate and only publishes npm on tag pushes', asyn
 });
 it('runs all supported Node majors and leaves consuming GitLab stages intact', async () => {
   const ci = parse(await readFile('.github/workflows/ci.yml', 'utf8'));
-  expect(ci.jobs.verify.strategy.matrix.node).toEqual([20, 22, 24]);
+  expect(ci.jobs.verify.strategy.matrix.node).toEqual([22, 24, 26]);
   expect(ci.on.push.branches).toEqual(['main']);
   const gitlab = parse(await readFile('templates/gitlab-ci.yml', 'utf8'));
   expect(gitlab.stages).toBeUndefined();

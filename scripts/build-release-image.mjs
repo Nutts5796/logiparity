@@ -38,6 +38,11 @@ await new Promise((accept, reject) => {
   child.stdin.end(token);
 });
 const reference = `${image}:${version}${suffix}`;
+const repository = process.env.GITHUB_REPOSITORY;
+const runId = process.env.GITHUB_RUN_ID;
+if (!repository || !/^\d+$/.test(runId ?? ''))
+  throw new Error('Image preparation requires its GitHub repository and workflow run ID.');
+const revision = (await run('git', ['rev-parse', 'HEAD'])).stdout.trim();
 let digest;
 try {
   digest = (
@@ -49,7 +54,6 @@ try {
 const reused = !!digest;
 const metadata = `output/release/${target}-image.json`;
 if (!digest) {
-  const revision = (await run('git', ['rev-parse', 'HEAD'])).stdout.trim();
   const created = (await run('git', ['show', '-s', '--format=%cI', 'HEAD'])).stdout.trim();
   await run('docker', [
     'buildx',
@@ -59,6 +63,10 @@ if (!digest) {
     'linux/amd64,linux/arm64',
     '--target',
     target,
+    '--annotation',
+    `index:io.logiparity.build-run-id=${runId}`,
+    '--annotation',
+    `index:org.opencontainers.image.revision=${revision}`,
     '--tag',
     reference,
     '--build-arg',
@@ -75,7 +83,50 @@ if (!digest) {
     '.',
   ]);
   digest = JSON.parse(await readFile(metadata, 'utf8'))['containerimage.digest'];
-} else await writeFile(metadata, JSON.stringify({ 'containerimage.digest': digest, reused: true }) + '\n');
+}
 if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new Error('Invalid registry image digest');
-await appendFile(process.env.GITHUB_OUTPUT, `digest=${digest}\nreused=${reused}\n`);
-console.log(`Verified ${reference}@${digest}`);
+let needsAttestation = !reused;
+let attestationVerified = false;
+if (reused) {
+  try {
+    await run('gh', [
+      'attestation',
+      'verify',
+      `oci://${image}@${digest}`,
+      '--repo',
+      repository,
+      '--signer-workflow',
+      `${repository}/.github/workflows/release.yml`,
+      '--source-ref',
+      `refs/tags/v${version}`,
+      '--source-digest',
+      revision,
+    ]);
+    attestationVerified = true;
+  } catch (error) {
+    if (!/no attestations|attestation.*not found|HTTP 404/i.test(error.stderr ?? error.message)) throw error;
+    const manifest = JSON.parse(
+      (await run('docker', ['buildx', 'imagetools', 'inspect', `${image}@${digest}`, '--raw'])).stdout,
+    );
+    const annotations = manifest.annotations ?? {};
+    if (
+      annotations['io.logiparity.build-run-id'] !== runId ||
+      annotations['org.opencontainers.image.revision'] !== revision
+    )
+      throw new Error(
+        'Existing image has no verified provenance from this workflow run. Re-run failed jobs in the original image-building run to repair its attestation.',
+      );
+    needsAttestation = true;
+  }
+  await writeFile(
+    metadata,
+    JSON.stringify({ 'containerimage.digest': digest, reused: true, attestationVerified, buildRunId: runId }) + '\n',
+  );
+}
+await appendFile(
+  process.env.GITHUB_OUTPUT,
+  `digest=${digest}\nreused=${reused}\nneeds-attestation=${needsAttestation}\n`,
+);
+console.log(
+  `${reused ? (attestationVerified ? 'Reusing image with verified provenance' : 'Reusing this workflow run’s image; provenance repair pending') : 'Built image; provenance attestation pending'}: ${reference}@${digest}`,
+);

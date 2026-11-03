@@ -12,7 +12,7 @@
     - |
       node --input-type=module <<'JS'
       import {execFileSync} from 'node:child_process';
-      const match=process.env.LOGIPARITY_IMAGE.match(/:(\d+\.\d+\.\d+)(?:-slim)?@sha256:[a-f0-9]{64}$/);
+      const match=process.env.LOGIPARITY_IMAGE.match(/^ghcr\.io\/nutts5796\/logiparity:(\d+\.\d+\.\d+)(?:-slim)?@sha256:[a-f0-9]{64}$/);
       if(!match || execFileSync('logiparity',['--version'],{encoding:'utf8'}).trim()!==match[1]) throw new Error('Set a verified digest-pinned LOGIPARITY_IMAGE with its matching CLI version');
       JS
     - logiparity validate --allow-missing-env --config parity.yaml

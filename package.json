@@ -5,7 +5,7 @@
   "license": "MIT",
   "author": "Sergei Orekhovskii",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "workspaces": [
     "packages/*",

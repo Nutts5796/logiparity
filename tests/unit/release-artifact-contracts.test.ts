@@ -24,12 +24,14 @@ it('makes byte-identical offline archives despite different source mtimes and cr
 it('gates tag preparation on reusable CI, grants draft lookup access and binds the npm environment (ana)', async () => {
   const workflow = parse(await readFile('.github/workflows/release.yml', 'utf8'));
   expect(workflow.jobs.verify.uses).toBe('./.github/workflows/ci.yml');
-  expect(workflow.jobs.build.needs).toBe('verify');
-  expect(workflow.jobs.build.permissions.contents).toBe('write');
+  expect(workflow.jobs.build.needs).toContain('verify');
+  expect(workflow.jobs.build.needs).toContain('lookup');
+  expect(workflow.jobs.build.permissions.contents).toBe('read');
+  expect(workflow.jobs.lookup.permissions.contents).toBe('write');
   expect(workflow.jobs.npm.environment).toBe('npm');
   expect(
     workflow.jobs.images.steps.find((step: { with?: Record<string, unknown> }) => step.with?.['subject-name'])?.if,
-  ).toContain('reused');
+  ).toContain('needs-attestation');
 });
 it('pins the expected image repository and Dockerfile frontend without a build', async () => {
   const template = await readFile('templates/github-actions-container.yml', 'utf8');

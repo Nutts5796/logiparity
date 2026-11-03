@@ -42,5 +42,7 @@ export async function deterministicArchive(directory, name, destination) {
   };
   await entry(name, true);
   chunks.push(Buffer.alloc(1024));
-  await writeFile(destination, gzipSync(Buffer.concat(chunks), { level: 9 }));
+  const archive = gzipSync(Buffer.concat(chunks), { level: 9 });
+  archive[9] = 255; // Unknown OS: identical header on macOS and Linux.
+  await writeFile(destination, archive);
 }

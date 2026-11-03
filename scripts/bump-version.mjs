@@ -35,13 +35,31 @@ console.log(
   `Updated first-party versions to ${version}. Run npm install --package-lock-only, checks, then review the diff. Nothing tagged or published.`,
 );
 
+// Human release history is edited during review, never by a global replacement.
 for (const file of [
   'README.md',
-  'docs/release.md',
   'templates/github-actions.yml',
   'templates/github-actions-container.yml',
   'templates/gitlab-ci.yml',
 ]) {
-  const path = resolve(root, file);
-  await writeFile(path, (await readFile(path, 'utf8')).replaceAll(previous, version));
+  const path = resolve(root, file),
+    text = await readFile(path, 'utf8');
+  const next = text
+    .split('\n')
+    .map((line) => {
+      if (/^\s*LOGIPARITY_VERSION:/.test(line))
+        return line.replace(/(['"]?)(\d+\.\d+\.\d+)\1/, (token, _quote, found) =>
+          found === previous ? `'${version}'` : token,
+        );
+      if (!/\b(?:npm\s+(?:install|i)|npx)\b/.test(line)) return line;
+      return line
+        .replace(/\blogiparity@(\d+\.\d+\.\d+)/g, (token, found) =>
+          found === previous ? `logiparity@${version}` : token,
+        )
+        .replace(/\blogiparity-(\d+\.\d+\.\d+)\.tgz/g, (token, found) =>
+          found === previous ? `logiparity-${version}.tgz` : token,
+        );
+    })
+    .join('\n');
+  await writeFile(path, next);
 }
