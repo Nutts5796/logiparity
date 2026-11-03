@@ -39,3 +39,11 @@ M6 verification: 205 unit and adapter tests, 62 end-to-end tests, and 100% core 
 - Improved monetary display, report grammar and pattern placement.
 - Prepared npm trusted publishing, checksums and a CycloneDX SBOM.
 - Node 20.20.2 and 22.23.4 passed 301 unit and adapter tests and 87 end-to-end tests. Core line coverage was 99.64%. Package checks, documented examples and browser report checks passed. Both container targets passed on arm64, and the slim image also passed on amd64.
+
+## M9.1 — Final 1.0.1 corrections
+
+Replaced runtime ExcelJS with streaming XML and a bounded shared-string cache backed by temporary files. Plain consumer installation, npm ci and npm audit passed with zero vulnerabilities for every combination of Node 20.20.2 and 22.23.4 with npm 10.9.9 and 11.6.0. The reported null.trim crash did not reproduce in the baseline environment; its failing audit and vulnerable runtime chain are documented.
+
+Fixed short and encoded secret redaction, formats selected per source, rollup explanations and warning persistence. Reports prioritize unexplained findings and include matching final missing keys. Release retries verify existing assets and registry integrity. Both image variants install the same checksummed tarball and support amd64 and arm64 with verified provenance and SBOM attestations.
+
+Both Node versions passed lint, type checks, 341 unit and adapter tests and 98 end-to-end tests. Core line coverage was 98.64%. Documented examples, offline installation, upstream fixture verification and regenerated screenshots passed review. Both container variants passed platform smoke checks; native arm64 Chromium also passed. Repository formatting was isolated in a separate style commit. Release publication was not executed.
