@@ -1,3 +1,4 @@
+import { checkReleaseText } from './check-release-text.mjs';
 import { buildOfflineKit } from './offline-kit.mjs';
 import { packArtifact } from './pack.mjs';
 import { execFile } from 'node:child_process';
@@ -21,6 +22,7 @@ const npm = (args, cwd = root) =>
     maxBuffer: 16 * 1024 * 1024,
   });
 try {
+  await checkReleaseText(root);
   await mkdir(output, { recursive: true });
   const packed = await packArtifact(output);
   const archive = join(output, packed.filename);

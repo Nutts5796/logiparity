@@ -63,3 +63,18 @@ for (const file of [
     .join('\n');
   await writeFile(path, next);
 }
+
+// Version only the published schema identities and references, never arbitrary prose.
+for (const file of ['docs/report-schema.json', 'docs/scenario-report-schema.json']) {
+  const path = resolve(root, file),
+    schema = JSON.parse(await readFile(path, 'utf8'));
+  const update = (value) => {
+    if (!value || typeof value !== 'object') return;
+    for (const [key, item] of Object.entries(value))
+      if ((key === '$id' || key === '$ref') && typeof item === 'string')
+        value[key] = item.replace(`/v${previous}/`, `/v${version}/`);
+      else update(item);
+  };
+  update(schema);
+  await writeFile(path, JSON.stringify(schema, null, 2) + '\n');
+}

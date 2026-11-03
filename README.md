@@ -49,7 +49,7 @@ npm install --save-dev --save-exact pg@8.23.1 pg-query-stream@4.17.1 pgsql-ast-p
 
 These are optional peers loaded only for UI or SQL configurations. Missing peers fail with exit 2 and the exact install command. External runtime dependencies are exact-pinned ordinary dependencies, so consumer `overrides` can patch them. See [dependencies and sizes](docs/dependencies.md) and the [offline kit](docs/release.md#offline-installation).
 
-The commands below describe 1.1.0, currently **Unreleased**. To review it before publication, install the locally prepared `logiparity-1.1.0.tgz` instead of the registry package. Published 1.0.0 does not include the `demo` command.
+Version **1.1.0** adds the installed demo, optional browser parity and independent currency reconciliation.
 
 ## Quickstart
 
@@ -208,7 +208,7 @@ The [synthetic freight day](examples/freight/README.md) covers carrier settlemen
 
 ## How it is tested
 
-The M10.2 review passed 528 [unit](https://github.com/Nutts5796/logiparity/tree/main/tests/unit) and [adapter](https://github.com/Nutts5796/logiparity/tree/main/tests/adapters) tests. The 113 passing [end-to-end tests](https://github.com/Nutts5796/logiparity/tree/main/tests/e2e) exercise real Chromium, disposable PostgreSQL and synthetic HTTP services. Unit/adapter line coverage is 91.22% (3,109/3,408), above the 80% gate: core 97.13%, adapters 91.10%, scenarios 82.39% and CLI 49.39%. Scenario runner.ts and CLI subprocess behavior are exercised by e2e and installed-package checks and do not increase unit-process coverage.
+The automated suite passed 564 [unit](https://github.com/Nutts5796/logiparity/tree/main/tests/unit) and [adapter](https://github.com/Nutts5796/logiparity/tree/main/tests/adapters) tests. The 116 passing [end-to-end tests](https://github.com/Nutts5796/logiparity/tree/main/tests/e2e) exercise real Chromium, disposable PostgreSQL and synthetic HTTP services. Coverage includes core, adapters, scenarios and CLI; packages/ai is tested but excluded from this coverage figure. Unit/adapter line coverage is 91.84% (3,233/3,520), above the 80% gate: core 97.22%, adapters 90.93%, scenarios 82.29% and CLI 60.59%. Scenario runner.ts and CLI subprocess behavior are exercised by e2e and installed-package checks and do not increase unit-process coverage.
 
 Installed-package checks cover both optional-peer profiles, public imports and declarations, installed demo/scenario commands and empty-cache offline installation. Six clean consumer profiles on npm 10.9.9 and 11.6.0 passed plain npm install, npm ci, npm audit and npm audit signatures, including coexistence with Playwright 1.63.0 and pg 8.16.0. The clean-source quickstart executed the README commands, including plain npm ci, and checked all report formats.
 
@@ -216,7 +216,7 @@ The seeded property-based test [filter-contributions.test.ts](https://github.com
 
 ## How it was built
 
-AI coding agents generated the code, tests and documentation under the maintainer’s commit account. The maintainer wrote milestone specifications and acceptance criteria, triaged review rounds, verified fixes and chose the report design, including readable labels, dates and reconciliation instead of decorative charts. The first-person [origin stories](docs/design-decisions.md) are the maintainer’s own accounts. See the [build history](https://github.com/Nutts5796/logiparity/blob/main/docs/development/milestones.md) and the selected [variant E design reference](https://github.com/Nutts5796/logiparity/tree/main/docs/design), which is excluded from the npm package.
+AI coding agents generated the code, tests and documentation under the maintainer’s commit account. The maintainer wrote milestone specifications and acceptance criteria, triaged review rounds using simulated reviewer personas (AI agents), not human testers or users, verified fixes and chose the report design, including readable labels, dates and reconciliation instead of decorative charts. The first-person [origin stories](docs/design-decisions.md) are the maintainer’s own accounts. See the [build history](https://github.com/Nutts5796/logiparity/blob/main/docs/development/milestones.md) and the selected [variant E design reference](https://github.com/Nutts5796/logiparity/tree/main/docs/design), which is excluded from the npm package.
 
 ## Verify
 
@@ -235,7 +235,7 @@ gh attestation verify "oci://$LOGIPARITY_IMAGE" --repo Nutts5796/logiparity
 docker run --rm "$LOGIPARITY_IMAGE" --version
 ```
 
-A 1.1.0 digest will exist only after publication. Use a CI variable for the reference, then set the CI variable to the verified digest from the release notes; no source commit is required for variable-based templates. Do not combine a 1.0.0 image with a 1.1.0 CLI.
+Use the verified 1.1.0 digest in the release notes as a CI variable, then set the CI variable to the verified digest from the release notes; no source commit is required for variable-based templates. Do not combine a 1.0.0 image with a 1.1.0 CLI.
 
 ## Safety
 
@@ -243,7 +243,7 @@ Test and staging only. Read-only except scenario events you map yourself. No tel
 
 ## Status
 
-1.0.0 is published; 1.1.0 is under review. Maintained by Sergei Orekhovskii.
+Version 1.1.0 — 2026-11-04. Maintained by Sergei Orekhovskii.
 
 Pilots and feedback: share a sanitized use case or defect through [Issues](https://github.com/Nutts5796/logiparity/issues).
 
@@ -263,7 +263,7 @@ Sergei Orekhovskii, the maintainer, is a QA engineer who previously ran transpor
 
 Node 22+ is required. UI/SQL adapters now use optional peers; install the adapters you need or use the matching full image. Playwright supports `>=1.63.0 <2.0.0` with a runtime check; tests cover 1.63.0 and 1.64.1. PostgreSQL peer ranges are listed in [dependencies](docs/dependencies.md).
 
-Text `where` filters are case-insensitive by default; set source `caseSensitive: true` to retain exact matching. The first row of a duplicate key now counts once in totals. Invalid cells produce `invalid_value` findings in the new default `invalid` failOn category: add it to explicit lists to block bad cells. Fixtures must remain within the scenario directory tree, including symlinks; move a 1.0 `../fixtures` directory under the scenario directory. Mutation targets require `allowedHosts`. Every interpolated environment value is secret unless its name is in `publicEnv`. Money still rejects excess precision unless rounding is explicitly enabled.
+Text `where` filters are case-insensitive by default; set source `caseSensitive: true` to retain exact matching. The first row of a duplicate key now counts once in totals. New resource defaults stop a source above 100,000 physical rows (`entities[].sources.<name>.maxRows`) or a report above 10,000 findings (`maxFindings`) with exit 2. Previously those inputs could finish with exit 0 or 1. Raise the relevant setting together with the Node heap, for example `NODE_OPTIONS=--max-old-space-size=6144`, after reviewing memory use. Invalid cells produce `invalid_value` findings in the new default `invalid` failOn category: add it to explicit lists to block bad cells. Fixtures must remain within the scenario directory tree, including symlinks; move a 1.0 `../fixtures` directory under the scenario directory. Mutation targets require `allowedHosts`. Every interpolated environment value is secret unless its name is in `publicEnv`. Money still rejects excess precision unless rounding is explicitly enabled.
 
 The 21 former core helper exports are restored as deprecated aliases until 2.0, including SourceError, ConfigError and policy helpers; the complete list and retained type aliases are in [public API notes](docs/public-api.md#deprecated-compatibility-exports). Use the supported entry points when updating integrations.
 

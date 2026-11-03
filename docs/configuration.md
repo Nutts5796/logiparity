@@ -169,7 +169,7 @@ report:
   displayTimezone: America/Chicago
 ```
 
-Defaults are `outputs: [console, json]`, `dir: ./logiparity-report`, `fileMode: '0600'`, `displayTimezone: UTC`. Octal mode strings or numeric modes 0–511 are accepted; fileMode allows a shared host group/UID setup in containers. Writers replace complete reports atomically, refuse symlink destinations and apply the requested mode. See [formats](report-formats.md) and the [parity/scenario JSON schemas](report-schema.md). All writers remove unsafe controls and line separators and redact configured secrets. HTML embeds fonts and works offline.
+Defaults are `outputs: [console, json]`, `dir: ./logiparity-report`, `fileMode: '0600'`, `displayTimezone: UTC`. Use a quoted octal string such as `'0640'` or `'0o640'`; unquoted numeric modes are rejected to avoid YAML decimal/octal ambiguity; fileMode allows a shared host group/UID setup in containers. Writers replace complete reports atomically, refuse symlink destinations and apply the requested mode. See [formats](report-formats.md) and the [parity/scenario JSON schemas](report-schema.md). All writers remove unsafe controls and line separators and redact configured secrets. HTML embeds fonts and works offline.
 
 ## Environment guard and redaction
 

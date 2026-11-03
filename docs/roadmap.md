@@ -26,3 +26,5 @@ Next areas to explore:
 - An affected_reassigned invariant that verifies reassignment after a disruption.
 - A scenario validate command for mutation-free preflight.
 - Optional Playwright and PostgreSQL adapters through optional or peer dependencies, keeping a CSV and REST installation small.
+
+- Add a documented EDI 210/214 CSV-mapping example: export invoice/status segments to normalized load/charge tables at the same cutoff, map carrier codes explicitly and compare those tables. This is a planned CSV workflow, not a native EDI decoder or a tested EDI fixture.

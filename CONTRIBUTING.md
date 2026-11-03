@@ -42,7 +42,7 @@ The package check verifies an empty-cache offline installation and public API de
 
 Use strict TypeScript, ESM and clear errors that identify the source, record or config path. Avoid `any`. Preserve decimal text for money unless numeric input is explicitly enabled. Keep runtime dependency versions exact and permissively licensed; optional peers use tested compatible ranges. regenerate `docs/dependencies.md` with `node scripts/dependencies.mjs` after changing runtime dependencies.
 
-New commits use Conventional Commits (adopted in M10.2; earlier history predates this rule), such as `fix: detect capped REST pages`. In the pull request, explain the user-visible problem, resulting behavior and checks performed. Include minimal synthetic fixtures, never tokens, browser storageState, private endpoints or customer records. Keep AI tests local and mock-based. Follow the [code of conduct](CODE_OF_CONDUCT.md), and use [private vulnerability reporting](SECURITY.md) for security issues.
+Use Conventional Commits, as in the M1–M10 history, such as `fix: detect capped REST pages`. In the pull request, explain the user-visible problem, resulting behavior and checks performed. Include minimal synthetic fixtures, never tokens, browser storageState, private endpoints or customer records. Keep AI tests local and mock-based. Follow the [code of conduct](CODE_OF_CONDUCT.md), and use [private vulnerability reporting](SECURITY.md) for security issues.
 
 Run `npm run format` before committing. CI checks Prettier with a 120-column print width. Embedded documentation examples remain literal because the quickstart executes them and compares the staging YAML with init. Verified upstream schema and license bytes are excluded from formatting.
 

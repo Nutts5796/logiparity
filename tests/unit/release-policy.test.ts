@@ -8,7 +8,7 @@ it('keeps release authority separate and only publishes npm on tag pushes', asyn
   expect(release.jobs.build.permissions).toEqual({ contents: 'read' });
   expect(release.jobs.lookup.permissions).toEqual({ contents: 'write' });
   expect(release.jobs.npm.permissions).toEqual({ 'id-token': 'write' });
-  expect(release.jobs.npm.if).toBe("github.event_name == 'push'");
+  expect(release.jobs.npm.if).toContain("github.event_name == 'push'");
   expect(release.jobs.notes.needs).toContain('images');
   for (const job of Object.values(release.jobs).filter(
     (job: unknown) => !!job && typeof job === 'object' && 'steps' in job,

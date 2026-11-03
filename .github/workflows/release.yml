@@ -47,7 +47,10 @@ jobs:
             printf 'exists=true\n' >> "$GITHUB_OUTPUT"
             version="${TAG#v}"
             for file in "logiparity-$version.tgz" "logiparity-$version.tgz.sha256" "logiparity-$version.cdx.json" "logiparity-offline-$version.tgz" "logiparity-offline-$version.tgz.sha256"; do
-              jq -e --arg file "$file" '.assets | any(.name == $file)' output/release/release-metadata.json
+              if ! jq -e --arg file "$file" '.assets | any(.name == $file)' output/release/release-metadata.json > /dev/null; then
+                printf 'Existing release is missing asset: %s\n' "$file" >&2
+                exit 1
+              fi
               gh release download "$TAG" --repo "$REPOSITORY" --pattern "$file" --dir output/release
             done
           elif grep -Eqi 'release not found|HTTP 404' lookup-error.txt; then
@@ -111,7 +114,7 @@ jobs:
           retention-days: 14
   attest:
     needs: build
-    if: needs.build.outputs.reused != 'true'
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.build.outputs.reused != 'true' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -131,7 +134,7 @@ jobs:
           sbom-path: output/release/logiparity-${{ needs.build.outputs.version }}.cdx.json
   draft:
     needs: [build, attest]
-    if: always() && needs.build.result == 'success' && (needs.attest.result == 'success' || needs.build.outputs.reused == 'true')
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.attest.result == 'success' || needs.build.outputs.reused == 'true') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -150,7 +153,7 @@ jobs:
   npm:
     environment: npm
     needs: [build, draft]
-    if: github.event_name == 'push'
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.draft.result == 'success' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -165,7 +168,7 @@ jobs:
       - run: node scripts/publish-release.mjs npm
   images:
     needs: [build, draft, npm]
-    if: always() && needs.draft.result == 'success' && (needs.npm.result == 'success' || github.event_name == 'workflow_dispatch')
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.draft.result == 'success' && (needs.npm.result == 'success' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -211,7 +214,7 @@ jobs:
           path: output/release/${{ matrix.target }}-image.json
   notes:
     needs: [build, npm, images]
-    if: always() && needs.images.result == 'success' && (needs.npm.result == 'success' || github.event_name == 'workflow_dispatch')
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.images.result == 'success' && (needs.npm.result == 'success' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

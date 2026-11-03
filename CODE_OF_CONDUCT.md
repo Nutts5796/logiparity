@@ -83,5 +83,3 @@ For answers to common questions about this code of conduct, see the FAQ at [http
 [translations]: https://www.contributor-covenant.org/translations
 
 Contributor Covenant is stewarded by the Organization for Ethical Source and licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The reporting contact above is adapted for this project. This document is separate from the software MIT license.
-
-For confidential conduct reports, use the same [GitHub private reporting](https://github.com/Nutts5796/logiparity/security/advisories/new), the same confidential channel listed in SECURITY.md.

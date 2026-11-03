@@ -11,6 +11,7 @@ const run = (command, args) => execute(command, args, { env: buildEnv, maxBuffer
 const version = JSON.parse(await readFile('package.json', 'utf8')).version;
 const tag = process.env.TAG;
 if (tag !== `v${version}`) throw new Error('Release tag must match package.json');
+await run('npm', ['run', 'check:release-text']);
 const directory = 'output/release';
 await mkdir(directory, { recursive: true });
 const metadata = JSON.parse(await readFile(join(directory, 'release-metadata.json'), 'utf8'));

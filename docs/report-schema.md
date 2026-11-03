@@ -1,6 +1,6 @@
 # JSON report schema, version 1
 
-The machine-readable [JSON Schema](report-schema.json) ships in the package. New optional properties may be added to schemaVersion 1; readers must tolerate unknown fields. Required meanings and money/time units remain stable. Removing fields or changing units requires a new schema version. Readers of older reports may encounter conflict `line` properties and display-string uncertain keys; new reports use physical `row` and key-part arrays. Version 1.1.0 is unreleased, so its review changes are included before publication.
+The machine-readable [JSON Schema](report-schema.json) ships in the package. New optional properties may be added to schemaVersion 1; readers must tolerate unknown fields. Required meanings and money/time units remain stable. Removing fields or changing units requires a new schema version. Readers of older reports may encounter conflict `line` properties and display-string uncertain keys; new reports use physical `row` and key-part arrays. Version 1.1.0 uses this version-1 contract.
 
 The root requires schemaVersion, entities and findings. Optional patterns.minCount is at least 3 (default 3). groups preserve exact findingIndexes and never contain fewer members than minCount. coverage.explained counts the union of supported pattern members and accounted aggregate findings; needsReview counts the remaining findings. Accounting does not change failure policy.
 
@@ -16,7 +16,7 @@ Object properties follow configuration order; findings sort naturally by entity,
 
 ## Package exports and scenario reports
 
-Import `logiparity/report-schema.json` and `logiparity/scenario-report-schema.json` (JSON import attributes depend on your runtime), or read the files under docs/ in the installed package. Their versioned raw `$id` URLs identify the 1.1.0 tag; they resolve publicly after publication. Validators can register both local schemas without network access.
+Import `logiparity/report-schema.json` and `logiparity/scenario-report-schema.json` (JSON import attributes depend on your runtime), or read the files under docs/ in the installed package. Their versioned raw `$id` URLs identify the 1.1.0 tag; they identify the corresponding versioned release. Validators can register both local schemas without network access.
 
 The [scenario schema](scenario-report-schema.json) describes `kind: scenario`, events, invariants, affectedOrderCount, runtime errors and optional nested Parity. Both wire schemas use version 1: consumers must tolerate additive optional fields; required meanings or money/time units cannot change without a schema version change. Runtime error reports may contain only the state collected before failure.
 

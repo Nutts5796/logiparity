@@ -7,7 +7,8 @@ const require = createRequire(import.meta.url);
 it('exports both schemas through public package paths and uses versioned raw IDs (david)', async () => {
   for (const file of ['report-schema.json', 'scenario-report-schema.json']) {
     const schema = parseCheckedJson(await readFile(require.resolve('logiparity/' + file), 'utf8'));
-    expect(schema.$id).toMatch(/^https:\/\/raw\.githubusercontent\.com\/Nutts5796\/logiparity\/v1\.1\.0\/docs\//);
+    const version = parseCheckedJson(await readFile('package.json', 'utf8')).version;
+    expect(schema.$id).toBe(`https://raw.githubusercontent.com/Nutts5796/logiparity/v${version}/docs/${file}`);
   }
 });
 it('checks the emitted accounting, location, evidence, currency and group contracts (david)', async () => {

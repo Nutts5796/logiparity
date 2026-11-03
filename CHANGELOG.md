@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.1.0] - Unreleased
+## [1.1.0] - 2026-11-04
 
 ### Added
 
@@ -17,6 +17,8 @@
 
 ### Fixed
 
+- Mapping causes now distinguish lagging values from vocabularies using matched rows; known page sizes constrain page-boundary causes; uncertain totals retain explanations in every format. AI explain validates real reports with the shipped schema.
+- Release text and schema-version gates, safe pasted tag recipes, reused-asset downstream jobs, quoted octal file modes and report-directory symlink refusal.
 - Corrupted diagnostic text from field-label substitution; untyped CSV/XLSX/REST equality; explicit offsets in XLSX date cells; duplicated currency findings and mixed-currency reconciliation; duplicate totals and tolerated changes across filters.
 - Interrupted page-boundary patterns, missing post-scenario parity counts, invalid-reference details, bounded timezone advice and scenario/fixture realism.
 - Configuration diagnostics, invalid failOn starters, stale demo ports, installed browser checks, CLI argument handling, report layout and documentation consistency.
@@ -30,7 +32,7 @@
 
 ### Upgrading from 1.0.x
 
-Install UI/SQL optional peers when needed. Use Node 22+. Text `where` is now case-insensitive by default (`caseSensitive: true` restores exact matching); the first duplicate row counts once in totals. Include the new `invalid` category in explicit failOn lists. Move `../fixtures` beneath the scenario directory; realpaths must stay inside it. Mutation targets require allowedHosts; interpolated environment values are secret unless listed in publicEnv. Money rounding remains explicit. The 21 restored core helpers and AI/scenario compatibility helpers are deprecated until 2.0; see [public API notes](docs/public-api.md#deprecated-compatibility-exports).
+Install UI/SQL optional peers when needed. Use Node 22+. Text `where` is now case-insensitive by default (`caseSensitive: true` restores exact matching); the first duplicate row counts once in totals. New defaults cap each source at 100,000 physical rows and reports at 10,000 findings, returning exit 2 instead of a former exit 0/1. Raise source maxRows or root maxFindings together with Node heap capacity (for example NODE_OPTIONS=--max-old-space-size=6144). Include the new `invalid` category in explicit failOn lists. Move `../fixtures` beneath the scenario directory; realpaths must stay inside it. Mutation targets require allowedHosts; interpolated environment values are secret unless listed in publicEnv. Money rounding remains explicit. The 21 restored core helpers and AI/scenario compatibility helpers are deprecated until 2.0; see [public API notes](docs/public-api.md#deprecated-compatibility-exports).
 
 ## [1.0.0] - 2026-11-02
 
@@ -40,5 +42,5 @@ Install UI/SQL optional peers when needed. Use Node 22+. Text `where` is now cas
 - Console, HTML, Markdown, JSON and JUnit reports, disruption scenarios and local AI draft previews.
 - Synthetic delivery fixtures, public APIs, container images and staging CI examples.
 
-[1.1.0]: https://github.com/Nutts5796/logiparity/compare/v1.0.0...HEAD
+[1.1.0]: https://github.com/Nutts5796/logiparity/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Nutts5796/logiparity/releases/tag/v1.0.0

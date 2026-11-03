@@ -57,7 +57,7 @@ it('removes release credentials from npm subprocesses even if supplied by the pa
       .trim()
       .split('\n')
       .map((line) => parseCheckedJson(line));
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
     for (const call of calls) {
       expect(call.gh).toBeUndefined();
       expect(call.github).toBeUndefined();
@@ -72,6 +72,8 @@ it('bumps only package identities and explicit install settings in a scratch 1.2
   try {
     for (const folder of ['scripts', 'packages/core', 'packages/cli/src', 'apps', 'docs', 'templates'])
       await mkdir(join(dir, folder), { recursive: true });
+    await cp('docs/report-schema.json', join(dir, 'docs/report-schema.json'));
+    await cp('docs/scenario-report-schema.json', join(dir, 'docs/scenario-report-schema.json'));
     await cp('scripts/bump-version.mjs', join(dir, 'scripts/bump-version.mjs'));
     await writeFile(
       join(dir, 'package.json'),

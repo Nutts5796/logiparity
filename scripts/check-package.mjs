@@ -1,3 +1,4 @@
+import { checkReleaseText } from './check-release-text.mjs';
 import { parseCheckedJson } from './validate-report.mjs';
 import { buildOfflineKit } from './offline-kit.mjs';
 import { checkInstalledDemo } from './check-installed-demo.mjs';
@@ -23,6 +24,7 @@ const npm = (args, cwd = root) =>
     timeout: 120000,
   });
 try {
+  await checkReleaseText(root);
   await assert.rejects(npm(['pack', '--dry-run']), /pack:artifact/);
   const suppliedArchive = process.env.LOGIPARITY_TARBALL ? resolve(process.env.LOGIPARITY_TARBALL) : undefined;
   const dry = suppliedArchive
@@ -114,6 +116,7 @@ try {
   await mkdir(install);
   await npm(['init', '-y'], install);
   await npm(['install', join(temporary, packed.filename)], install);
+  await checkReleaseText(join(install, 'node_modules/logiparity'));
   const consumerLock = await readFile(join(install, 'package-lock.json'), 'utf8');
   await rm(join(install, 'node_modules'), { recursive: true, force: true });
   await npm(['ci'], install);
@@ -168,8 +171,8 @@ try {
         assert(
           result.stderr.includes(
             kind === 'ui'
-              ? 'npm install --save-dev --save-exact playwright@1.63.0'
-              : 'npm install --save-dev --save-exact pg@8.16.0 pg-query-stream@4.17.1 pgsql-ast-parser@12.0.2',
+              ? 'npm install --save-dev --save-exact playwright@1.64.1'
+              : 'npm install --save-dev --save-exact pg@8.23.1 pg-query-stream@4.17.1 pgsql-ast-parser@12.0.2',
           ),
         );
     }

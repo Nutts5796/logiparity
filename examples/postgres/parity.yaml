@@ -25,4 +25,4 @@ entities:
       - { name: payout_total, type: sum, field: payout }
 report:
   outputs: [console, html, json, markdown]
-  dir: ../../logiparity-report-postgres
+  dir: ./logiparity-report-postgres
