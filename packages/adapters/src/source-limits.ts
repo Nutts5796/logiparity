@@ -9,7 +9,7 @@ export async function* limitSourceRows(
   for await (const row of rows) {
     if (++count > limit)
       throw new SourceError(
-        `${config.label ?? context.sourceName ?? config.type}: source exceeds maxRows (${limit}). Reduce the export or increase the reviewed limit.`,
+        `${config.label ?? context.sourceName ?? config.type}: source exceeds maxRows (${limit.toLocaleString('en-US')}). Reduce the export, or raise maxRows together with Node memory, for example NODE_OPTIONS=--max-old-space-size=6144.`,
       );
     yield row;
   }

@@ -83,7 +83,7 @@ async function getPage(
       const rowGuard = new JsonRowLimit(
         config.items,
         remainingRows,
-        `${sourceName}: response exceeds maxRows (${config.maxRows}); reduce the export or increase the reviewed limit.`,
+        `${sourceName}: response exceeds maxRows (${config.maxRows.toLocaleString('en-US')}). Reduce the export, or raise maxRows together with Node memory, for example NODE_OPTIONS=--max-old-space-size=6144.`,
       );
       const sizeError = `${sourceName}: response exceeds maxResponseBytes (${(config.maxResponseBytes / (1024 * 1024)).toLocaleString('en-US', { maximumFractionDigits: 3 })} MiB).`;
       const declared = Number(response.headers.get('content-length'));

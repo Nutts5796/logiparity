@@ -45,7 +45,7 @@ Fields map logical names to paths, column headers or selectors. `{path: ..., lab
 
 ## Common source options and filters
 
-Every source accepts `label`, `fields`, `where`, `caseSensitive` (false), `unique` (empty), `rollup`, `maxRows` (100,000, maximum 10,000,000), `locale`, `numberFormat`, `datetimeFormat` and `currencyField`. Row limits count physical input records before filtering; exceeding a limit yields a source error. The engine indexes the reference and one candidate in memory; increase limits only with enough memory.
+Every source accepts `label`, `fields`, `where`, `caseSensitive` (false), `unique` (empty), `rollup`, `maxRows` (100,000, maximum 10,000,000), `locale`, `numberFormat`, `datetimeFormat` and `currencyField`. Row limits count physical input records before filtering; exceeding a limit yields a source error. The engine indexes the reference and one candidate in memory. With Node's default heap (about 2 GB on an 8 GB Mac), two 1,000,000-row CSV sources with six columns ran out of memory; the same check passed with `NODE_OPTIONS=--max-old-space-size=6144`. Raise `maxRows` together with the heap size.
 
 `where` combines fields with AND. Values can be scalar equality, a nonempty list, or `{not: value}` / `{not: [values]}`. The same predicate grammar applies to source, rollup and aggregate filters. Text equality is case-insensitive by default; set source `caseSensitive: true` for exact text matching. Typed filter values use their field normalization without comparison tolerances; untyped values use canonical strings. Quote money in major units: `{pay: "10.00"}`. Source filters run before unrelated cells are parsed; an all-filtered source warns with its entity/source and applied predicates.
 

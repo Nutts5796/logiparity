@@ -38,6 +38,7 @@ it('stops a source at its row limit and truncates excessive findings with a runt
   const rowReport = await checkedReport(compareEntities([config], rows));
   expect(reportExitCode(rowReport)).toBe(2);
   expect(rowReport.findings[0]?.message).toContain('maxRows');
+  expect(rowReport.findings[0]?.message).toContain('--max-old-space-size');
   for (const source of Object.values(config.sources)) Object.assign(source, { maxRows: 100 });
   const report = await checkedReport(
     compareEntities(

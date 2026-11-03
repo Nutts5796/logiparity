@@ -362,7 +362,7 @@ export async function readSource(
       records++;
       if (records > (config.maxRows ?? 100000))
         throw new Error(
-          `Source ${source} exceeds maxRows (${config.maxRows}). Reduce the export or increase the reviewed limit.`,
+          `Source ${source} exceeds maxRows (${(config.maxRows ?? 100000).toLocaleString('en-US')}). Reduce the export, or raise maxRows together with Node memory, for example NODE_OPTIONS=--max-old-space-size=6144.`,
         );
       if (state.issues.length > maxFindings) throw new Error(`Source ${source} exceeds maxFindings (${maxFindings}).`);
       state.position = raw[sourceRow] ?? records;
