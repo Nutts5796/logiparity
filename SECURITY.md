@@ -22,7 +22,7 @@ AI commands preview locally by default. --send and complete provider configurati
 | ------------------ | --------------------------------- |
 | Latest 1.x release | Supported                         |
 | Older 1.x patches  | Upgrade to the latest 1.x release |
-| 1.1.x              | Supported; 1.1.0 dated 2026-11-04 |
+| 1.1.x              | Supported; 1.1.0 dated 2026-11-03 |
 
 The maintainer aims to acknowledge private reports within seven days and provide an initial assessment or progress update within 30 days. This is an expected response time, not a guaranteed service level.
 

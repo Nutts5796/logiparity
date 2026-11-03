@@ -243,7 +243,7 @@ Test and staging only. Read-only except scenario events you map yourself. No tel
 
 ## Status
 
-Version 1.1.0 — 2026-11-04. Maintained by Sergei Orekhovskii.
+Version 1.1.0 — 2026-11-03. Maintained by Sergei Orekhovskii.
 
 Pilots and feedback: share a sanitized use case or defect through [Issues](https://github.com/Nutts5796/logiparity/issues).
 

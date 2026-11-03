@@ -1,6 +1,6 @@
 # Release procedure
 
-Release only reviewed changes. Version 1.1.0 is dated 2026-11-04; 1.0.1 was never published and its notes are folded into 1.1.0. Local preparation never pushes, tags or publishes. Use `npm run pack:artifact` for the sanitized CLI alone or `npm run release:prepare` for the complete release assets. Direct workspace `npm pack`/`npm publish` is rejected so a manifest with development fields cannot be distributed accidentally; release jobs publish the reviewed tarball.
+Release only reviewed changes. Version 1.1.0 is dated 2026-11-03; 1.0.1 was never published and its notes are folded into 1.1.0. Local preparation never pushes, tags or publishes. Use `npm run pack:artifact` for the sanitized CLI alone or `npm run release:prepare` for the complete release assets. Direct workspace `npm pack`/`npm publish` is rejected so a manifest with development fields cannot be distributed accidentally; release jobs publish the reviewed tarball.
 
 ## One-time setup
 
@@ -27,7 +27,7 @@ npm run test:docker
 npm run release:prepare
 ```
 
-Use the intended next version in the bump command. It updates all first-party manifests, lockfile records and the CLI version module. Review changelog and generated assets, confirm the planned publication date (2026-11-04 for 1.1.0), and commit. After release approval:
+Use the intended next version in the bump command. It updates all first-party manifests, lockfile records and the CLI version module. Review changelog and generated assets, confirm the planned publication date (2026-11-03 for 1.1.0), and commit. After release approval:
 
 ```sh
 (
