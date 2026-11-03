@@ -117,9 +117,11 @@ describe('streaming file adapters', () => {
     sheet.addRow(['ID', 'Value']);
     sheet.addRow(['A', { formula: '1+1' }]);
     await workbook.xlsx.writeFile(join(baseDir, 'test.xlsx'));
-    await expect(
-      collect(readFileSource(config({ type: 'xlsx', file: 'test.xlsx', sheet: 'Data' }), { baseDir, env: {} })),
-    ).rejects.toThrow('cached result');
+    const badCells = await collect(
+      readFileSource(config({ type: 'xlsx', file: 'test.xlsx', sheet: 'Data' }), { baseDir, env: {} }),
+    );
+    expect(badCells[0]?.value).toBeInstanceOf(Error);
+    expect(String(badCells[0]?.value)).toContain('cached result');
     await writeFile(join(baseDir, 'bad.xlsx'), 'bad zip');
     await expect(
       collect(readFileSource(config({ type: 'xlsx', file: 'bad.xlsx', sheet: 'Data' }), { baseDir, env: {} })),

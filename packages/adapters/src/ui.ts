@@ -2,14 +2,24 @@ import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
-import { fieldPaths, SourceError, type AdapterContext, type DataRow, type UiConfig } from '@logiparity/core';
+import {
+  assertAllowedHost,
+  fieldPaths,
+  withSourceRow,
+  SourceError,
+  type AdapterContext,
+  type DataRow,
+  type UiConfig,
+} from '@logiparity/core';
 
 export async function* readUi(config: UiConfig, context: AdapterContext): AsyncIterable<DataRow> {
+  assertAllowedHost(config.url, context.allowedHosts, 'UI');
   let browser: Browser | undefined;
   let session: BrowserContext | undefined;
   let page: Page | undefined;
   let violation: SourceError | undefined;
   let pageNumber = 1;
+  let rowNumber = 1;
   let stage = 'launch Chromium (run npx playwright install chromium if it is missing)';
   try {
     browser = await chromium.launch({ headless: true, timeout: Math.max(10000, config.timeoutMs) });
@@ -21,8 +31,20 @@ export async function* readUi(config: UiConfig, context: AdapterContext): AsyncI
       ...(config.storageState ? { storageState: resolve(context.baseDir, config.storageState) } : {}),
     });
     const origins = new Set([new URL(config.url).origin, ...config.allowedOrigins]);
+    const hostAllowed = (url: URL) => {
+      try {
+        assertAllowedHost(url, context.allowedHosts, 'UI');
+        return true;
+      } catch {
+        return false;
+      }
+    };
     const allowed = (url: URL) =>
-      ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && origins.has(url.origin);
+      hostAllowed(url) &&
+      ['http:', 'https:'].includes(url.protocol) &&
+      !url.username &&
+      !url.password &&
+      origins.has(url.origin);
     const assertOrigin = () => {
       if (violation) throw violation;
       if (page && !allowed(new URL(page.url()))) throw new SourceError('Page navigation left allowedOrigins.');
@@ -100,7 +122,7 @@ export async function* readUi(config: UiConfig, context: AdapterContext): AsyncI
       if (visited.has(digest))
         throw new SourceError('Pagination repeated earlier rows; correct nextPage or the target paginator.');
       visited.add(digest);
-      yield* extracted.records;
+      for (const record of extracted.records) yield withSourceRow(record, ++rowNumber);
       if (!config.nextPage) return;
       stage = `nextPage selector ${config.nextPage}; ensure it exists on the first page and disables/disappears at the end`;
       const next = page.locator(config.nextPage);

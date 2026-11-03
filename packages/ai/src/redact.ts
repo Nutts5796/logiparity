@@ -42,7 +42,7 @@ function redactCredentials(text: string, collect: (...values: string[]) => void)
       return value;
     }
   };
-  text = text.replace(/\b([a-z][a-z0-9+.-]*:\/\/)([^/\s@]*)@/gi, (_, scheme: string, userinfo: string) => {
+  text = text.replace(/\b([a-z][a-z0-9+.-]*:\/\/)([^/\s?#]*)@/gi, (_, scheme: string, userinfo: string) => {
     const separator = userinfo.indexOf(':');
     if (separator >= 0) {
       const user = userinfo.slice(0, separator);
@@ -55,14 +55,21 @@ function redactCredentials(text: string, collect: (...values: string[]) => void)
     return `${scheme}${redacted}@`;
   });
   text = text.replace(
-    /\b((?:proxy-)?authorization)[ \t]*[=:][ \t]*(\S+)[ \t]+([^\r\n,;]+)/gi,
+    /("(?:proxy-)?authorization"\s*:\s*")([^"\\]*(?:\\.[^"\\]*)*)"/gi,
+    (_match, prefix: string, credentials: string) => {
+      collect(credentials);
+      return `${prefix}${redacted}"`;
+    },
+  );
+  text = text.replace(
+    /\b((?:proxy-)?authorization)[ \t]*[=:][ \t]*(\S+)[ \t]+([^\r\n]+)/gi,
     (_, name: string, scheme: string, credentials: string) => {
       collect(credentials, decoded(credentials));
       return `${name}: ${scheme} ${redacted}`;
     },
   );
   text = text.replace(
-    /\b([A-Za-z_][A-Za-z0-9_.-]*)[ \t]*([=:])[ \t]*(?:"([^"\r\n]*)"|'([^'\r\n]*)'|([^\s,&#?<>]+))/g,
+    /["']?\b([A-Za-z_][A-Za-z0-9_.-]*)["']?[ \t]*([=:])[ \t]*(?:"([^"\r\n]*)"|'([^'\r\n]*)'|([^\s,&#?<>]+))/g,
     (
       match,
       name: string,
@@ -84,7 +91,11 @@ function redactCredentials(text: string, collect: (...values: string[]) => void)
     collect(value, decoded(value));
     return `${separator}${key}=${redacted}`;
   });
-  return text.replace(/\bBearer[ \t]+([^\s"'<>`,;]+)/gi, (_, token: string) => {
+  text = text.replace(/\bDigest[ \t]+([^\r\n]+)/gi, (_match, credentials: string) => {
+    collect(credentials);
+    return `Digest ${redacted}`;
+  });
+  return text.replace(/\bBearer[ \t]*:?[ \t]+([^\s"'<>`,;]+)/gi, (_, token: string) => {
     collect(token);
     return `Bearer ${redacted}`;
   });

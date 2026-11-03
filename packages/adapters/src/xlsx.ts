@@ -1,3 +1,4 @@
+import { xlsxLimits } from './xlsx-limits.js';
 import { posix } from 'node:path';
 import unzipper from 'unzipper';
 import { xmlEvents } from './xlsx-xml.js';
@@ -85,7 +86,11 @@ async function readSharedStrings(entry: unzipper.File, strings: SharedStrings): 
       if (event.name === 'rPh') phonetic = true;
       if (event.name === 't') inText = true;
     }
-    if (event.type === 'text' && inText && !phonetic) value += event.text;
+    if (event.type === 'text' && inText && !phonetic) {
+      if (value.length + event.text.length > xlsxLimits.cellChars)
+        throw new Error('XLSX shared string exceeds the 1 MiB cell limit.');
+      value += event.text;
+    }
     if (event.type === 'close') {
       if (event.name === 'rPh') phonetic = false;
       if (event.name === 't') inText = false;
@@ -173,6 +178,8 @@ export async function* xlsxRows(file: string, sheetName: string): AsyncIterable<
         }
         if (cell && event.name === 't') inText = true;
       } else if (event.type === 'text' && cell) {
+        if (cell.value.length + cell.text.length + event.text.length > xlsxLimits.cellChars)
+          throw new Error('XLSX cell exceeds the 1 MiB limit.');
         if (inValue) cell.value += event.text;
         if (inText) cell.text += event.text;
       } else if (event.type === 'close') {

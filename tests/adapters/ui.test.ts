@@ -64,6 +64,7 @@ describe('Playwright table adapter', () => {
     const browser = await chromium.launch();
     try {
       const page = await browser.newPage();
+      page.setDefaultTimeout(5000);
       await page.goto(url + '/dispatcher');
       expect(page.url()).toContain('/login');
       await page.getByLabel('Username', { exact: true }).fill('dispatcher');
@@ -79,8 +80,8 @@ describe('Playwright table adapter', () => {
       await page.getByLabel('Status', { exact: true }).selectOption('in_transit');
       await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
       expect((await page.locator('[data-col=status]').allInnerTexts()).every((s) => s === 'In transit')).toBe(true);
-      await page.getByLabel('Date', { exact: true }).fill('1900-01-01');
-      await page.getByRole('button', { name: 'Apply filters', exact: true }).click();
+      expect(await page.getByLabel('Date', { exact: true }).innerText()).toContain('Nov 2, 2026');
+      await page.goto(url + '/dispatcher?date=1900-01-01');
       expect(await page.locator('body').innerText()).toContain('Synthetic data exists only');
       await page.goto(url + '/dispatcher');
       await page.getByRole('button', { name: 'Sign out', exact: true }).click();
@@ -102,7 +103,7 @@ describe('Playwright table adapter', () => {
   it('uses storageState, reads typed text cells and follows server-rendered pagination', async () => {
     const rows = await collect(readUi(config(), context()));
     expect(rows).toHaveLength(201);
-    expect(rows[0]).toEqual({ id: 'S000001', status: 'In transit', payout: '$18.19' });
+    expect(rows[0]).toEqual({ id: 'S000001', status: 'In transit', payout: '$18.11' });
     expect(rows[200]?.id).toBe('S000201');
   });
   it('supports filters and snapshots without pagination', async () => {

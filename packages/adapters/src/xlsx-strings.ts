@@ -1,3 +1,5 @@
+import { xlsxLimits } from './xlsx-limits.js';
+import { registerXlsxTemp, unregisterXlsxTemp } from './xlsx-temp.js';
 import { mkdtemp, open, rm, type FileHandle } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -23,6 +25,7 @@ export class SharedStrings {
   ) {}
   static async create(): Promise<SharedStrings> {
     const directory = await mkdtemp(join(tmpdir(), 'logiparity-xlsx-'));
+    registerXlsxTemp(directory);
     try {
       return new SharedStrings(
         directory,
@@ -31,11 +34,15 @@ export class SharedStrings {
       );
     } catch (error) {
       await rm(directory, { recursive: true, force: true });
+      unregisterXlsxTemp(directory);
       throw error;
     }
   }
   async add(value: string): Promise<void> {
+    if (value.length > xlsxLimits.cellChars) throw new Error('XLSX shared string exceeds the 1 MiB cell limit.');
     const bytes = Buffer.from(value);
+    if (this.offset + bytes.length + (this.count + 1) * 16 > xlsxLimits.sharedBytes)
+      throw new Error('XLSX shared-string temporary disk quota exceeds 64 MiB.');
     if (bytes.length > 8 * 1024 * 1024) throw new Error('An XLSX shared string exceeds the 8 MiB cell limit.');
     const index = Buffer.alloc(16);
     index.writeBigUInt64LE(BigInt(this.offset));
@@ -100,6 +107,7 @@ export class SharedStrings {
       await Promise.all([this.data.close(), this.index.close()]);
     } finally {
       await rm(this.directory, { recursive: true, force: true });
+      unregisterXlsxTemp(this.directory);
     }
   }
 }

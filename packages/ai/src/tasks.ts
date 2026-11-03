@@ -21,11 +21,16 @@ const scalar = z.union([z.string(), z.number().finite(), z.boolean(), z.null()])
 const reportSchema = z
   .object({
     schemaVersion: z.literal(1),
+    patterns: z.object({ minCount: z.number().int().min(3) }).optional(),
     entities: z.array(
       z
         .object({
           entity: text,
           reference: text,
+          uniqueCounts: z.record(text, z.number().int().nonnegative()).optional(),
+          filters: z.record(text, z.unknown()).optional(),
+          rollupSources: z.array(text).optional(),
+          pluralLabel: text.optional(),
           counts: z.record(text, z.number().int().nonnegative()),
           aggregates: z
             .array(
@@ -35,6 +40,8 @@ const reportSchema = z
                   type: z.enum(['count', 'sum']),
                   values: z.record(text, z.union([z.string(), z.number().finite()])),
                   skippedSources: z.array(text),
+                  sourceStatus: z.record(text, z.enum(['certain', 'uncertain', 'not_mapped', 'not_read'])).optional(),
+                  uncertainKeys: z.record(text, z.array(text)).optional(),
                   reconciliation: z
                     .record(
                       text,
@@ -51,6 +58,8 @@ const reportSchema = z
                               .strict(),
                           ),
                           remainder: scalar,
+                          uncertain: z.object({ keys: z.array(text), amount: scalar }).optional(),
+                          causes: z.array(text).optional(),
                         })
                         .strict(),
                     )
@@ -99,6 +108,8 @@ const reportSchema = z
             'aggregate_mismatch',
             'duplicate_key',
             'source_error',
+            'invalid_value',
+            'duplicate_value',
           ]),
           entity: text,
           source: text,
@@ -111,6 +122,11 @@ const reportSchema = z
           reason: z.enum(['rollup_conflict', 'rollup_missing_value', 'rollup_duplicate']).optional(),
           blocking: z.boolean().optional(),
           screenshot: z.string().optional(),
+          keyParts: z.array(text).optional(),
+          row: z.number().int().positive().optional(),
+          relatedKeys: z.array(text).optional(),
+          amounts: z.array(z.object({ field: text, amount: scalar })).optional(),
+          accounting: z.object({ causes: z.array(text), remainder: z.string() }).optional(),
           referencePosition: z.number().int().positive().optional(),
         })
         .strict(),

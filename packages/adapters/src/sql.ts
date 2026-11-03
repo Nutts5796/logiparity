@@ -1,7 +1,14 @@
 import { finished } from 'node:stream/promises';
 import pg from 'pg';
 import QueryStream from 'pg-query-stream';
-import { fieldPath, SourceError, type AdapterContext, type DataRow, type SqlConfig } from '@logiparity/core';
+import {
+  assertAllowedHost,
+  fieldPath,
+  SourceError,
+  type AdapterContext,
+  type DataRow,
+  type SqlConfig,
+} from '@logiparity/core';
 import { validateReadOnlySql } from './sql-guard.js';
 
 export async function* readSql(config: SqlConfig, context: AdapterContext): AsyncIterable<DataRow> {
@@ -20,6 +27,7 @@ export async function* readSql(config: SqlConfig, context: AdapterContext): Asyn
       `SQL ${config.connectionEnv} must contain an explicit postgres:// or postgresql:// host/database URL; correct the environment variable.`,
     );
   }
+  assertAllowedHost(connection, context.allowedHosts, 'SQL');
   const client = new pg.Client({
     connectionString: connection,
     application_name: 'logiparity',

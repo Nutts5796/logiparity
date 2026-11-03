@@ -1,4 +1,5 @@
 import {
+  assertAllowedHost,
   fieldPath,
   type Adapter,
   type AdapterContext,
@@ -15,6 +16,10 @@ import { readSql } from './sql.js';
 
 export const adapters: Adapter = {
   read(config: SourceConfig, context: AdapterContext): AsyncIterable<DataRow> {
+    if (config.type === 'rest') assertAllowedHost(config.baseUrl, context.allowedHosts, 'REST');
+    if (config.type === 'ui') assertAllowedHost(config.url, context.allowedHosts, 'UI');
+    if (config.type === 'sql' && context.env[config.connectionEnv])
+      assertAllowedHost(context.env[config.connectionEnv] as string, context.allowedHosts, 'SQL');
     switch (config.type) {
       case 'rest':
         return readRest(config, context);
@@ -54,7 +59,7 @@ export function validateSource(config: SourceConfig): void {
 }
 
 /** Shared semantic checks for validate and check, with no source I/O. */
-export function validateConfig(config: Config): void {
+export function validateConfig(config: Config, env: NodeJS.ProcessEnv = process.env): void {
   for (const [index, entity] of config.entities.entries()) {
     const reference = Object.values(entity.sources)[0]!;
     for (const [field, rule] of Object.entries(entity.compare)) {
@@ -68,6 +73,12 @@ export function validateConfig(config: Config): void {
         if (!Object.hasOwn(entity.sources, name))
           throw new Error(`entities[${index}].compare.${field}.sourceTimezones.${name}: unknown source`);
     }
-    for (const source of Object.values(entity.sources)) validateSource(source);
+    for (const source of Object.values(entity.sources)) {
+      if (source.type === 'rest') assertAllowedHost(source.baseUrl, config.allowedHosts, 'REST');
+      if (source.type === 'ui') assertAllowedHost(source.url, config.allowedHosts, 'UI');
+      if (source.type === 'sql' && env[source.connectionEnv])
+        assertAllowedHost(env[source.connectionEnv] as string, config.allowedHosts, 'SQL');
+      validateSource(source);
+    }
   }
 }

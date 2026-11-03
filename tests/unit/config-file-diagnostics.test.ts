@@ -12,7 +12,7 @@ afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 async function directory() {
-  const dir = await mkdtemp(join(tmpdir(), 'logiparity-m7-'));
+  const dir = await mkdtemp(join(tmpdir(), 'logiparity-regression-'));
   dirs.push(dir);
   return dir;
 }

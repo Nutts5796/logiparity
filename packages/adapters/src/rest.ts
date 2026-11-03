@@ -1,4 +1,4 @@
-import { safeConsole, fieldPath } from '@logiparity/core';
+import { assertAllowedHost, connectionCause, safeConsole, fieldPath } from '@logiparity/core';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { AdapterContext, DataRow, RestConfig } from '@logiparity/core';
 import { selectJson, selectOne } from './jsonpath.js';
@@ -27,13 +27,13 @@ async function getPage(
     let response: Response;
     try {
       response = await fetch(url, { headers, redirect: 'error', signal: AbortSignal.timeout(config.timeoutMs) });
-    } catch {
+    } catch (error) {
       if (attempt < config.retries) {
         await delay(config.backoffMs * 2 ** attempt);
         continue;
       }
       throw new Error(
-        `GET ${url.origin}${url.pathname} failed or timed out after ${config.retries + 1} attempts; check connectivity, redirects and timeoutMs.`,
+        `GET ${url.origin}${url.pathname} ${connectionCause(error)} after ${config.retries + 1} attempts; check connectivity, redirects and timeoutMs.`,
       );
     }
     if ((response.status === 429 || response.status >= 500) && attempt < config.retries) {
@@ -47,7 +47,19 @@ async function getPage(
     if (!response.ok) {
       await response.body?.cancel();
       throw new Error(
-        `GET ${url.origin}${url.pathname} returned HTTP ${response.status}; check authentication, path and server health.`,
+        `GET ${url.origin}${url.pathname} returned HTTP ${response.status}; ${
+          response.status === 401 || response.status === 403
+            ? `check token environment ${
+                config.auth?.type === 'bearer'
+                  ? config.auth.tokenEnv
+                  : config.auth?.type === 'basic'
+                    ? `${config.auth.usernameEnv} and ${config.auth.passwordEnv}`
+                    : Object.values(config.headersEnv)
+                        .map((item) => (typeof item === 'string' ? item : item.env))
+                        .join(', ') || '(configure auth.tokenEnv)'
+              }`
+            : 'check path and server health'
+        }.`,
       );
     }
     try {
@@ -63,6 +75,7 @@ async function getPage(
 
 export async function* readRest(config: RestConfig, context: AdapterContext): AsyncIterable<DataRow> {
   const base = new URL(config.baseUrl);
+  assertAllowedHost(base, context.allowedHosts, 'REST');
   let url = safeUrl(config.path, base);
   const headers = new Headers({ accept: 'application/json', ...config.headers });
   for (const [header, reference] of Object.entries(config.headersEnv))
@@ -87,6 +100,7 @@ export async function* readRest(config: RestConfig, context: AdapterContext): As
     if (pagination?.type === 'offset') url.searchParams.set(pagination.offsetParam, String(position));
     if (visited.has(url.href)) throw new Error('Pagination repeated a URL or cursor; fix the next-page configuration.');
     visited.add(url.href);
+    assertAllowedHost(url, context.allowedHosts, 'REST');
     const { body, link } = await getPage(url, config, headers);
     const selected = selectJson(body, config.items);
     const items: unknown[] =
@@ -129,7 +143,7 @@ export async function* readRest(config: RestConfig, context: AdapterContext): As
         const message = `${location}; no completion signal is configured. This is an unverified short first page. Set totalPath, totalPagesPath or hasMorePath to verify completeness.`;
         if (!pagination.allowShortFirstPage)
           throw new Error(
-            `${message} Set allowShortFirstPage: true only to explicitly accept an unverified short first page.`,
+            `${message} Set size: ${items.length} to match the server cap, or allowShortFirstPage: true only to accept an unverified short first page.`,
           );
         (context.warn ?? console.warn)(safeConsole(message));
       }

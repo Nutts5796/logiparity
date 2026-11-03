@@ -1,3 +1,4 @@
+import { XmlBudget, xlsxLimits } from './xlsx-limits.js';
 import { StringDecoder } from 'node:string_decoder';
 import { SaxesParser } from 'saxes';
 import type unzipper from 'unzipper';
@@ -10,6 +11,11 @@ const local = (name: string) => name.slice(name.lastIndexOf(':') + 1);
 
 // Drain one ZIP chunk at a time so neither XML events nor worksheet rows grow with the workbook.
 export async function* xmlEvents(entry: unzipper.File): AsyncIterable<XmlEvent> {
+  if (entry.uncompressedSize > xlsxLimits.xmlBytes)
+    throw new Error('XLSX XML exceeds the 128 MiB decompression quota.');
+  if (entry.uncompressedSize > Math.max(1024 * 1024, entry.compressedSize * xlsxLimits.compressionRatio))
+    throw new Error('XLSX decompression ratio exceeds 200:1.');
+  const budget = new XmlBudget(entry.compressedSize);
   const stream = entry.stream();
   const parser = new SaxesParser();
   const decoder = new StringDecoder('utf8');
@@ -23,7 +29,10 @@ export async function* xmlEvents(entry: unzipper.File): AsyncIterable<XmlEvent> 
   });
   try {
     for await (const chunk of stream) {
-      parser.write(decoder.write(chunk as Buffer));
+      const buffer = chunk as Buffer;
+      const decoded = decoder.write(buffer);
+      budget.consume(decoded, buffer.length);
+      parser.write(decoded);
       yield* events;
       events = [];
     }

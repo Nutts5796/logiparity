@@ -2,7 +2,14 @@ import { createReadStream } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parse } from 'csv-parse';
-import { fieldPath, type FieldMapping, type AdapterContext, type DataRow, type FileConfig } from '@logiparity/core';
+import {
+  withSourceRow,
+  fieldPath,
+  type FieldMapping,
+  type AdapterContext,
+  type DataRow,
+  type FileConfig,
+} from '@logiparity/core';
 import { xlsxRows } from './xlsx.js';
 
 function headerIndexes(headers: unknown[], fields: Record<string, FieldMapping>): [string, number][] {
@@ -54,7 +61,10 @@ export async function* readFileSource(config: FileConfig, context: AdapterContex
             indexes = headerIndexes(raw.record, config.fields);
             continue;
           }
-          yield Object.fromEntries(indexes.map(([field, index]) => [field, raw.record[index]]));
+          yield withSourceRow(
+            Object.fromEntries(indexes.map(([field, index]) => [field, raw.record[index]])),
+            recordNumber,
+          );
         }
       } finally {
         input.destroy();
@@ -71,7 +81,10 @@ export async function* readFileSource(config: FileConfig, context: AdapterContex
           );
           continue;
         }
-        yield Object.fromEntries(indexes.map(([field, index]) => [field, excelValue(row.values[index] ?? null)]));
+        yield withSourceRow(
+          Object.fromEntries(indexes.map(([field, index]) => [field, row.values[index] ?? null])),
+          row.number,
+        );
       }
     }
     if (!indexes)
