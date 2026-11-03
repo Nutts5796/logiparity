@@ -71,6 +71,10 @@ jobs:
           subject-path: |
             output/release/*.tgz
             output/release/*.cdx.json
+      - uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-path: output/release/logiparity-${{ needs.build.outputs.version }}.tgz
+          sbom-path: output/release/logiparity-${{ needs.build.outputs.version }}.cdx.json
   draft:
     needs: [build, attest]
     runs-on: ubuntu-latest
