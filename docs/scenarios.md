@@ -1,11 +1,11 @@
 # Scenario reference
 
-Run from the built checkout against an explicitly selected test/staging target:
+Run `npx logiparity demo` first to start the synthetic service and write the demo scenarios, fixtures and target into `logiparity-demo/`. Keep it running, then use a second terminal in the same project directory:
 
 ```sh
 export DEMO_API_URL=http://127.0.0.1:3010
-./node_modules/.bin/logiparity scenario run examples/demo/scenarios/02-vehicle-breakdown.yaml \
-  --target examples/demo/target.yaml
+npx logiparity scenario run logiparity-demo/scenarios/02-vehicle-breakdown.yaml \
+  --target logiparity-demo/target.yaml
 ```
 
 The command writes console output and `scenario.html`, `scenario.md`, `scenario.json`, `junit.xml` under `logiparity-scenario-report/02-vehicle-breakdown/`. Override the output directory with `--report-dir <directory>` (relative to the working directory). Post-scenario Parity has its own `parity/` directory, with the existing four file formats; downloaded artifacts live in `artifacts/`. JSON Parity schema v1 and normalized values are unchanged. Money and datetime presentation in HTML/Markdown uses the Parity configuration.
@@ -164,20 +164,24 @@ export default function check(state: InvariantState): InvariantResult {
 
 Optional target `artifacts` are GET requests with safe basename filenames ending in `.csv`/`.xlsx`. They are downloaded after invariant evaluation, including when an invariant fails, and before Parity. The runner exposes the absolute artifact directory to that Parity config as `${LOGIPARITY_SCENARIO_ARTIFACT_DIR}` without changing process environment. Downloads use target headers, same-origin/redirect restrictions and the target timeout. Repeated runs replace artifacts in the chosen report directory; all outputs should be treated as sensitive test data.
 
-The existing comparison engine supplies normalization, aggregates and `failOn`. A consistent API/export can pass Parity while an operational invariant fails: losing an order from every surface is still a loss. The five shipped scenarios exercise 55 drivers/2,750 orders with spare capacity and a deterministic synthetic planner. `BUG_REPLAN_LOSES_ORDER` and `BUG_DOUBLE_ASSIGN` reproduce the independent domain failures; see [bug switches](../apps/demo-delivery/BUGS.md).
+The existing comparison engine supplies normalization, aggregates and `failOn`. A consistent API/export can pass Parity while an operational invariant fails: losing an order from every surface is still a loss. The five shipped scenarios exercise 55 drivers/2,750 orders with spare capacity and a deterministic synthetic planner. `BUG_REPLAN_LOSES_ORDER` and `BUG_DOUBLE_ASSIGN` reproduce the independent domain failures; see [bug switches](https://github.com/Nutts5796/logiparity/blob/main/apps/demo-delivery/BUGS.md).
 
 Rendered request path segments equal to `.` or `..`, including percent-encoded forms, are rejected before URL normalization or sending. Configuration files and opted-in modules are trusted input; the module entry restriction does not sandbox its imports or Node permissions. AI-generated scenario drafts cannot contain module invariants.
 
 For target request headers, `headersEnv: {Authorization: {env: STAGING_API_TOKEN, prefix: "Bearer "}}` reuses the raw token also named by REST `auth.tokenEnv`. A string value remains supported for an environment variable already containing the complete header value. All referenced variables are checked in preflight; configured secret values are redacted from errors and reports.
 
-A scenario that selects only `no_order_lost` and `single_assignment` emits a warning in every scenario report: these invariants cannot detect a replan that never ran. The warning points to the state-selection section above and does not change the exit code. An `affected_reassigned` invariant remains on the roadmap.
+A scenario that selects only `no_order_lost` and `single_assignment` emits a warning in every scenario report: these invariants cannot detect a replan that never ran. The warning points to the state-selection section above and does not change the exit code. Use `affected_reassigned` to verify reassignment.
 
 ## Reassignment and validation
 
 Run `logiparity scenario validate <scenario.yaml> --target <target.yaml>` before injecting events. Validation checks schemas, selected state mappings, request paths, environment names and confined fixture/module paths without opening sources or executing modules. If `validate --config` receives a target file, it prints this command.
 
-`affected_reassigned` reads the pre-event baseline, identifies active orders on the absent driver or broken vehicle, then requires exactly one different driver after replanning. Delivered and cancelled baseline orders are excluded. It fails when the replan never ran. Configure orders, assignments and drivers (including driver vehicle_id for vehicle events). This is the fix for the limitation warning from minimal lost-order/single-assignment checks; the warning appears only when affected_reassigned is absent. The demo no-show and breakdown scenarios and the staging example include it.
+`affected_reassigned` reads the pre-event baseline, identifies active orders on the absent driver or broken vehicle, then requires exactly one different driver after replanning. Delivered and cancelled baseline orders are excluded. A legitimately cancelled affected order passes when it has no assignments after replanning. It fails when the replan never ran. Configure orders, assignments and drivers (including driver vehicle_id for vehicle events). This is the fix for the limitation warning from minimal lost-order/single-assignment checks; the warning appears only when affected_reassigned is absent. The demo no-show and breakdown scenarios and the staging example include it.
 
 `allowedHosts` is required on mutation-enabled targets and applies to state reads and mapped requests before network I/O. `environment: test` is a label. Fixtures must remain inside the scenario directory even through symlinks. Every path placeholder is URL encoded; put literal route separators in the template, for example `/events/{{params.event}}`. Placeholder values cannot contain whitespace or controls.
 
 Set `pagination.sizeParam` explicitly for a staging API; its default is `limit`. Both the configured page size and the API cap must agree.
+
+Scenario fixtures reset the demo state. Restart the demo after scenario runs before returning to the original full dataset. A generic http event in the demo target uses a fixed `/api/events/{{params.event}}` route and params.body; whole-path placeholders are rejected by scenario validate.
+
+The synthetic delivery day uses America/Chicago from 8 AM to 6 PM. Its initial dispatcher snapshot is at noon; scenario fixtures start at 8 AM. Shipped demo events use explicit ISO 8601 UTC instants, including their date, so their local business times remain unambiguous.

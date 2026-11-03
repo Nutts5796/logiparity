@@ -19,7 +19,7 @@ Next areas to explore:
 | Improve console examples for missing and duplicate keys                 | good first issue |
 | Extend locale fixtures to additional numeral and grouping systems       | help wanted      |
 
-## Planned capabilities
+## Shipped in 1.1.0
 
 - Composite keys and a where filter on rollup lines, allowing settlement comparisons per charge line.
 - Uniqueness checks on fields other than the join key, such as one shipper PO appearing under two load IDs.

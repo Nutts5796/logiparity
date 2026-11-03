@@ -2,7 +2,7 @@
 
 **Can I use production data or inject production events?** Use only test/staging targets and synthetic or appropriately controlled test data. Environment declarations do not identify a production hostname. Scenario mutations require explicit allowMutations and an allowedHosts list, and have no rollback.
 
-**What is compared?** The first source in an entity is the reference; other sources are joined by the canonical key. Missing/extra records, duplicate keys, scalar mismatches and configured aggregates become findings. The first duplicate row is retained for matching; totals list its affected key as uncertain. Invalid cells are per-row findings; more than maxInvalidRows invalid rows fail the source. Source failures exit 2 and suppress misleading incomplete comparisons.
+**What is compared?** The first source in an entity is the reference; other sources are joined by the canonical key. Missing/extra records, duplicate keys, scalar mismatches and configured aggregates become findings. The first duplicate row is retained for matching; the retained first row counts once in totals, with raw input and excluded rows shown when they differ. Invalid cells are per-row findings; more than maxInvalidRows invalid rows fail the source. Source failures exit 2 and suppress misleading incomplete comparisons.
 
 **Why did a one-cent difference appear?** Monetary inputs must be decimal strings, not floating-point numbers. Normalization converts to exact bigint minor units; tolerance is an integer in those units. The intentionally buggy demo export rounds some values incorrectly. HTML, Markdown and console show configured currency amounts with a difference. JSON keeps exact minor-unit values.
 

@@ -12,7 +12,7 @@ The owner created the `logiparity` npm organization on 2026-11-03; the scope is 
 # Set VERSION to the intended release version first.
 npm run release:bump -- "$VERSION"
 npm install --package-lock-only --ignore-scripts
-npm ci --ignore-scripts
+npm ci
 npm run lint
 npm run format:check
 npm run typecheck

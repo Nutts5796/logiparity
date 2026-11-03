@@ -1,6 +1,6 @@
 # Configuration reference
 
-The strict Zod schema is [packages/core/src/config.ts](../packages/core/src/config.ts). Supported sources are REST, CSV, XLSX, UI and PostgreSQL. Unknown options fail with the file and configuration path, followed by valid keys for that object. YAML errors include line/column; missing environment variables are reported by name without their value. `logiparity init [--config path]` writes a commented REST/CSV starter without loading sources or overwriting files.
+The strict Zod schema is [packages/core/src/config.ts](https://github.com/Nutts5796/logiparity/blob/main/packages/core/src/config.ts). Supported sources are REST, CSV, XLSX, UI and PostgreSQL. Unknown options fail with the file and configuration path, followed by valid keys for that object. YAML errors include line/column; missing environment variables are reported by name without their value. `logiparity init [--config path]` writes a commented REST/CSV starter without loading sources or overwriting files.
 
 Required root fields: `version: 1` and a nonempty `entities` array. Optional `environment` is `test` (default) or `staging`; `production` is rejected. This declaration cannot verify a target's actual deployment environment. Entity names must be unique. `variables` maps names to quoted strings. Every scalar string supports `${ENV_VAR}` substitution followed by `{{variable}}`; interpolation occurs after YAML parsing so values cannot inject additional YAML structure.
 
@@ -33,7 +33,7 @@ Every source accepts an optional `label`. Each `fields` value can remain a path 
 
 Human formats use the first configured field label for that logical field, so name a field consistently across its sources. Missing labels are humanized (`delivered_count` → `Delivered count`). Missing-row findings use `Whole row`. JSON retains raw names; human formats, including JUnit, use labels. Labels do not affect comparisons, extraction or grouping.
 
-The dispatcher example reads visible Chicago clock and date text from `.parity-time`, excluding the adjacent CST/CDT abbreviation. Its per-source format is `format: {ui: "h:mm a'\n'LLL d, yyyy"}` with `sourceTimezones: {ui: America/Chicago}`. The quoted newline is part of the visible two-line value. API timestamps continue to use ISO parsing. Use [parity-ui.yaml](../examples/demo/parity-ui.yaml) after `npm run demo:login`; the main [parity.yaml](../examples/demo/parity.yaml) keeps the browser-free first report.
+The dispatcher example reads visible Chicago clock and date text from `.parity-time`, excluding the adjacent CST/CDT abbreviation. Its per-source format is `format: {ui: "h:mm a'\n'LLL d, yyyy"}` with `sourceTimezones: {ui: America/Chicago}`. The quoted newline is part of the visible two-line value. API timestamps continue to use ISO parsing. Use [parity-ui.yaml](../examples/demo/parity-ui.yaml) after `npm run demo:login` (checkout only); the main [parity.yaml](../examples/demo/parity.yaml) keeps the browser-free first report.
 
 ## REST source
 
@@ -104,7 +104,7 @@ timeoutMs: 10000
 maxPages: 1000
 ```
 
-Install the pinned browser with `npx playwright install chromium`. URL must be HTTP(S) without embedded credentials. `storageState` is optional and relative to the YAML file. Create it with Playwright on your test/staging login; it can contain credentials and must not be committed. The local demo helper `npm run demo:login` creates ignored state for the public synthetic account only.
+Install the pinned browser with `npx logiparity install-browser`. URL must be HTTP(S) without embedded credentials. `storageState` is optional and relative to the YAML file. Create it with Playwright on your test/staging login; it can contain credentials and must not be committed. The local demo helper `npm run demo:login` (checkout only) creates ignored state for the public synthetic account only.
 
 Use CSS selectors: table must identify one visible table; rows defaults to tbody tr; field selectors are relative to each row and must match exactly one cell. Text is extracted in one browser batch per page. Money cells use decimal text; symbols and accounting parentheses require the explicit options below. Optional `readySelector` waits for a visible readiness marker before extraction, useful for asynchronously populated tables. Empty tables are supported; supplying an appropriate readiness marker avoids confusing a loading state with empty data.
 
@@ -146,7 +146,7 @@ Column mappings use result aliases exactly. pg numeric/int8 remain exact decimal
 | money     | Required ISO currency code (e.g. `USD`); decimal string → bigint minor units by default, with opt-in `allowNumber: true` for finite numeric input. Currency fraction digits follow Intl. `tolerance` is a nonnegative safe integer in minor units. No rounding is performed; excess nonzero decimal places fail. `allowCurrencySymbol: false` and `negativeParentheses: false` are strict defaults; opt in to accept the configured currency symbol/code and accounting negatives such as `(200.00)`. Other currencies and invalid grouping still fail.                                                                                    |
 | datetime  | ISO 8601 → UTC milliseconds; optional `format: "MM/dd/yyyy HH:mm"` applies one Luxon format to every source, while `format: {export: "MM/dd/yyyy HH:mm"}` selects it only for that source; other sources keep ISO parsing; `sourceTimezones: {export: America/Chicago}` for offsetless values; `toleranceSeconds: 0` default. Missing zones, invalid dates, DST gaps and ambiguous local clock times fail. A date without a time reports "date has no time". A format mismatch names the configured format and source before checking offsets. Custom formats retain zone/DST checks; include an explicit offset to disambiguate overlaps. |
 
-Empty and null are equivalent by default; `emptyAsNull: false` preserves empty strings for string/enum fields. Number/money/datetime fields still require valid nonempty values. Comparisons involving null pass only when both sides normalize to null. Keys are nonempty trimmed strings or safe integers, compared as strings; normalization rules do not change key identity. Duplicate keys produce findings, with first record retained and total row counts preserved.
+Empty and null are equivalent by default; `emptyAsNull: false` preserves empty strings for string/enum fields. Number/money/datetime fields still require valid nonempty values. Comparisons involving null pass only when both sides normalize to null. Keys are nonempty trimmed strings or safe integers, compared as strings; enum maps and other key rules apply before matching. Duplicate keys produce findings, with first record retained and total row counts preserved.
 
 ## Reports
 
@@ -270,3 +270,7 @@ Text filters are case-insensitive by default. Set source `caseSensitive: true` f
 Duplicate keys without a rollup retain the first row, which counts once in totals. Reports show raw source totals and retained/certain totals when they differ, with excluded row numbers. Rollup sums with invalid or blank inputs remain uncertain. A uniqueness field on a rollup must be retained in `by` or `first`. Reconciliation lists missing rows, extra rows, individual value differences, qualifying patterns and uncertain lines; any contribution without a supporting finding stays in the remainder.
 
 REST sources limit each decoded response to `maxResponseBytes` (default 67108864, 64 MiB), including chunked responses without Content-Length. Redirects are refused immediately. PostgreSQL connection URLs may not override host, hostaddr or port in query parameters. allowedHosts accepts host or host:port only, without URL schemes or paths. Report writers refuse existing symlink destinations and replace complete reports atomically.
+
+Failure categories are missing, extra, mismatch, aggregate, duplicate and invalid. duplicate_value belongs to duplicate; invalid_value belongs to invalid. All are enabled by default. Explicit category lists opt out of all unlisted categories.
+
+For currencyField rules, the legacy scalar values entry is the configured-currency bucket. Read valuesByCurrency for the complete set of totals; it is never an exchange-converted combined total. Reconciliation diagrams apply to a single currency; mixed-currency totals remain separate and are not marked accounted for by a combined sum.

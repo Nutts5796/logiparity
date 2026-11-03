@@ -26,7 +26,7 @@
 ### Security
 
 - Scenario paths enforce encoded placeholders and the configured base path; fixture realpaths stay inside the scenario directory.
-- Environment credentials, Basic auth and file-report values use consistent redaction, including short secrets and AI quoted authorization text.
+- Environment credentials, Basic auth and file-report values use consistent redaction, including short secrets and credentials copied into AI text previews.
 - Streaming XLSX parsing bounds XML tokens, attributes, shared-string disk use and decompression ratios and cleans temporary files on exit and signals.
 
 ## [1.0.0] - 2026-11-02
@@ -39,3 +39,7 @@
 
 [1.1.0]: https://github.com/Nutts5796/logiparity/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/Nutts5796/logiparity/releases/tag/v1.0.0
+
+### Upgrading from 1.0.x
+
+UI/SQL adapters use optional peers. Mutation targets require allowedHosts. Invalid cells are invalid_value findings in the default invalid failOn category. Every interpolated environment value is secret unless listed in publicEnv. Review explicit failOn category lists when upgrading.

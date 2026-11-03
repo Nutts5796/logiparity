@@ -3,7 +3,7 @@
 Prepare the checksummed artifact, then supply its version to both targets:
 
 ```sh
-npm ci --ignore-scripts
+npm ci
 npm run release:prepare
 VERSION=$(node -p "require('./package.json').version")
 docker build --build-arg VERSION="$VERSION" --tag "logiparity:$VERSION" .

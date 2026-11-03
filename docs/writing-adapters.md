@@ -1,6 +1,6 @@
 # Writing adapters
 
-The shared [Adapter interface](../packages/core/src/types.ts) exposes `read(config, context): AsyncIterable<DataRow>`. A DataRow is a field-to-scalar mapping using the logical entity field names, including its join key. The context supplies the config directory and environment. An adapter must use only user-configured test/staging targets; read operations must not mutate the target.
+The shared [Adapter interface](https://github.com/Nutts5796/logiparity/blob/main/packages/core/src/types.ts) exposes `read(config, context): AsyncIterable<DataRow>`. A DataRow is a field-to-scalar mapping using the logical entity field names, including its join key. The context supplies the config directory and environment. An adapter must use only user-configured test/staging targets; read operations must not mutate the target.
 
 Implement an async generator, map external fields to logical names, and yield one row at a time. Preserve decimal text for monetary fields and dates as ISO strings with offsets or Date values. Do not silently skip unreadable rows, missing mapped fields or failed pages. Throw an actionable error with file/line or page/record context; the engine adds entity/source/key/field context and generates `source_error` instead of misleading missing records after partial reads.
 

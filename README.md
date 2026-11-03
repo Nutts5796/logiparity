@@ -17,17 +17,14 @@ An endpoint test can pass while another surface shows different records. A contr
 
 ## How it differs from tools you already use
 
-| Tool                                                                                           | Typical focus                                                  |
-| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| [Postman](https://learning.postman.com/docs/tests-and-scripts/write-scripts/intro-to-scripts/) | API requests, scripts and automated API tests.                 |
-| [Playwright](https://playwright.dev/docs/intro)                                                | Browser automation and end-to-end application tests.           |
-| [Pact](https://docs.pact.io/)                                                                  | Consumer and provider expectations at integration boundaries.  |
-| [Great Expectations](https://docs.greatexpectations.io/docs/core/introduction/)                | Data validation through expectations and validation workflows. |
-| [data-diff style tools](https://github.com/datafold/data-diff)                                 | Record and value differences within or across database tables. |
-
-| **LogiParity** | Keyed comparisons across API, file, browser and SQL sources, plus disruption invariants. |
-
-It names likely causes (page boundary, timezone, rounding), accounts for money differences, and checks orders after a disruption, all from one config.
+| Tool                                                                                           | Typical focus                                                                            |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| [Postman](https://learning.postman.com/docs/tests-and-scripts/write-scripts/intro-to-scripts/) | API requests, scripts and automated API tests.                                           |
+| [Playwright](https://playwright.dev/docs/intro)                                                | Browser automation and end-to-end application tests.                                     |
+| [Pact](https://docs.pact.io/)                                                                  | Consumer and provider expectations at integration boundaries.                            |
+| [Great Expectations](https://docs.greatexpectations.io/docs/core/introduction/)                | Data validation through expectations and validation workflows.                           |
+| [data-diff style tools](https://github.com/datafold/data-diff)                                 | Record and value differences within or across database tables.                           |
+| **LogiParity**                                                                                 | Keyed comparisons across API, file, browser and SQL sources, plus disruption invariants. |
 
 One configuration compares records across browser tables, APIs, files and SQL. Scenario runs add invariant checks after disruptions, such as whether every order remains present and has one assignment.
 
@@ -66,8 +63,8 @@ Keep the service open. It creates `logiparity-demo/parity.yaml` without overwrit
 
 ```sh
 cd logiparity-demo
-curl --max-time 60 --retry 3 -fS http://127.0.0.1:3010/exports/shipments.xlsx -o shipments.xlsx
-curl --max-time 60 --retry 3 -fS http://127.0.0.1:3010/exports/shipments.csv -o shipments.csv
+curl --max-time 60 --retry 3 --retry-connrefused -fsS http://127.0.0.1:3010/exports/shipments.xlsx -o shipments.xlsx
+curl --max-time 60 --retry 3 --retry-connrefused -fsS http://127.0.0.1:3010/exports/shipments.csv -o shipments.csv
 npx logiparity validate --config parity.yaml
 npx logiparity check --config parity.yaml
 ```
@@ -79,7 +76,7 @@ For a source checkout:
 ```sh
 git clone https://github.com/Nutts5796/logiparity.git
 cd logiparity
-npm ci --ignore-scripts
+npm ci
 DEMO_PORT=3010 npm run demo
 ```
 
@@ -94,17 +91,17 @@ npx logiparity check --config examples/demo/parity.yaml
 
 The checkout report is `logiparity-report/report.html`. Use `npm run demo:bugs` after stopping the service to enable the six synthetic defects. `DEMO_PORT` and `DEMO_API_URL` must agree. A source checkout currently reports moderate development-dependency advisories; see [dependency audit notes](docs/dependency-audit.md). Those development tools are excluded from the installed CLI.
 
-![Light parity report](docs/images/report.png)
+![Light parity report](https://github.com/Nutts5796/logiparity/blob/main/docs/images/report.png)
 
 <details><summary>Dark report</summary>
 
-![Dark parity report](docs/images/report-dark.png)
+![Dark parity report](https://github.com/Nutts5796/logiparity/blob/main/docs/images/report-dark.png)
 
 </details>
 
 <details><summary>Dispatcher screen</summary>
 
-![Authenticated synthetic dispatcher](docs/images/dispatcher.png)
+![Authenticated synthetic dispatcher](https://github.com/Nutts5796/logiparity/blob/main/docs/images/dispatcher.png)
 
 </details>
 
@@ -112,7 +109,7 @@ HTML, Markdown and console reports show currency amounts and readable UTC dates,
 
 ## Try it on your staging
 
-Save this as `parity.yaml`, or generate the identical starter with `./node_modules/.bin/logiparity init`. It works against the running demo without a token; change only `STAGING_API_URL` below to use a different demo port. For your own API, edit paths, mappings and completion metadata to match its contract. Uncomment bearer authentication if your staging API requires it and set `STAGING_API_TOKEN`.
+Save this as `parity.yaml`, or generate the identical starter with `npx logiparity init`. It works against the running demo without a token; change only `STAGING_API_URL` below to use a different demo port. For your own API, edit paths, mappings and completion metadata to match its contract. Uncomment bearer authentication if your staging API requires it and set `STAGING_API_TOKEN`.
 
 ```yaml
 # LogiParity starter — TEST AND STAGING ENVIRONMENTS ONLY.
@@ -121,6 +118,7 @@ Save this as `parity.yaml`, or generate the identical starter with `./node_modul
 # Keep secrets in environment variables; do not write credentials here.
 version: 1
 environment: test
+publicEnv: [STAGING_API_URL]
 entities:
   - name: shipment
     label: Order
@@ -163,9 +161,9 @@ Download a current export, validate the configuration, then compare:
 
 ```sh
 export STAGING_API_URL=http://127.0.0.1:3010
-curl --max-time 60 --retry 3 --fail --silent --show-error "$STAGING_API_URL/exports/shipments.csv" --output shipments.csv
-./node_modules/.bin/logiparity validate --config parity.yaml
-./node_modules/.bin/logiparity check --config parity.yaml
+curl --max-time 60 --retry 3 --retry-connrefused -fsS "$STAGING_API_URL/exports/shipments.csv" --output shipments.csv
+npx logiparity validate --config parity.yaml
+npx logiparity check --config parity.yaml
 ```
 
 Read the export and API at the same cutoff time: freeze a snapshot or pass the same `as_of` value to both requests if the target supports it. Downloading them one after another does not freeze changing data. Otherwise compare a closed day after updates have stopped. `totalPath` detects capped pages and confirms completion. Money uses decimal strings by default; opt into numeric input only after reviewing precision. The [configuration reference](docs/configuration.md) also covers SQL, browser sources and `validate --allow-missing-env` for CI lint steps without secrets.
@@ -177,7 +175,7 @@ The [GitHub Actions template](templates/github-actions.yml) installs a pinned CL
 Run a disruption against the demo after starting it and setting `DEMO_API_URL`:
 
 ```sh
-./node_modules/.bin/logiparity scenario run examples/demo/scenarios/02-vehicle-breakdown.yaml --target examples/demo/target.yaml
+npx logiparity scenario run logiparity-demo/scenarios/02-vehicle-breakdown.yaml --target logiparity-demo/target.yaml
 ```
 
 Five examples cover no-show, breakdown, traffic delay, cancellation and capacity reduction. Run `logiparity scenario validate <scenario.yaml> --target <target.yaml>` before injecting events. `affected_reassigned` verifies that each affected active order acquired a different driver, including when a replan never ran. Select the state needed by each check:
@@ -188,21 +186,31 @@ Five examples cover no-show, breakdown, traffic delay, cancellation and capacity
 
 For asynchronous replanning, configure a completion signal before reading the final state. A fixed delay is also supported. Without a wait setting, the runner reads final state immediately after the events. The [scenario reference](docs/scenarios.md) lists exact dependencies and a bring-your-own-API example. The [freight example](examples/freight/README.md) compares load totals with rolled-up settlement lines.
 
-![Synthetic breakdown scenario](docs/images/scenario.png)
+![Synthetic breakdown scenario](https://github.com/Nutts5796/logiparity/blob/main/docs/images/scenario.png)
 
 ## U.S. freight and delivery
 
-The [synthetic freight day](examples/freight/README.md) covers driver and carrier settlement, accessorials such as detention, duplicate tenders and charge-line reconciliation. Compare a closed day at one cutoff, configure explicit zones for DST and multi-timezone fleets, and map EDI 210/214 data exported as CSV to the same load keys. LogiParity reads the exported tables; it does not decode EDI messages.
+The [synthetic freight day](examples/freight/README.md) covers carrier settlement, accessorials such as detention, duplicate tenders and charge-line reconciliation. Compare a closed day at one cutoff, configure explicit zones for DST and multi-timezone fleets, and map EDI 210/214 data exported as CSV to the same load keys. LogiParity reads the exported tables; it does not decode EDI messages.
 
-![Synthetic freight reconciliation](docs/images/freight.png)
+![Synthetic freight reconciliation](https://github.com/Nutts5796/logiparity/blob/main/docs/images/freight.png)
+
+## How it is tested
+
+The current review runs passed 455 unit and adapter tests and 113 end-to-end tests with real Chromium, local PostgreSQL and synthetic HTTP services. Line coverage across core, adapters, scenarios and the CLI was 88.12% (2678/3039), with an 80% gate. Coverage measures these source modules; subprocess e2e activity is verified separately.
+
+Installed-package checks cover both optional-peer profiles, public imports and declarations, installed demo/scenario commands and empty-cache offline installation. Six clean consumer profiles on npm 10.9.9 and 11.6.0 passed plain npm install, npm ci, npm audit and npm audit signatures, including coexistence with Playwright 1.63.0 and pg 8.16.0. The clean-source quickstart executed the README commands, including plain npm ci, and checked all report formats.
+
+Regression cases include one-off differences that never become patterns, DST gaps and overlaps, capped pages, duplicate keys, source filters and currency partitions, XLSX amplification, temporary-file cleanup, path escape, redirect refusal and report symlinks. Tests and fixtures are synthetic; these results are not claims about production use. Detailed commands and review limits are in the [milestone report](https://github.com/Nutts5796/logiparity/blob/main/docs/development/MILESTONE_REPORT.md).
 
 ## How it was built
 
+The code, tests and documentation were generated by AI coding agents. Commits are made under the maintainer's account. The maintainer wrote the milestone specifications and acceptance criteria, triaged the review rounds, and verified fixes. The first-person origin stories in the design decisions are the maintainer's own accounts.
+
 The author defined the problem and design rules from his own work. The [origin stories](docs/design-decisions.md) cover waybill reconciliation, money in minor units after a FinTech rounding issue, and never guessing timezones.
 
-AI coding assistants wrote the implementation in milestones, with each milestone reviewed before the next. Repeated rounds with AI-simulated users found real defects that were fixed: redaction hiding ordinary values such as the version number; consumer `npm ci` and `npm audit` failures that led to replacing ExcelJS; one-off differences labelled as patterns; and base-path and secret-redaction gaps.
+AI coding assistants wrote the implementation in milestones, with each milestone reviewed before the next. Repeated rounds with AI-simulated users found real defects that were fixed: redaction hiding ordinary values such as the version number; dependency audit failures that led to replacing ExcelJS (the separately reported install crash was not reproduced); one-off differences labelled as patterns; and base-path and secret-redaction gaps.
 
-The author chose the report design from eight prototypes, rejected decorative tick-mark charts, and required readable labels, dates and a money reconciliation.
+The author chose the report design from several design prototypes; the chosen design is in docs/design, rejected decorative tick-mark charts, and required readable labels, dates and a money reconciliation.
 
 ## Verify
 
@@ -235,14 +243,20 @@ Pilots and feedback: share a sanitized use case or defect through [Issues](https
 
 ## About
 
-Built by Sergei Orekhovskii, a QA engineer who previously ran transport logistics for a delivery service. Read the [technical design decisions](docs/design-decisions.md).
+Created by Sergei Orekhovskii with AI coding assistants (see How it was built), a QA engineer who previously ran transport logistics for a delivery service. Read the [technical design decisions](docs/design-decisions.md).
 
 ## Reference
 
 - [Configuration](docs/configuration.md), [scenarios](docs/scenarios.md) and [optional AI drafts](docs/ai.md)
 - [Reports](docs/report-formats.md), [JSON schema](docs/report-schema.md) and [adapter development](docs/writing-adapters.md)
 - [CI](docs/ci.md), [Docker](docs/docker.md), [FAQ](docs/faq.md) and [release guide](docs/release.md)
-- [Dependencies](docs/dependencies.md), [audit notes](docs/dependency-audit.md) and [build history](docs/development/milestones.md)
+- [Dependencies](docs/dependencies.md), [audit notes](docs/dependency-audit.md) and [build history](https://github.com/Nutts5796/logiparity/blob/main/docs/development/milestones.md)
 - [Contributing](CONTRIBUTING.md), [code of conduct](CODE_OF_CONDUCT.md), [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md)
 
 MIT © Sergei Orekhovskii.
+
+## Upgrading from 1.0.x
+
+UI and SQL sources now require optional peers; install the adapters you use, or choose the full container image. Mutation targets require allowedHosts. Invalid cells produce invalid_value findings, selected by the new invalid failOn category (enabled by default). A pipeline that selects failOn categories explicitly must include invalid to block bad cells. Every interpolated environment value is redacted by default, including values passed through variables; list only non-secret names in publicEnv. Existing strict money rules remain strict; rounding requires explicit opt-in.
+
+Optional peer compatibility is checked at load time: Playwright 1.63–1.64, pg 8.16–8.x, pg-query-stream 4.17.1–4.x and pgsql-ast-parser 12.0.2–12.x. For a project with its own pg dependency, an npm overrides entry such as `{"pg":"$pg"}` keeps that direct version; keep it within the supported range. Use `npx logiparity install-browser --with-deps` on Linux containers or GitLab runners missing browser system libraries. The slim image supports CSV/XLSX/REST; select the matching full image for UI or SQL.
