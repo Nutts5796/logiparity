@@ -20,6 +20,8 @@ export async function packArtifact(destination) {
     )[0];
     for (const entry of dry.files) {
       if (entry.path.endsWith('.map')) continue;
+      if (entry.path.startsWith('node_modules/') && !entry.path.startsWith('node_modules/@logiparity/')) continue;
+      if (/^node_modules\/@logiparity\/[^/]+\/node_modules\//.test(entry.path)) continue;
       const target = join(temporary, entry.path);
       await mkdir(dirname(target), { recursive: true });
       await cp(join(root, entry.path), target, { dereference: true });
@@ -28,6 +30,13 @@ export async function packArtifact(destination) {
         delete manifest.scripts;
         delete manifest.devDependencies;
         delete manifest.workspaces;
+        if (entry.path !== 'package.json') {
+          manifest.dependencies = Object.fromEntries(
+            Object.entries(manifest.dependencies ?? {}).filter(([name]) => name.startsWith('@logiparity/')),
+          );
+          delete manifest.peerDependencies;
+          delete manifest.peerDependenciesMeta;
+        }
         await writeFile(target, JSON.stringify(manifest, null, 2) + '\n');
       }
     }

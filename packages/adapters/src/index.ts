@@ -1,3 +1,4 @@
+import { requireOptionalAdapter } from './optional.js';
 import {
   assertAllowedHost,
   fieldPath,
@@ -38,6 +39,7 @@ export { selectJson } from './jsonpath.js';
 
 /** Validate extraction/query syntax without opening a source. */
 export function validateSource(config: SourceConfig): void {
+  if (config.type === 'ui' || config.type === 'sql') requireOptionalAdapter(config.type);
   if (config.type === 'sql') validateReadOnlySql(config.query);
   if (config.type !== 'rest') return;
   const p = config.pagination;

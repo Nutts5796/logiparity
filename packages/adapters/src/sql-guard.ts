@@ -1,4 +1,6 @@
-import { parse } from 'pgsql-ast-parser';
+import { createRequire } from 'node:module';
+import { requireOptionalAdapter } from './optional.js';
+const require = createRequire(import.meta.url);
 
 const readStatements = new Set(['select', 'with', 'with recursive', 'union', 'union all']);
 const forbiddenStatements = new Set([
@@ -64,6 +66,8 @@ const sqlFunctions = new Set([
 ]);
 
 export function validateReadOnlySql(query: string): void {
+  requireOptionalAdapter('sql');
+  const { parse } = require('pgsql-ast-parser') as typeof import('pgsql-ast-parser');
   let statements: unknown[];
   try {
     statements = parse(query);

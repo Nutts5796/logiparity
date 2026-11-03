@@ -1,6 +1,6 @@
 import { finished } from 'node:stream/promises';
-import pg from 'pg';
-import QueryStream from 'pg-query-stream';
+
+import type QueryStreamType from 'pg-query-stream';
 import {
   assertAllowedHost,
   fieldPath,
@@ -13,6 +13,7 @@ import { validateReadOnlySql } from './sql-guard.js';
 
 export async function* readSql(config: SqlConfig, context: AdapterContext): AsyncIterable<DataRow> {
   validateReadOnlySql(config.query); // Must happen before credentials are read or any connection is made.
+  const [{ default: pg }, { default: QueryStream }] = await Promise.all([import('pg'), import('pg-query-stream')]);
   const connection = Object.hasOwn(context.env, config.connectionEnv) ? context.env[config.connectionEnv] : undefined;
   if (!connection)
     throw new SourceError(
@@ -40,7 +41,7 @@ export async function* readSql(config: SqlConfig, context: AdapterContext): Asyn
     /* Active operations report connection errors; prevent idle socket errors from escaping cleanup. */
   });
   let transaction = false;
-  let stream: QueryStream | undefined;
+  let stream: QueryStreamType | undefined;
   let stage = 'connect';
   try {
     await client.connect();

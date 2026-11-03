@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import type { Browser, BrowserContext, Page } from 'playwright';
+import { requireOptionalAdapter } from './optional.js';
 import {
   assertAllowedHost,
   fieldPaths,
@@ -14,13 +15,15 @@ import {
 
 export async function* readUi(config: UiConfig, context: AdapterContext): AsyncIterable<DataRow> {
   assertAllowedHost(config.url, context.allowedHosts, 'UI');
+  requireOptionalAdapter('ui');
+  const { chromium } = await import('playwright');
   let browser: Browser | undefined;
   let session: BrowserContext | undefined;
   let page: Page | undefined;
   let violation: SourceError | undefined;
   let pageNumber = 1;
   let rowNumber = 1;
-  let stage = 'launch Chromium (run npx playwright install chromium if it is missing)';
+  let stage = 'launch Chromium (run npx logiparity install-browser if it is missing)';
   try {
     browser = await chromium.launch({ headless: true, timeout: Math.max(10000, config.timeoutMs) });
     stage = config.storageState
