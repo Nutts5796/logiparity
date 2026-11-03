@@ -10,6 +10,7 @@ import {
   rememberEnvironment,
   validateEnvironment,
   headerEnvSchema,
+  validAllowedHost,
 } from '@logiparity/core';
 import { z } from 'zod';
 
@@ -87,8 +88,9 @@ export const targetSchema = z
     name: text,
     environment: z.enum(['test', 'staging']),
     allowMutations: z.literal(true),
-    allowedHosts: z.array(text).min(1),
+    allowedHosts: z.array(text.refine(validAllowedHost, 'Use host or host:port without a URL scheme or path')).min(1),
     publicEnv: z.array(text).default([]),
+    secretEnv: z.array(text).default([]),
     baseUrl: z
       .url()
       .refine(

@@ -161,10 +161,9 @@ it('validates explicit mutation consent, step uniqueness, artifact paths and req
   };
   expect(targetSchema.safeParse(raw).success).toBe(false);
   const target = targetSchema.parse({ ...raw, environment: 'test', allowMutations: true, allowedHosts: ['127.0.0.1'] });
-  expect(
-    requestPlan(target, { method: 'POST', path: '{{params.path}}' }, { params: { path: 'https://elsewhere.test/' } })
-      .url.origin,
-  ).toBe('http://127.0.0.1:3010');
+  expect(() =>
+    requestPlan(target, { method: 'POST', path: '{{params.path}}' }, { params: { path: 'https://elsewhere.test/' } }),
+  ).toThrow('whole request path');
   expect(() => requestPlan(target, { method: 'GET', path: '/', body: {} }, {})).toThrow('GET');
   expect(renderTemplate('/driver/{{params.id}}', { params: { id: 'a/b' } }, true)).toBe('/driver/a%2Fb');
   expect(renderTemplate({ capacity: '{{params.capacity}}' }, { params: { capacity: 25 } })).toEqual({ capacity: 25 });
@@ -230,4 +229,11 @@ it('permits an ID-only lost-order check and an order-only SLA check', () => {
       [{ sla_window_violations: { max: 0 } }],
     ),
   ).not.toThrow();
+});
+
+it('passes affected orders cancelled during replanning with zero assignments (M10.1)', () => {
+  const context = state();
+  context.after.orders![0]!.status = 'cancelled';
+  context.after.assignments = [];
+  expect(checkBuiltin('affected_reassigned', context).passed).toBe(true);
 });

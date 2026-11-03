@@ -1,3 +1,4 @@
+import { redactCredentialTokens as redactCredentials } from './credential-tokens.js';
 import { isSecretName, normalizedSecretName } from '@logiparity/core';
 export const redacted = '[REDACTED]';
 export const defaultRedactFields = [
@@ -33,72 +34,6 @@ function pathTokens(path: string): Token[] {
   }
   if (!tokens.length) throw new Error('redactFields cannot mask the entire $ payload; select a field or subtree.');
   return tokens;
-}
-function redactCredentials(text: string, collect: (...values: string[]) => void): string {
-  const decoded = (value: string) => {
-    try {
-      return decodeURIComponent(value.replaceAll('+', ' '));
-    } catch {
-      return value;
-    }
-  };
-  text = text.replace(/\b([a-z][a-z0-9+.-]*:\/\/)([^/\s?#]*)@/gi, (_, scheme: string, userinfo: string) => {
-    const separator = userinfo.indexOf(':');
-    if (separator >= 0) {
-      const user = userinfo.slice(0, separator);
-      const password = userinfo.slice(separator + 1);
-      collect(password, decoded(password));
-      if (user) collect(user, decoded(user));
-      return `${scheme}${redacted}:${redacted}@`;
-    }
-    collect(userinfo, decoded(userinfo));
-    return `${scheme}${redacted}@`;
-  });
-  text = text.replace(
-    /("(?:proxy-)?authorization"\s*:\s*")([^"\\]*(?:\\.[^"\\]*)*)"/gi,
-    (_match, prefix: string, credentials: string) => {
-      collect(credentials);
-      return `${prefix}${redacted}"`;
-    },
-  );
-  text = text.replace(
-    /\b((?:proxy-)?authorization)[ \t]*[=:][ \t]*(\S+)[ \t]+([^\r\n]+)/gi,
-    (_, name: string, scheme: string, credentials: string) => {
-      collect(credentials, decoded(credentials));
-      return `${name}: ${scheme} ${redacted}`;
-    },
-  );
-  text = text.replace(
-    /["']?\b([A-Za-z_][A-Za-z0-9_.-]*)["']?[ \t]*([=:])[ \t]*(?:"([^"\r\n]*)"|'([^'\r\n]*)'|([^\s,&#?<>]+))/g,
-    (
-      match,
-      name: string,
-      separator: string,
-      quoted: string | undefined,
-      single: string | undefined,
-      plain: string | undefined,
-    ) => {
-      if (!isSecretName(name) || /^(?:proxy-)?authorization$/i.test(name)) return match;
-      const value = quoted ?? single ?? plain ?? '';
-      if (value === redacted) return match;
-      collect(value, decoded(value));
-      return `${name}${separator}${redacted}`;
-    },
-  );
-  text = text.replace(/([?&#])([^=&#\s?]+)=([^&#\s?]*)/g, (match, separator: string, key: string, value: string) => {
-    const name = normalizedSecretName(decoded(key));
-    if (!isSecretName(name) && name !== 'key' && name !== 'sig') return match;
-    collect(value, decoded(value));
-    return `${separator}${key}=${redacted}`;
-  });
-  text = text.replace(/\bDigest[ \t]+([^\r\n]+)/gi, (_match, credentials: string) => {
-    collect(credentials);
-    return `Digest ${redacted}`;
-  });
-  return text.replace(/\bBearer[ \t]*:?[ \t]+([^\s"'<>`,;]+)/gi, (_, token: string) => {
-    collect(token);
-    return `Bearer ${redacted}`;
-  });
 }
 export interface Redaction {
   data: unknown;

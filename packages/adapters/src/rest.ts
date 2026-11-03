@@ -26,15 +26,25 @@ async function getPage(
   for (let attempt = 0; attempt <= config.retries; attempt++) {
     let response: Response;
     try {
-      response = await fetch(url, { headers, redirect: 'error', signal: AbortSignal.timeout(config.timeoutMs) });
+      response = await fetch(url, { headers, redirect: 'manual', signal: AbortSignal.timeout(config.timeoutMs) });
     } catch (error) {
       if (attempt < config.retries) {
         await delay(config.backoffMs * 2 ** attempt);
         continue;
       }
       throw new Error(
-        `GET ${url.origin}${url.pathname} ${connectionCause(error)} after ${config.retries + 1} attempts; check connectivity, redirects and timeoutMs.`,
+        `GET ${url.origin}${url.pathname} ${connectionCause(error)} after ${config.retries + 1} attempts; ${connectionCause(error) === 'timed out' ? 'check connectivity and timeoutMs' : 'check the host, port and service availability'}.`,
       );
+    }
+    if (response.status >= 300 && response.status < 400) {
+      await response.body?.cancel();
+      let host = '(unknown host)';
+      try {
+        host = new URL(response.headers.get('location') ?? '', url).host;
+      } catch {
+        /* Invalid redirect location is refused too. */
+      }
+      throw new Error(`redirect refused: ${response.status} to ${host}`);
     }
     if ((response.status === 429 || response.status >= 500) && attempt < config.retries) {
       const retryAfter = response.headers.get('retry-after');
@@ -63,8 +73,26 @@ async function getPage(
       );
     }
     try {
-      return { body: (await response.json()) as unknown, link: response.headers.get('link') };
-    } catch {
+      const chunks: Uint8Array[] = [];
+      let bytes = 0;
+      const declared = Number(response.headers.get('content-length'));
+      if (Number.isFinite(declared) && declared > config.maxResponseBytes) {
+        await response.body?.cancel();
+        throw new Error(`REST response exceeds maxResponseBytes (${config.maxResponseBytes}).`);
+      }
+      if (response.body)
+        for await (const chunk of response.body) {
+          bytes += chunk.byteLength;
+          if (bytes > config.maxResponseBytes)
+            throw new Error(`REST response exceeds maxResponseBytes (${config.maxResponseBytes}).`);
+          chunks.push(chunk);
+        }
+      return {
+        body: JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown,
+        link: response.headers.get('link'),
+      };
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('maxResponseBytes')) throw error;
       throw new Error(
         `GET ${url.origin}${url.pathname}: response is not valid JSON or body read timed out; check the endpoint and timeoutMs.`,
       );

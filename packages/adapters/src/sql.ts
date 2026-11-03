@@ -28,6 +28,11 @@ export async function* readSql(config: SqlConfig, context: AdapterContext): Asyn
       `SQL ${config.connectionEnv} must contain an explicit postgres:// or postgresql:// host/database URL; correct the environment variable.`,
     );
   }
+  for (const key of new URL(connection).searchParams.keys())
+    if (['host', 'hostaddr', 'port'].includes(key.toLowerCase()))
+      throw new SourceError(
+        'SQL connection URL cannot override host, hostaddr or port through query parameters. Put the allowed host and port in the URL authority.',
+      );
   assertAllowedHost(connection, context.allowedHosts, 'SQL');
   const client = new pg.Client({
     connectionString: connection,

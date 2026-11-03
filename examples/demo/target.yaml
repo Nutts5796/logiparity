@@ -13,7 +13,7 @@ events:
   traffic_delay: { method: POST, path: /api/events/traffic-delay, body: '{{params}}' }
   order_cancel: { method: POST, path: /api/events/order-cancel, body: '{{params}}' }
   capacity_change: { method: POST, path: /api/events/capacity-change, body: '{{params}}' }
-  http: { method: POST, path: '{{params.path}}', body: '{{params.body}}' }
+  http: { method: POST, path: '/api/events/{{params.event}}', body: '{{params.body}}' }
 replan: { method: POST, path: /api/replan, body: {} }
 clock:
   advance: { method: POST, path: /api/clock/advance, body: { seconds: '{{seconds}}' } }

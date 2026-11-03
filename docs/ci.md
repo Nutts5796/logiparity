@@ -20,3 +20,5 @@ For containers, set the Actions variable `LOGIPARITY_IMAGE` to `ghcr.io/nutts579
 The [GitLab template](../templates/gitlab-ci.yml) defines only hidden `.logiparity`. Include it, then extend it in a job and select your existing stage. It never overrides `stages`. Set protected `LOGIPARITY_IMAGE`, `STAGING_API_URL` and `STAGING_API_TOKEN` variables; schedule the pipeline or run it manually.
 
 Every download uses a bounded timeout and retries. Snapshot both sources at the same cutoff time or compare a closed day. Report artifacts and UI evidence may contain test data; restrict retention and access to your needs.
+
+GitHub step summaries and attached reports are visible to anyone with permission to read the repository. Keep sensitive source data out of summaries and use appropriate repository access and artifact retention.

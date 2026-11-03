@@ -97,6 +97,7 @@ export function checkBuiltin(definition: Invariant, state: InvariantState): Inva
         state.events.filter((event) => event.type === 'driver_no_show' || event.type === 'vehicle_breakdown'),
       ).affectedKeys;
       for (const key of affected) {
+        if (byId.get(key)?.status === 'cancelled' && !after.assignments.some((item) => item.order_id === key)) continue;
         const prior = before.assignments.filter((item) => item.order_id === key).map((item) => item.driver_id);
         const current = after.assignments.filter((item) => item.order_id === key).map((item) => item.driver_id);
         if (!byId.has(key) || current.length !== 1 || current.some((driver) => prior.includes(driver))) failed.add(key);

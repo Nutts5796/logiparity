@@ -26,6 +26,7 @@ const help = `LogiParity ${version} — data parity checks for TEST AND STAGING 
 Usage: logiparity demo [--bugs]
        logiparity install-browser
        logiparity check --config <parity.yaml>
+       logiparity scenario validate <scenario.yaml> --target <target.yaml>
        logiparity scenario run <scenario.yaml> --target <target.yaml> [--report-dir <dir>] [--allow-modules]
        logiparity ai suggest-config --openapi <spec.yaml> --entity <name>
        logiparity ai scenario --from <description>
@@ -107,6 +108,8 @@ async function main(): Promise<number> {
     output('The scenario configuration is valid. Sources were not opened and no mutations were performed.\n');
     return 0;
   }
+  if (positionals[0] === 'scenario' && (!values.target || !positionals[2]))
+    throw new Error(commandHelp(['scenario']).trim());
   if (values['allow-missing-env'] && positionals[0] !== 'validate')
     throw new Error('--allow-missing-env requires validate');
   if (positionals[0] === 'ai') return aiCommand(positionals.slice(1), values);

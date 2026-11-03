@@ -18,6 +18,10 @@ function lookup(path: string, context: Record<string, unknown>): unknown {
 }
 export function renderTemplate(value: unknown, context: Record<string, unknown>, path = false): unknown {
   if (typeof value === 'string') {
+    if (path && /^\{\{[\w.]+\}\}$/.test(value))
+      throw new ConfigError(
+        'A whole request path cannot be a placeholder: it would be URL-encoded. Use a fixed route with placeholders for individual path segments, e.g. /api/orders/{{params.id}}.',
+      );
     const exact = value.match(/^\{\{([\w.]+)\}\}$/);
     if (exact?.[1] && !path) return lookup(exact[1], context);
     const result = value.replace(/\{\{([\w.]+)\}\}/g, (_, key: string) => {

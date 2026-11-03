@@ -121,7 +121,7 @@ describe('REST adapter with local servers', () => {
       res.writeHead(302, { location: 'https://example.invalid/' });
       res.end();
     });
-    await expect(collect(readRest(config(url), context))).rejects.toThrow('connection failed');
+    await expect(collect(readRest(config(url), context))).rejects.toThrow('redirect refused');
   });
   it('reports HTTP, JSON and extraction failures with page and record', async () => {
     const { url } = await server((req, res) => {

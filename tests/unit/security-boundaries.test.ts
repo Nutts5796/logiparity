@@ -17,12 +17,12 @@ it.each(['.\t./admin', ' ../admin', '..;/admin', '.;/admin', '..%00/admin', '..%
   'rejects the base-path bypass %s',
   (path) => expect(() => requestPlan(target, { method: 'POST', path }, {})).toThrow(),
 );
-it('encodes exact placeholders and confines resolved paths to the target prefix', () => {
-  const plan = requestPlan(target, { method: 'POST', path: '{{params.p}}' }, { params: { p: '/internal/delete-all' } });
-  expect(plan.url.pathname).toBe('/api/v1/%2Finternal%2Fdelete-all');
-  expect(() => requestPlan(target, { method: 'POST', path: '{{params.p}}' }, { params: { p: ' ../admin' } })).toThrow(
-    'whitespace',
-  );
+it('rejects whole-path placeholders and encodes segment placeholders inside a fixed route', () => {
+  expect(() =>
+    requestPlan(target, { method: 'POST', path: '{{params.p}}' }, { params: { p: '/internal/delete-all' } }),
+  ).toThrow('whole request path');
+  const plan = requestPlan(target, { method: 'POST', path: '/orders/{{params.p}}' }, { params: { p: 'a/b' } });
+  expect(plan.url.pathname).toBe('/api/v1/orders/a%2Fb');
   expect(renderTemplate('{{params.n}}', { params: { n: 12 } })).toBe(12);
 });
 it('treats URL/path/header bindings as sensitive unless explicitly public', () => {

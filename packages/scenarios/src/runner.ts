@@ -13,6 +13,7 @@ import {
   humanize,
   shortSecretWarnings,
   redactSecrets,
+  redactTree,
   secretValues,
 } from '@logiparity/core';
 import { scenarioFixture } from './preflight.js';
@@ -56,7 +57,7 @@ export async function runScenario(
     const warnings = new Set<string>(shortSecretWarnings([scenario, target], env));
     if (scenario.invariants.every((invariant) => invariant === 'no_order_lost' || invariant === 'single_assignment'))
       warnings.add(
-        'These invariants cannot detect a replan that never ran. Add affected_reassigned to verify reassignment. See https://github.com/Nutts5796/logiparity/blob/main/docs/scenarios.md#affected_reassigned',
+        'These invariants cannot detect a replan that never ran. Add affected_reassigned to verify reassignment. See https://github.com/Nutts5796/logiparity/blob/main/docs/scenarios.md#reassignment-and-validation',
       );
     const warn = (message: string) => {
       if (!warnings.has(message)) {
@@ -212,8 +213,9 @@ export async function runScenario(
       report.exitCode = 2;
     }
     report.warnings = [...warnings].map((message) => redactSecrets(message, secrets));
-    await writeScenarioReport(report, reportDir);
-    return report;
+    const redactedReport = redactTree(report, secrets);
+    await writeScenarioReport(redactedReport, reportDir);
+    return redactedReport;
   } catch (error) {
     throw new Error(redactSecrets(errorText(error), secrets));
   }
