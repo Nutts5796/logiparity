@@ -1,6 +1,6 @@
 # Synthetic AI inputs
 
-These are handwritten fixtures for local previews, not results from a provider or claims about an observed production/demo defect. The OpenAPI document describes a small synthetic shipment surface; the Parity report also includes hypothetical email data for redaction demonstration. Every record and address is synthetic.
+These are AI-generated static fixtures for local previews, not results from a provider or claims about an observed production/demo defect. The OpenAPI document describes a small synthetic shipment surface; the Parity report also includes hypothetical email data for redaction demonstration. Every record and address is synthetic.
 
 After building, from the repository root:
 

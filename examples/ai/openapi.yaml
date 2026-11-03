@@ -1,4 +1,4 @@
-# Handwritten synthetic OpenAPI input for AI preview; not fetched from a live system.
+# AI-generated static synthetic OpenAPI input for AI preview; not fetched from a live system.
 openapi: 3.1.0
 info:
   title: Synthetic shipment API

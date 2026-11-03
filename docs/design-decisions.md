@@ -30,7 +30,7 @@ A short first page can mean a complete small result or an undocumented server pa
 
 ## Grouping heuristics
 
-Groups summarize observed uniform differences while preserving every finding and its blocking status. Constant deltas or value mappings use all mismatches in an entity, source and field bucket. Missing and extra groups require a run of at least three keys with the same prefix and a constant numeric stride greater than one. Outliers, such as a final partial-page key, remain individual findings. Likely-cause labels suggest an investigation; snapshot and producer behavior determine the actual cause.
+patterns.minCount controls support (default 3, minimum 3). Groups summarize observed uniform differences while preserving every finding and its blocking status. Constant deltas or value mappings use all mismatches in an entity, source and field bucket. Missing and extra groups require a run of at least three keys with the same prefix and a constant numeric stride greater than one. Outliers, such as a final partial-page key, remain individual findings. Likely-cause labels suggest an investigation; snapshot and producer behavior determine the actual cause.
 
 ## Read-only SQL
 

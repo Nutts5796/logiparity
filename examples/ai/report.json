@@ -10,7 +10,7 @@
       "field": "customer_email",
       "expected": "synthetic-a@example.test",
       "actual": "synthetic-b@example.test",
-      "message": "Handwritten synthetic AI fixture: synthetic-a@example.test differs from synthetic-b@example.test.",
+      "message": "AI-generated static synthetic AI fixture: synthetic-a@example.test differs from synthetic-b@example.test.",
       "blocking": true
     },
     {
@@ -21,7 +21,7 @@
       "field": "payout",
       "expected": "625",
       "actual": "624",
-      "message": "Handwritten synthetic AI fixture: payout differs by one minor unit; currency requires configuration context.",
+      "message": "AI-generated static synthetic AI fixture: payout differs by one minor unit; currency requires configuration context.",
       "blocking": true
     },
     {
@@ -32,7 +32,7 @@
       "field": "eta",
       "expected": 1793624460000,
       "actual": 1793602860000,
-      "message": "Handwritten synthetic AI fixture: normalized UTC epoch milliseconds differ.",
+      "message": "AI-generated static synthetic AI fixture: normalized UTC epoch milliseconds differ.",
       "blocking": true
     }
   ]
