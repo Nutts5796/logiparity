@@ -7,6 +7,8 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const version = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const image = process.env.LOGIPARITY_DOCKER_IMAGE ?? 'logiparity:' + version;
 const run = promisify(execFile);
+const revision = (await run('git', ['rev-parse', 'HEAD'], { cwd: root })).stdout.trim();
+const created = (await run('git', ['show', '-s', '--format=%cI', 'HEAD'], { cwd: root })).stdout.trim();
 const probe = `const fs=require('node:fs/promises'); const {execFile}=require('node:child_process'); const {promisify}=require('node:util'); const run=promisify(execFile);
 (async()=>{
 if(process.getuid()===0) throw Error('Container must be non-root');
@@ -22,16 +24,39 @@ console.log('Docker non-root, API/file checks, SQL validation, reports, money/UT
 await run('npm', ['run', 'release:prepare'], { cwd: root, maxBuffer: 4 * 1024 * 1024, timeout: 300000 });
 for (const target of ['runtime', 'slim']) {
   const tag = target === 'runtime' ? image : `${image}-slim`;
-  const build = spawn('docker', ['build', '--build-arg', 'VERSION=' + version, '--target', target, '--tag', tag, '.'], {
-    cwd: root,
-    stdio: 'inherit',
-  });
+  const build = spawn(
+    'docker',
+    [
+      'build',
+      '--build-arg',
+      'VERSION=' + version,
+      '--build-arg',
+      'REVISION=' + revision,
+      '--build-arg',
+      'CREATED=' + created,
+      '--target',
+      target,
+      '--tag',
+      tag,
+      '.',
+    ],
+    {
+      cwd: root,
+      stdio: 'inherit',
+    },
+  );
   const code = await new Promise((accept, reject) => {
     build.once('error', reject);
     build.once('exit', accept);
   });
   assert.equal(code, 0, `Docker ${target} build failed`);
   assert.equal((await run('docker', ['run', '--rm', '--network=none', tag, '--version'])).stdout.trim(), version);
+  const labels = JSON.parse(
+    (await run('docker', ['image', 'inspect', tag, '--format', '{{json .Config.Labels}}'])).stdout,
+  );
+  assert.equal(labels['org.opencontainers.image.version'], version);
+  assert.equal(labels['org.opencontainers.image.revision'], revision);
+  assert.equal(labels['org.opencontainers.image.created'], created);
   const result = await run(
     'docker',
     [
