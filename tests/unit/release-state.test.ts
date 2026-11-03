@@ -82,6 +82,7 @@ it('allows first creation and refuses image-only creation', async () => {
   ).rejects.toThrow('Image-only');
   expect(calls.some((args) => args[1] === 'create')).toBe(false);
   expect(await githubRelease({ tag: 'v1.0.1', version: '1.0.1', directory, run })).toBe('created');
+  expect(calls.find((args) => args[1] === 'create')).toContain('--draft');
 });
 it.each(['matching', 'different', 'absent'] as const)(
   'checks npm integrity before any publication: %s',

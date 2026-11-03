@@ -78,7 +78,7 @@ try {
     ['node_modules/.bin/logiparity', 'check', '--config', 'examples/demo/parity.yaml'],
     { cwd: temporary, env, timeout: 30000 },
   );
-  assert.match(checked.stdout, /0 findings \(0 blocking\)/);
+  assert.match(checked.stdout, /0 findings \(0 blocking findings\)/);
   const report = JSON.parse(await readFile(join(temporary, 'logiparity-report/report.json'), 'utf8'));
   assert.deepEqual(report.findings, []);
   assert.deepEqual(report.entities[0].counts, { api: 2750, export: 2750, csv: 2750 });
@@ -93,8 +93,11 @@ try {
     process.execPath,
     ['node_modules/.bin/logiparity', 'check', '--config', 'examples/freight/parity.yaml'],
     { cwd: temporary, env },
-  );
-  assert.match(freight.stdout, /0 findings \(0 blocking\)/);
+  ).catch((error) => {
+    assert.equal(error.code, 1);
+    return error;
+  });
+  assert.match(freight.stdout, /12 findings/);
   const readme = await readFile(join(temporary, 'README.md'), 'utf8');
   const staging = readme.split('## Try it on your staging')[1].split('## Disruption scenarios')[0];
   const yaml = staging.match(/```yaml\n([\s\S]*?)```/)[1];
@@ -115,7 +118,7 @@ try {
     timeout: 30000,
   });
   assert.match(staged.stdout, /The configuration is valid/);
-  assert.match(staged.stdout, /0 findings \(0 blocking\)/);
+  assert.match(staged.stdout, /0 findings \(0 blocking findings\)/);
   const stagingReport = JSON.parse(await readFile(join(temporary, 'logiparity-report/report.json'), 'utf8'));
   assert.deepEqual(stagingReport.findings, []);
   assert.deepEqual(stagingReport.entities[0].counts, { api: 2750, export: 2750 });

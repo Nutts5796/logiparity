@@ -1,9 +1,11 @@
+import { readFile } from 'node:fs/promises';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 const root = fileURLToPath(new URL('../', import.meta.url));
-const image = process.env.LOGIPARITY_DOCKER_IMAGE ?? 'logiparity:1.0.1';
+const version = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
+const image = process.env.LOGIPARITY_DOCKER_IMAGE ?? 'logiparity:' + version;
 const run = promisify(execFile);
 const probe = `const fs=require('node:fs/promises'); const {execFile}=require('node:child_process'); const {promisify}=require('node:util'); const run=promisify(execFile);
 (async()=>{
@@ -20,13 +22,16 @@ console.log('Docker non-root, API/file checks, SQL validation, reports, money/UT
 await run('npm', ['run', 'release:prepare'], { cwd: root, maxBuffer: 4 * 1024 * 1024, timeout: 300000 });
 for (const target of ['runtime', 'slim']) {
   const tag = target === 'runtime' ? image : `${image}-slim`;
-  const build = spawn('docker', ['build', '--target', target, '--tag', tag, '.'], { cwd: root, stdio: 'inherit' });
+  const build = spawn('docker', ['build', '--build-arg', 'VERSION=' + version, '--target', target, '--tag', tag, '.'], {
+    cwd: root,
+    stdio: 'inherit',
+  });
   const code = await new Promise((accept, reject) => {
     build.once('error', reject);
     build.once('exit', accept);
   });
   assert.equal(code, 0, `Docker ${target} build failed`);
-  assert.equal((await run('docker', ['run', '--rm', '--network=none', tag, '--version'])).stdout.trim(), '1.0.1');
+  assert.equal((await run('docker', ['run', '--rm', '--network=none', tag, '--version'])).stdout.trim(), version);
   const result = await run(
     'docker',
     [

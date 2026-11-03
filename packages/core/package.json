@@ -1,6 +1,6 @@
 {
   "name": "@logiparity/core",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -19,9 +19,10 @@
     "zod": "4.6.7"
   },
   "files": [
-    "dist/",
     "bin/",
     "LICENSE",
-    "assets/"
+    "assets/",
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
   ]
 }

@@ -1,3 +1,4 @@
+import { packArtifact } from './pack.mjs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -8,6 +9,7 @@ import assert from 'node:assert/strict';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const run = promisify(execFile);
+const version = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version;
 const temporary = await mkdtemp(join(tmpdir(), 'logiparity-package-'));
 const npmCli = process.env.npm_execpath;
 const npm = (args, cwd = root) =>
@@ -19,9 +21,9 @@ const npm = (args, cwd = root) =>
   });
 try {
   const args = ['--ignore-scripts', '--json', '--offline', '--no-fund'];
-  const dry = JSON.parse((await npm(['pack', '--dry-run', ...args])).stdout)[0];
+  const dry = await packArtifact(temporary);
   assert.equal(dry.name, 'logiparity');
-  assert.equal(dry.version, '1.0.1');
+  assert.equal(dry.version, version);
   const files = new Set(dry.files.map((file) => file.path));
   for (const file of [
     'bin/logiparity.js',
@@ -34,7 +36,6 @@ try {
     'CODE_OF_CONDUCT.md',
     'docs/ci.md',
     'docs/faq.md',
-    'docs/development/milestones.md',
     'examples/staging/driver-no-show-target.yaml',
     'examples/staging/driver-no-show.yaml',
     'examples/freight/parity.yaml',
@@ -46,6 +47,12 @@ try {
   ])
     assert(files.has(file), `Missing packaged ${file}`);
   assert(!files.has('MILESTONE_REPORT.md'));
+  for (const path of files)
+    assert(
+      !/^(?:docs\/(?:images|design|development)|examples\/freight\/logiparity-report)\//.test(path) &&
+        !path.endsWith('.map'),
+      'Unwanted package content ' + path,
+    );
   for (const name of ['cli', 'core', 'adapters', 'scenarios', 'ai']) {
     for (const file of ['package.json', 'LICENSE', `dist/${name === 'cli' ? 'main' : 'index'}.js`])
       assert(files.has(`node_modules/@logiparity/${name}/${file}`), `Missing bundled ${name}/${file}`);
@@ -65,7 +72,7 @@ try {
     );
     assert(!/(?:^|\/)\.env(?:\.|$)/.test(file), `Environment file ${file}`);
   }
-  const packed = JSON.parse((await npm(['pack', '--pack-destination', temporary, ...args])).stdout)[0];
+  const packed = dry;
   const offline = join(temporary, 'offline-consumer');
   await mkdir(offline);
   await npm(['install', join(temporary, packed.filename), ...args], offline);
@@ -119,8 +126,8 @@ export {provider};
       env: { ...process.env, LOGIPARITY_AI_BASE_URL: '', LOGIPARITY_AI_MODEL: '', LOGIPARITY_AI_API_KEY: '' },
       timeout: 30000,
     });
-  assert.match((await cli(['--help'])).stdout, /LogiParity 1\.0\.1/);
-  assert.equal((await cli(['--version'])).stdout.trim(), '1.0.1');
+  assert((await cli(['--help'])).stdout.includes('LogiParity ' + version));
+  assert.equal((await cli(['--version'])).stdout.trim(), version);
   await cli(['init', '--config', 'starter.yaml']);
   await writeFile(join(work, 'a.csv'), 'ID,Payout,At\nS1,6.25,2026-11-02T13:01:00Z\n');
   await writeFile(join(work, 'b.csv'), 'ID,Payout,At\nS1,6.24,2026-11-02T13:00:00Z\n');
@@ -152,24 +159,29 @@ export {provider};
   assert.equal(report.findings.length, 2);
   assert.deepEqual(
     report.groups.map((group) => group.kind),
-    ['datetime_offset', 'money_delta'],
+    [],
   );
   const html = await readFile(join(work, 'report/report.html'), 'utf8');
   assert(html.includes('$6.25'));
   assert(html.includes('data:font/woff2;base64,'));
   assert(html.includes('font-src data:'));
   assert(!html.includes('fonts.googleapis.com'));
-  assert.equal(report.coverage.explained, 2);
+  assert.equal(report.coverage.explained, 0);
   assert(html.includes('Nov 2, 2026, 1:01 PM UTC'));
-  assert(html.includes('1793624460000'));
+  assert(!html.includes('1793624460000'));
   await cp(join(install, 'node_modules/logiparity/examples/freight'), join(work, 'freight-example'), {
     recursive: true,
   });
   await cli(['validate', '--config', 'freight-example/parity.yaml']);
-  await cli(['check', '--config', 'freight-example/parity.yaml']);
+  await cli(['check', '--config', 'freight-example/parity.yaml']).then(
+    () => {
+      throw new Error('Intentional freight defects should fail');
+    },
+    (error) => assert.equal(error.code, 1),
+  );
   const freight = JSON.parse(await readFile(join(work, 'freight-example/logiparity-report/report.json'), 'utf8'));
-  assert.deepEqual(freight.findings, []);
-  assert.deepEqual(freight.entities[0].counts, { tms: 3, settlement: 9 });
+  assert.equal(freight.findings.length, 12);
+  assert.deepEqual(freight.entities.find((entity) => entity.entity === 'load').counts, { rate: 40, settlement: 151 });
   for (const name of ['github-actions.yml', 'github-actions-container.yml', 'gitlab-ci.yml'])
     assert(
       !/REPLACE_WITH|<release digest>/.test(

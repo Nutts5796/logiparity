@@ -1,28 +1,25 @@
-# Pin LOGIPARITY_IMAGE to a digest from the release notes if required:
-# Append @sha256: followed by the verified index digest in the release notes.
-# Copy to .gitlab-ci.yml. Set protected staging URL/token CI variables.
-stages: [test]
-variables:
-  LOGIPARITY_IMAGE: 'ghcr.io/nutts5796/logiparity:1.0.1-slim'
-logiparity:
-  stage: test
+# include: this file, then define a visible job with extends: .logiparity.
+# Select the stage in your own pipeline. This include never defines stages.
+# Set protected LOGIPARITY_IMAGE to a verified digest-pinned version reference.
+.logiparity:
   image:
     name: $LOGIPARITY_IMAGE
     entrypoint: ['']
   timeout: 15m
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web"'
-    # Opt in only for isolated targets: '$CI_PIPELINE_SOURCE == "merge_request_event"'
   script:
-    - test "$(logiparity --version)" = '1.0.1'
-    - logiparity validate --allow-missing-env --config parity.yaml
     - |
       node --input-type=module <<'JS'
-      import { writeFile } from 'node:fs/promises';
-      const response = await fetch(`${process.env.STAGING_API_URL}/exports/shipments.csv`, {headers: {Authorization: `Bearer ${process.env.STAGING_API_TOKEN}`}, redirect: 'error', signal: AbortSignal.timeout(30000)});
-      if (!response.ok) throw new Error(`Export HTTP ${response.status}`);
-      await writeFile('shipments.csv', new Uint8Array(await response.arrayBuffer()));
+      import {execFileSync} from 'node:child_process';
+      const match=process.env.LOGIPARITY_IMAGE.match(/:(\d+\.\d+\.\d+)(?:-slim)?@sha256:[a-f0-9]{64}$/);
+      if(!match || execFileSync('logiparity',['--version'],{encoding:'utf8'}).trim()!==match[1]) throw new Error('Set a verified digest-pinned LOGIPARITY_IMAGE with its matching CLI version');
       JS
+    - logiparity validate --allow-missing-env --config parity.yaml
+    - >-
+      curl --max-time 60 --retry 3 --fail --silent --show-error
+      -H "Authorization: Bearer $STAGING_API_TOKEN"
+      "$STAGING_API_URL/exports/shipments.csv" --output shipments.csv
     - logiparity check --config parity.yaml
   artifacts:
     when: always

@@ -1,8 +1,10 @@
-# Optional Actions variable LOGIPARITY_IMAGE overrides the version tag below.
-# To pin immutably, append @sha256: followed by the verified index digest in the release notes.
+# Set LOGIPARITY_IMAGE to ghcr.io/nutts5796/logiparity:<version>-slim@sha256:<verified digest>.
+# The CLI version check derives from that same image reference. No tag-only fallback.
 name: Staging parity in a container
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'
 permissions:
   contents: read
 jobs:
@@ -10,32 +12,45 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
-      image: ${{ vars.LOGIPARITY_IMAGE || 'ghcr.io/nutts5796/logiparity:1.0.1-slim' }}
-      # GitHub checkout and artifact actions need write access to runner-owned workspace mounts.
-      # This overrides the image default UID 1000 only for this CI job.
+      image: ${{ vars.LOGIPARITY_IMAGE }}
+      # Actions' checkout/artifact JavaScript actions must write to runner-owned /__w mounts.
+      # This job alone uses root for those mounts; the published image defaults to UID 1000.
       options: --user 0
     env:
+      LOGIPARITY_IMAGE: ${{ vars.LOGIPARITY_IMAGE }}
       STAGING_API_URL: ${{ vars.STAGING_API_URL }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Validate the bundled CLI and config
+        with: { persist-credentials: false }
+      - name: Verify digest pin and matching CLI
         run: |
-          test "$(logiparity --version)" = '1.0.1'
+          node --input-type=module <<'JS'
+          import {execFileSync} from 'node:child_process';
+          const match=process.env.LOGIPARITY_IMAGE.match(/:(\d+\.\d+\.\d+)(?:-slim)?@sha256:[a-f0-9]{64}$/);
+          if(!match || execFileSync('logiparity',['--version'],{encoding:'utf8'}).trim()!==match[1]) throw new Error('Set a verified digest-pinned LOGIPARITY_IMAGE with its matching CLI version');
+          JS
           logiparity validate --allow-missing-env --config parity.yaml
       - name: Download staging export
         env:
           STAGING_API_TOKEN: ${{ secrets.STAGING_API_TOKEN }}
-        run: |
-          node --input-type=module <<'JS'
-          import { writeFile } from 'node:fs/promises';
-          const response = await fetch(`${process.env.STAGING_API_URL}/exports/shipments.csv`, {headers: {Authorization: `Bearer ${process.env.STAGING_API_TOKEN}`}, redirect: 'error', signal: AbortSignal.timeout(30000)});
-          if (!response.ok) throw new Error(`Export HTTP ${response.status}`);
-          await writeFile('shipments.csv', new Uint8Array(await response.arrayBuffer()));
-          JS
+        run: >-
+          curl --max-time 60 --retry 3 --fail --silent --show-error
+          -H "Authorization: Bearer $STAGING_API_TOKEN"
+          "$STAGING_API_URL/exports/shipments.csv" --output shipments.csv
       - name: Compare staging sources
         env:
           STAGING_API_TOKEN: ${{ secrets.STAGING_API_TOKEN }}
-        run: logiparity check --config parity.yaml
+        run: |
+          set +e
+          logiparity check --config parity.yaml
+          code=$?
+          set -e
+          if [ "$code" -eq 1 ]; then echo '::error::Data findings'; fi
+          if [ "$code" -eq 2 ]; then echo '::error::Source or configuration error'; fi
+          exit "$code"
+      - name: Append readable results
+        if: always()
+        run: if [ -f logiparity-report/report.md ]; then cat logiparity-report/report.md >> "$GITHUB_STEP_SUMMARY"; fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

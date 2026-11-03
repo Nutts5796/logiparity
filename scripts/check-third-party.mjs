@@ -50,3 +50,19 @@ for (const entry of fonts.files) {
   assert(local.equals(Buffer.from(await response.arrayBuffer())), `Font asset differs from upstream: ${entry.file}`);
   console.log(`${entry.file}: ${entry.sha256} matches upstream`);
 }
+
+const licenseRoot = new URL('../licenses/upstream/', import.meta.url);
+const licenses = JSON.parse(await readFile(new URL('sources.json', licenseRoot), 'utf8'));
+for (const entry of licenses) {
+  const local = await readFile(new URL(entry.file, licenseRoot));
+  assert.equal(createHash('sha256').update(local).digest('hex'), entry.sha256, `License hash: ${entry.package}`);
+  const response = await fetch(entry.url, { redirect: 'error', signal: AbortSignal.timeout(30000) });
+  assert(response.ok);
+  let upstream = await response.text();
+  if (entry.extract === 'license-section') {
+    const start = upstream.toLowerCase().lastIndexOf('## license');
+    upstream = upstream.slice(start).split('\n').slice(2).join('\n').trim() + '\n';
+  }
+  assert.equal(local.toString(), upstream, `License upstream: ${entry.package}`);
+  console.log(`${entry.package}: license matches immutable upstream source`);
+}

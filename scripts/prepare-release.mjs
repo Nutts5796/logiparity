@@ -1,3 +1,4 @@
+import { packArtifact } from './pack.mjs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
@@ -20,9 +21,7 @@ const npm = (args, cwd = root) =>
   });
 try {
   await mkdir(output, { recursive: true });
-  const packed = JSON.parse(
-    (await npm(['pack', '--ignore-scripts', '--offline', '--json', '--pack-destination', output])).stdout,
-  )[0];
+  const packed = await packArtifact(output);
   const archive = join(output, packed.filename);
   const checksum = createHash('sha256')
     .update(await readFile(archive))

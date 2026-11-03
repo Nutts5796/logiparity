@@ -70,6 +70,7 @@ export async function githubRelease({ tag, version, directory, run, requireExist
     tag,
     ...names.map((name) => join(directory, name)),
     '--verify-tag',
+    '--draft',
     '--title',
     tag,
     '--notes-file',

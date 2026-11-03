@@ -1,0 +1,49 @@
+[
+  {
+    "package": "saxes",
+    "version": "6.0.0",
+    "url": "https://raw.githubusercontent.com/lddubeau/saxes/211fa0ebec9b628affc09219199639887174bfc3/LICENSE",
+    "file": "saxes.txt",
+    "sha256": "0fac2374380621b22e6b50451057721a9c52935b02d16d106a9f04897f061d0e"
+  },
+  {
+    "package": "isarray",
+    "version": "1.0.0",
+    "file": "isarray.txt",
+    "url": "https://raw.githubusercontent.com/juliangruber/isarray/2a23a281f369e9ae06394c0fb4d2381355a6ba33/README.md",
+    "extract": "license-section",
+    "sha256": "a1bd5deadb6a06dd74efa852c1b8b23f63b67f2214fbe9c8bd591da51da69268"
+  },
+  {
+    "package": "pg-types",
+    "version": "2.2.0",
+    "file": "pg-types.txt",
+    "url": "https://raw.githubusercontent.com/brianc/node-pg-types/d9d9dfb87eb50914043cbc178c301b7dd3b0c50d/README.md",
+    "extract": "license-section",
+    "sha256": "2c8a6e1b7782f0ca241792868af742f1c281c9661f59ec36c9acf40381c86645"
+  },
+  {
+    "package": "pgpass",
+    "version": "1.0.5",
+    "file": "pgpass.txt",
+    "url": "https://raw.githubusercontent.com/hoegaarden/pgpass/4230ed5e417ba6044ea7eb80b7c33db9ec301398/README.md",
+    "extract": "license-section",
+    "sha256": "492e56ee92e47d39ca91d60ef75f55b1104678fab8f09838206b61b43136e211"
+  },
+  {
+    "package": "pgsql-ast-parser",
+    "version": "12.0.2",
+    "file": "pgsql-ast-parser.txt",
+    "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/MIT.txt",
+    "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+    "note": "Upstream declares MIT but includes no separate license file. Standard full license text from SPDX; author attribution from upstream: Olivier Guimbal. No copyright year is inferred."
+  },
+  {
+    "package": "railroad-diagrams",
+    "version": "1.0.0",
+    "file": "railroad-diagrams.txt",
+    "url": "https://raw.githubusercontent.com/spdx/license-list-data/31846481de7ea17d92f2f46fad76abe58b2e9bb0/text/CC0-1.0.txt",
+    "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+    "note": "Upstream declares CC0-1.0 but includes no separate license file. Standard full license text from SPDX; author attribution from upstream: Tab Atkins Jr. and contributors. No copyright year is inferred."
+  }
+]

@@ -1,6 +1,6 @@
 {
   "name": "logiparity",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "type": "module",
   "license": "MIT",
   "author": "Sergei Orekhovskii",
@@ -30,7 +30,9 @@
     "release:prepare": "npm run build && node scripts/prepare-release.mjs",
     "check:third-party": "node scripts/check-third-party.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "release:bump": "node scripts/bump-version.mjs",
+    "pack:artifact": "npm run build && node scripts/pack.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
@@ -52,7 +54,7 @@
     "vitest": "4.1.12",
     "yaml": "2.9.1"
   },
-  "description": "Test/staging logistics data parity and disruption scenario checks, with optional AI drafts.",
+  "description": "Test/staging logistics data parity and disruption scenario checks.",
   "bin": {
     "logiparity": "bin/logiparity.js"
   },
@@ -64,7 +66,7 @@
     "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md",
     "SECURITY.md",
-    "docs/",
+    "docs/*.md",
     "templates/",
     "examples/ai/",
     "examples/postgres/",
@@ -73,21 +75,26 @@
     "examples/demo/scenarios/",
     "api/",
     "examples/staging/",
-    "examples/freight/"
+    "THIRD_PARTY_LICENSES.txt",
+    "examples/freight/*.csv",
+    "examples/freight/*.yaml",
+    "examples/freight/README.md"
   ],
   "dependencies": {
-    "@logiparity/adapters": "1.0.1",
-    "@logiparity/ai": "1.0.1",
-    "@logiparity/cli": "1.0.1",
-    "@logiparity/core": "1.0.1",
-    "@logiparity/scenarios": "1.0.1"
+    "@logiparity/adapters": "1.1.0",
+    "@logiparity/ai": "1.1.0",
+    "@logiparity/cli": "1.1.0",
+    "@logiparity/core": "1.1.0",
+    "@logiparity/scenarios": "1.1.0",
+    "@logiparity/demo-delivery": "1.1.0"
   },
   "bundleDependencies": [
     "@logiparity/cli",
     "@logiparity/core",
     "@logiparity/adapters",
     "@logiparity/scenarios",
-    "@logiparity/ai"
+    "@logiparity/ai",
+    "@logiparity/demo-delivery"
   ],
   "publishConfig": {
     "access": "public"
