@@ -19,7 +19,7 @@ Direct external runtime dependencies are pinned exactly:
 
 First-party workspace packages use this repository's MIT license. ExcelJS is a development-only writer for the demo and test fixtures; it is not installed or bundled with the CLI. The runtime XLSX reader uses unzipper and saxes, with a temporary disk index and a bounded cache for shared strings. No vendored runtime code remains. Development tools are pinned in package.json and package-lock.json.
 
-The full transitive runtime inventory follows. jszip is consumed under its MIT alternative. pako includes MIT and Zlib notices; preserve both when redistributing. The SQL parser transitively includes railroad-diagrams under CC0-1.0; its declared license is recorded below and the package retains its notice. No runtime dependency has unknown license metadata.
+The full transitive runtime inventory follows. Development-only jszip and pako retain their upstream notices in the fixture writer but are not distributed with the CLI. The SQL parser transitively includes railroad-diagrams under CC0-1.0; its declared license is recorded below and the package retains its notice. No runtime dependency has unknown license metadata.
 
 ## Locked transitive runtime inventory
 
