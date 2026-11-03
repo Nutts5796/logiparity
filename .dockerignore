@@ -1,6 +1,8 @@
 **
 !output/
+output/*
 !output/release/
-!output/release/logiparity-*.tgz
-!output/release/logiparity-*.tgz.sha256
-!output/release/logiparity-*.cdx.json
+output/release/*
+!output/release/logiparity-1.0.1.tgz
+!output/release/logiparity-1.0.1.tgz.sha256
+!output/release/logiparity-1.0.1.cdx.json
