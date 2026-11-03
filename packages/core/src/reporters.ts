@@ -99,7 +99,7 @@ export async function writeReports(
     const destination = join(directory, file);
     try {
       await mkdir(directory, { recursive: true });
-      await atomicReportFile(destination, render(report));
+      await atomicReportFile(destination, render(report), { mode: presentation.fileMode ?? 0o600 });
     } catch (error) {
       throw new Error(
         `Cannot write ${output} report to ${destination}: ${errorText(error)} Check report.dir and write permissions.`,

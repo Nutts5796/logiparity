@@ -10,7 +10,7 @@ import {
   type DataRow,
   type SqlConfig,
 } from '@logiparity/core';
-import { validateReadOnlySql } from './sql-guard.js';
+import { validateReadOnlySql, sqlConnectionUrl } from './sql-guard.js';
 
 export async function* readSql(config: SqlConfig, context: AdapterContext): AsyncIterable<DataRow> {
   validateReadOnlySql(config.query); // Must happen before credentials are read or any connection is made.
@@ -18,23 +18,10 @@ export async function* readSql(config: SqlConfig, context: AdapterContext): Asyn
   const connection = Object.hasOwn(context.env, config.connectionEnv) ? context.env[config.connectionEnv] : undefined;
   if (!connection)
     throw new SourceError(`Set ${config.connectionEnv} to the test/staging PostgreSQL URL for a read-only role.`);
-  try {
-    const url = new URL(connection);
-    if (!['postgres:', 'postgresql:'].includes(url.protocol) || !url.hostname || url.pathname.length < 2)
-      throw new Error('Invalid URL');
-  } catch {
-    throw new SourceError(
-      `${config.connectionEnv} requires an explicit postgres:// or postgresql:// host/database URL.`,
-    );
-  }
-  for (const key of new URL(connection).searchParams.keys())
-    if (['host', 'hostaddr', 'port'].includes(key.toLowerCase()))
-      throw new SourceError(
-        'SQL connection URL cannot override host, hostaddr or port through query parameters. Put the allowed host and port in the URL authority.',
-      );
-  assertAllowedHost(connection, context.allowedHosts, 'SQL');
+  const url = sqlConnectionUrl(connection, context.env);
+  assertAllowedHost(url, context.allowedHosts, 'SQL');
   const client = new pg.Client({
-    connectionString: connection,
+    connectionString: url.href,
     application_name: 'logiparity',
     connectionTimeoutMillis: config.timeoutMs,
   });

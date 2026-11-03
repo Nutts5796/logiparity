@@ -1,33 +1,55 @@
-export function validAllowedHost(host: string): boolean {
-  if (/[\s/?#@]/.test(host) || host.includes('://')) return false;
+interface AllowedHost {
+  hostname: string;
+  port?: number;
+}
+function allowedHost(input: string): AllowedHost | undefined {
+  if (/[\s/?#@*]/.test(input) || input.includes('://')) return undefined;
+  const match = input.match(/^(\[[^\]]+\]|[^:]+)(?::([0-9]+))?$/);
+  if (!match) return undefined;
   try {
-    const url = new URL(`http://${host}`);
-    return !!url.hostname && url.pathname === '/' && !url.username && !url.password && !host.endsWith(':');
+    const url = new URL(`http://${input}`);
+    const port = match[2] ? Number(match[2]) : undefined;
+    if (
+      !url.hostname ||
+      url.pathname !== '/' ||
+      url.username ||
+      url.password ||
+      (port !== undefined && (port < 1 || port > 65535))
+    )
+      return undefined;
+    return { hostname: url.hostname.toLowerCase(), ...(port === undefined ? {} : { port }) };
   } catch {
-    return false;
+    return undefined;
   }
+}
+export function validAllowedHost(host: string): boolean {
+  return !!allowedHost(host);
+}
+export function effectivePort(url: URL): number | undefined {
+  if (url.port) return Number(url.port);
+  return ({ 'http:': 80, 'https:': 443, 'postgres:': 5432, 'postgresql:': 5432 } as Record<string, number>)[
+    url.protocol
+  ];
 }
 export function assertAllowedHost(
   input: string | URL,
   allowed: readonly string[] | undefined,
   operation = 'Connection',
 ): void {
+  let url: URL;
+  try {
+    url = input instanceof URL ? input : new URL(input);
+  } catch {
+    throw new Error(`${operation}: invalid URL; supply a network URL with a host.`);
+  }
+  const port = effectivePort(url);
+  if (!url.hostname || port === undefined) throw new Error(`${operation}: invalid network URL or empty host.`);
   if (!allowed) return;
-  const url = input instanceof URL ? input : new URL(input);
-  const permitted = allowed.some((host) => {
-    try {
-      const candidate = new URL(`http://${host}`);
-      return (
-        candidate.username === '' &&
-        candidate.password === '' &&
-        candidate.pathname === '/' &&
-        (host.includes(':') ? candidate.host === url.host : candidate.hostname === url.hostname)
-      );
-    } catch {
-      return false;
-    }
+  const permitted = allowed.some((value) => {
+    const host = allowedHost(value);
+    return host && host.hostname === url.hostname.toLowerCase() && (host.port === undefined || host.port === port);
   });
-  if (!permitted) throw new Error(`${operation}: host ${url.hostname} is not in allowedHosts. No request was sent.`);
+  if (!permitted) throw new Error(`${operation}: configured host:${port} is not in allowedHosts. No request was sent.`);
 }
 export function connectionCause(error: unknown): string {
   if (error instanceof Error) {

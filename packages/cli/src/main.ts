@@ -172,7 +172,9 @@ async function main(): Promise<number> {
   try {
     validateConfig(config);
   } catch (error) {
-    throw new Error(`${resolve(values.config)}: ${errorText(error)}\nFix the listed configuration paths.`);
+    throw new Error(
+      `${resolve(values.config)}: ${errorText(error)}\nFix the source configuration or install the named optional packages.`,
+    );
   }
   if (positionals[0] === 'validate') {
     output(
@@ -194,13 +196,14 @@ async function main(): Promise<number> {
         },
       }),
     process.env,
-    { patterns: config.patterns, maxInvalidRows: config.maxInvalidRows },
+    { patterns: config.patterns, maxFindings: config.maxFindings, maxInvalidRows: config.maxInvalidRows },
   );
   if (warnings.length) report.warnings = [...warnings.map((message) => ({ message })), ...(report.warnings ?? [])];
   if (config.report.outputs.includes('console'))
     output(consoleReport(report, { entities: config.entities, displayTimezone: config.report.displayTimezone }));
   await writeReports(report, resolve(baseDir, config.report.dir), config.report.outputs, {
     entities: config.entities,
+    fileMode: config.report.fileMode,
     displayTimezone: config.report.displayTimezone,
     environment: config.environment,
     configFile: basename(values.config),

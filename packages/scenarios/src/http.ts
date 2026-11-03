@@ -111,16 +111,23 @@ export async function sendRequest(
       method: plan.method,
       headers,
       ...(plan.body === undefined ? {} : { body: plan.body }),
-      redirect: 'error',
+      redirect: 'manual',
       signal: signal ?? AbortSignal.timeout(target.timeoutMs),
     });
+    if (response.status >= 300 && response.status < 400) {
+      await response.body?.cancel();
+      throw new Error(`redirect refused: ${response.status}`);
+    }
     if (!response.ok) {
       await response.body?.cancel();
       throw new Error(`HTTP ${response.status}`);
     }
     return response;
   } catch (error) {
-    const status = error instanceof Error && /^HTTP \d+$/.test(error.message) ? error.message : connectionCause(error);
+    const status =
+      error instanceof Error && /^(?:HTTP \d+|redirect refused: \d+)$/.test(error.message)
+        ? error.message
+        : connectionCause(error);
     // Paths and response bodies can contain credentials; expose only the operation and status.
     throw new Error(`Target ${plan.method} request failed: ${status}. Check target mappings and service logs.`);
   }

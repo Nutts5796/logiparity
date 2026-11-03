@@ -1,8 +1,14 @@
+// Remove default-ignorable code points before matching secrets, including
+// combining grapheme joiners and variation selectors outside category Cf.
+export function cleanText(text: string): string {
+  return text
+    .replace(/[\p{Default_Ignorable_Code_Point}\u2028\u2029]/gu, '')
+    .replace(/\p{Cc}/gu, (char) => (['\t', '\n', '\r'].includes(char) ? char : ''));
+}
 export const normalizedSecretName = (name: string) =>
-  name
-    .replace(/\p{Cf}/gu, '')
+  cleanText(name)
     .toLowerCase()
-    .replace(/[-_.]/g, '');
+    .replace(/[-_.\s]/g, '');
 export const isSecretName = (name: string): boolean =>
   /token|secret|password|passwd|pwd|apikey|auth|cookie|session|credential|privatekey|jwt|signature|subscriptionkey|^pass$/.test(
     normalizedSecretName(name),
@@ -61,7 +67,7 @@ export function secretValues(config: unknown, env: NodeJS.ProcessEnv = process.e
       : [],
   );
   const addEnvironment = (name: string) => {
-    if (!publicNames.has(name)) add(env[name]);
+    if (name !== 'LOGIPARITY_SCENARIO_ARTIFACT_DIR' && !publicNames.has(name)) add(env[name]);
   };
   // Only variables the configuration actually uses are secrets. Scanning the whole
   // environment by name redacted unrelated values such as TERM_SESSION_ID or a flag "1".
@@ -118,9 +124,17 @@ function credentialEncodings(value: string): string[] {
   path.pathname = '/' + value;
   const query = new URL('https://redaction.invalid');
   query.search = '?value=' + value;
+  let canonical: string[] = [];
+  try {
+    const url = new URL(value);
+    canonical = [url.href, ...(url.origin !== 'null' ? [url.origin] : [])];
+  } catch {
+    /* Scalar secret. */
+  }
   return [
     ...new Set([
       value,
+      ...canonical,
       encodeURIComponent(value),
       encodeURI(value),
       path.pathname.slice(1),
@@ -146,10 +160,8 @@ export function redactSecrets(
   secrets: readonly string[],
   mode: 'diagnostic' | 'data' = 'diagnostic',
 ): string {
-  text = text.replace(/\p{Cf}/gu, '');
-  const values = [...new Set(secrets.map((secret) => secret.replace(/\p{Cf}/gu, '')).filter(Boolean))].sort(
-    (a, b) => b.length - a.length,
-  );
+  text = cleanText(text);
+  const values = [...new Set(secrets.map(cleanText).filter(Boolean))].sort((a, b) => b.length - a.length);
   for (const secret of values)
     for (const encoding of credentialEncodings(secret).sort((a, b) => b.length - a.length))
       text = replaceCredential(text, encoding, secret.length < 8, mode);
@@ -180,25 +192,7 @@ export function shortSecretWarnings(config: unknown, env: NodeJS.ProcessEnv = pr
     );
 }
 export function safeConsole(text: string): string {
-  return [...text.replace(/\p{Cf}/gu, '')]
-    .filter((char) => {
-      const code = char.codePointAt(0)!;
-      return (
-        (code === 9 || code === 10 || (code >= 32 && !(code >= 127 && code <= 159))) &&
-        ![
-          0x061c,
-          0x200b,
-          0xfeff,
-          0x200e,
-          0x200f,
-          0x2028,
-          0x2029,
-          ...Array.from({ length: 5 }, (_, i) => 0x202a + i),
-          ...Array.from({ length: 4 }, (_, i) => 0x2066 + i),
-        ].includes(code)
-      );
-    })
-    .join('');
+  return cleanText(text).replace(/\r/g, '');
 }
 
 export function redactTree<T>(input: T, secrets: readonly string[]): T {

@@ -1,5 +1,5 @@
 // Deliberately non-evaluating JSONPath subset. No scripts, filters or recursive descent.
-export function selectJson(value: unknown, path: string): unknown[] {
+export function jsonPathTokens(path: string): string[] {
   if (!path.startsWith('$')) throw new Error(`Invalid JSONPath ${path}; start with $.`);
   const tokens: string[] = [];
   const rest = path.slice(1);
@@ -13,6 +13,10 @@ export function selectJson(value: unknown, path: string): unknown[] {
     tokens.push(match[1] ?? match[2] ?? match[3] ?? match[4] ?? '');
     offset = pattern.lastIndex;
   }
+  return tokens;
+}
+export function selectJson(value: unknown, path: string): unknown[] {
+  const tokens = jsonPathTokens(path);
   let nodes: unknown[] = [value];
   for (const token of tokens) {
     nodes = nodes.flatMap((node) => {

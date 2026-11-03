@@ -1,4 +1,4 @@
-import { isSecretName, normalizedSecretName } from '@logiparity/core';
+import { isSecretName, normalizedSecretName, cleanText } from '@logiparity/core';
 const masked = '[REDACTED]';
 const decoded = (text: string) => {
   try {
@@ -25,7 +25,10 @@ function valueEnd(text: string, start: number, header = false): number {
 // Scan names and their values as tokens. Preserve delimiters and quotes so
 // scrubbing JSON twice remains valid JSON and cannot turn a mask into a key.
 export function redactCredentialTokens(input: string, collect: (...values: string[]) => void): string {
-  const text = input.replace(/\p{Cf}/gu, '');
+  const text = cleanText(input)
+    .replace(/\u00a0/g, ' ')
+    .replace(/\uff1a/g, ':')
+    .replace(/\uff1d/g, '=');
   let output = '',
     index = 0;
   const mask = (value: string) => {
@@ -34,6 +37,46 @@ export function redactCredentialTokens(input: string, collect: (...values: strin
   };
   while (index < text.length) {
     const rest = text.slice(index);
+    const pem = rest.match(/^-----BEGIN ([A-Z0-9 ]+)-----/);
+    if (pem) {
+      const closing = `-----END ${pem[1]}-----`;
+      const end = text.indexOf(closing, index + pem[0].length);
+      const stop = end < 0 ? text.length : end + closing.length;
+      output += mask(text.slice(index, stop));
+      index = stop;
+      continue;
+    }
+    const xml = rest.match(/^<([A-Za-z_][A-Za-z0-9_.:-]*)>/);
+    if (xml && isSecretName(xml[1] ?? '')) {
+      const closing = `</${xml[1]}>`,
+        start = index + xml[0].length;
+      const end = text.toLowerCase().indexOf(closing.toLowerCase(), start);
+      const stop = end < 0 ? text.length : end;
+      output += xml[0] + mask(text.slice(start, stop)) + (end < 0 ? '' : text.slice(end, end + closing.length));
+      index = end < 0 ? text.length : end + closing.length;
+      continue;
+    }
+    const escapedPair = rest.match(/^\\(["'])([A-Za-z_][A-Za-z0-9_. -]*)\\\1(\s*:\s*)\\(["'])/);
+    if (escapedPair && isSecretName(escapedPair[2] ?? '')) {
+      const start = index + escapedPair[0].length,
+        closing = '\\' + escapedPair[4];
+      const end = text.indexOf(closing, start),
+        stop = end < 0 ? text.length : end;
+      output += escapedPair[0] + mask(text.slice(start, stop)) + (end < 0 ? '' : closing);
+      index = end < 0 ? text.length : end + closing.length;
+      continue;
+    }
+    const secretFlag = rest.match(
+      /^(?:--(?:password|passwd|pass|token|secret|api-key|api_key)(?:[ \t]+|=)|-p(?:[ \t]+|=)?)/i,
+    );
+    if (secretFlag && (index === 0 || /\s/.test(text[index - 1] ?? ''))) {
+      const start = index + secretFlag[0].length,
+        end = valueEnd(text, start);
+      const quote = /["']/.test(text[start] ?? '') ? (text[start] ?? '') : '';
+      output += secretFlag[0] + quote + mask(text.slice(start + quote.length, end - quote.length)) + quote;
+      index = end;
+      continue;
+    }
     const url = rest.match(/^[a-z][a-z0-9+.-]*:\/\/[^/\s?#"'<>]*@/i);
     if (url) {
       const scheme = url[0].indexOf('://') + 3;
@@ -62,9 +105,7 @@ export function redactCredentialTokens(input: string, collect: (...values: strin
       index = end;
       continue;
     }
-    const nameToken = rest.match(
-      /^(?:(["'])([A-Za-z_][A-Za-z0-9_.-]*)\1|([A-Za-z_][A-Za-z0-9_.%-]*))([ \t]*[=:][ \t]*)/,
-    );
+    const nameToken = rest.match(/^(?:(["'])([A-Za-z_][A-Za-z0-9_. -]*)\1|([A-Za-z_][A-Za-z0-9_.%-]*))(\s*[=:]\s*)/);
     if (nameToken) {
       const name = normalizedSecretName(decoded(nameToken[2] ?? nameToken[3] ?? ''));
       if (
@@ -74,7 +115,8 @@ export function redactCredentialTokens(input: string, collect: (...values: strin
       ) {
         const start = index + nameToken[0].length,
           header = /^(?:proxyauthorization|authorization|cookie|setcookie|wwwauthenticate)$/.test(name);
-        let end = valueEnd(text, start, header);
+        const yaml = !header && nameToken[4]?.includes(':') && !/["']/.test(text[start] ?? '');
+        let end = valueEnd(text, start, header || yaml);
         if (header && !/["']/.test(text[start] ?? '')) {
           const outer = text[index - 1];
           end = outer === '"' || outer === "'" ? quotedEnd(text, index - 1) - 1 : text.indexOf('\n', start);
@@ -100,7 +142,7 @@ export function redactCredentialTokens(input: string, collect: (...values: strin
       index += nameToken[0].length;
       continue;
     }
-    const scheme = rest.match(/^(Bearer|Digest)[ \t]+/i);
+    const scheme = rest.match(/^(Bearer|Digest|Basic)[ \t]+/i);
     if (scheme && (index === 0 || /[\s:]/.test(text[index - 1] ?? ''))) {
       const start = index + scheme[0].length,
         end = valueEnd(text, start, scheme[1]?.toLowerCase() === 'digest');

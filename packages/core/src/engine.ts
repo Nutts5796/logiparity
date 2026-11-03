@@ -1,3 +1,4 @@
+import { limitFindings, appendFinding, FindingsLimitError } from './finding-limit.js';
 import { secretValues, redactSecrets, redactTree } from './diagnostics.js';
 import { keyFields, type EntityConfig, type Config } from './config.js';
 import type { Report, Finding, SourceReader, EntitySummary } from './types.js';
@@ -89,7 +90,7 @@ function compareSource(
   for (const [key, expected] of baseline.rows) {
     const actual = current.rows.get(key);
     if (!actual) {
-      report.findings.push(rowDetails(entity, source, reference, key, baseline, 'missing_in_source'));
+      appendFinding(report, rowDetails(entity, source, reference, key, baseline, 'missing_in_source'));
       continue;
     }
     for (const issue of invalidIssues.get(key) ?? []) issue.expected = expected[issue.field] ?? null;
@@ -111,7 +112,7 @@ function compareSource(
         const currencyField = entity.compare[field]?.currencyField ?? config.currencyField ?? field;
         if (currencyFindings.has(currencyField)) continue;
         currencyFindings.add(currencyField);
-        report.findings.push({
+        appendFinding(report, {
           type: 'field_mismatch',
           entity: entity.name,
           source,
@@ -126,7 +127,7 @@ function compareSource(
         continue;
       }
       if (!equalValues(value, actualValue, entity.compare[field]))
-        report.findings.push({
+        appendFinding(report, {
           type: 'field_mismatch',
           entity: entity.name,
           source,
@@ -143,7 +144,7 @@ function compareSource(
   }
   for (const key of current.rows.keys())
     if (!baseline.rows.has(key))
-      report.findings.push(rowDetails(entity, source, reference, key, current, 'extra_in_source'));
+      appendFinding(report, rowDetails(entity, source, reference, key, current, 'extra_in_source'));
 }
 function publishAggregates(
   entity: EntityConfig,
@@ -190,7 +191,7 @@ function publishAggregates(
           const expectedAmount = BigInt(referenceCurrencies[currency] ?? 0),
             actualAmount = BigInt(currencies[currency] ?? 0);
           if (!aggregateEqual(expectedAmount, actualAmount, definition))
-            report.findings.push({
+            appendFinding(report, {
               type: 'aggregate_mismatch',
               entity: entity.name,
               source,
@@ -207,7 +208,7 @@ function publishAggregates(
     }
     const expected = aggregate.values[reference];
     if (source !== reference && expected !== undefined && !aggregateEqual(expected, actual, definition))
-      report.findings.push({
+      appendFinding(report, {
         type: 'aggregate_mismatch',
         entity: entity.name,
         source,
@@ -243,7 +244,7 @@ export async function compareEntities(
   entities: EntityConfig[],
   read: SourceReader,
   env: NodeJS.ProcessEnv = process.env,
-  options: Partial<Pick<Config, 'patterns' | 'maxInvalidRows'>> = {},
+  options: Partial<Pick<Config, 'patterns' | 'maxInvalidRows' | 'maxFindings'>> = {},
 ): Promise<Report> {
   const secrets = secretValues(entities, env);
   const report: Report = {
@@ -252,8 +253,9 @@ export async function compareEntities(
     entities: [],
     patterns: options.patterns ?? { minCount: 3 },
   };
+  limitFindings(report, options.maxFindings ?? 10000);
   const finalKeys: Record<string, string> = Object.create(null) as Record<string, string>;
-  for (const entity of entities) {
+  entitiesLoop: for (const entity of entities) {
     const sources = Object.entries(entity.sources),
       reference = sources[0]?.[0] ?? '';
     const summary: EntitySummary = {
@@ -282,22 +284,45 @@ export async function compareEntities(
     report.entities.push(summary);
     let baseline: SourceState | undefined;
     for (const [source, config] of sources) {
-      const current = await readSource(entity, source, config, read, secrets, report, options.maxInvalidRows ?? 50);
-      if (!current) {
-        if (source === reference) break;
-        continue;
-      }
-      summary.counts[source] = current.count;
-      if (summary.uniqueCounts) summary.uniqueCounts[source] = current.rows.size;
-      for (const issue of current.issues) report.findings.push(issue);
-      publishAggregates(entity, source, reference, current, summary, report);
-      if (source === reference) {
-        baseline = current;
-        const last = [...current.rows.keys()].at(-1);
-        if (last && typeof entity.key === 'string') finalKeys[entity.name] = last;
-      } else if (baseline) {
-        compareSource(entity, source, reference, baseline, current, report);
-        collectReconciliation(entity, baseline, current, source, reference, summary);
+      try {
+        const current = await readSource(
+          entity,
+          source,
+          config,
+          read,
+          secrets,
+          report,
+          options.maxInvalidRows ?? 50,
+          options.maxFindings ?? 10000,
+        );
+        if (!current) {
+          if (source === reference) break;
+          continue;
+        }
+        summary.counts[source] = current.count;
+        if (summary.uniqueCounts) summary.uniqueCounts[source] = current.rows.size;
+        for (const issue of current.issues) appendFinding(report, issue);
+        publishAggregates(entity, source, reference, current, summary, report);
+        if (source === reference) {
+          baseline = current;
+          const last = [...current.rows.keys()].at(-1);
+          if (last && typeof entity.key === 'string') finalKeys[entity.name] = last;
+        } else if (baseline) {
+          compareSource(entity, source, reference, baseline, current, report);
+          collectReconciliation(entity, baseline, current, source, reference, summary);
+        }
+      } catch (error) {
+        if (!(error instanceof FindingsLimitError)) throw error;
+        report.truncated = true;
+        report.findings.push({
+          type: 'source_error',
+          entity: entity.name,
+          source,
+          key: '',
+          field: '',
+          message: error.message,
+        });
+        break entitiesLoop;
       }
     }
   }

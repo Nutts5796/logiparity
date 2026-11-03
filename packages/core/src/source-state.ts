@@ -1,3 +1,4 @@
+import { appendFinding } from './finding-limit.js';
 import { rowCurrency, recordRawTotals, measureCurrencies } from './source-totals.js';
 import { keyFields, errorText, type EntityConfig, type SourceConfig } from './config.js';
 import { sourceRule, normalize } from './normalize.js';
@@ -312,6 +313,7 @@ export async function readSource(
   secrets: string[],
   report: Report,
   maxInvalidRows: number,
+  maxFindings: number,
 ): Promise<SourceState | undefined> {
   const state: SourceState = {
     rows: new Map(),
@@ -353,6 +355,11 @@ export async function readSource(
       },
     })) {
       records++;
+      if (records > config.maxRows)
+        throw new Error(
+          `Source ${source} exceeds maxRows (${config.maxRows}). Reduce the export or increase the reviewed limit.`,
+        );
+      if (state.issues.length > maxFindings) throw new Error(`Source ${source} exceeds maxFindings (${maxFindings}).`);
       state.position = raw[sourceRow] ?? records;
       // Reject excluded rows before parsing unrelated cells or requiring their key.
       const filters = { ...config.where, ...(config.rollup?.where ?? {}) };
@@ -472,8 +479,8 @@ export async function readSource(
     return state;
   } catch (error) {
     const diagnostic = redactSecrets(errorText(error), secrets);
-    for (const issue of state.issues) report.findings.push(issue);
-    report.findings.push({
+    for (const issue of state.issues) appendFinding(report, issue);
+    appendFinding(report, {
       type: 'source_error',
       entity: entity.name,
       source,

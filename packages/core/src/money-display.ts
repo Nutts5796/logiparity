@@ -5,6 +5,7 @@ import { displayValue } from './report-utils.js';
 
 // Presentation context stays outside Report, preserving the JSON wire format.
 export interface ReportPresentation {
+  fileMode?: number;
   entities?: readonly EntityConfig[];
   patterns?: { minCount: number };
   environment?: string;

@@ -1,10 +1,10 @@
 import { mkdir } from 'node:fs/promises';
-import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
+import { finished } from 'node:stream/promises';
 import { basename, join, resolve } from 'node:path';
 import { adapters, validateConfig } from '@logiparity/adapters';
 import {
+  atomicReportFile,
   compareEntities,
   loadConfig,
   reportExitCode,
@@ -173,10 +173,13 @@ export async function runScenario(
         for (const artifact of artifacts) {
           const response = await sendRequest(artifact.plan, target, headers);
           if (!response.body) throw new Error('Empty artifact response');
-          await pipeline(
-            Readable.fromWeb(response.body as import('node:stream/web').ReadableStream),
-            createWriteStream(join(artifactDir, artifact.file)),
-          );
+          const body = Readable.fromWeb(response.body as import('node:stream/web').ReadableStream);
+          try {
+            await atomicReportFile(join(artifactDir, artifact.file), body, { maxBytes: artifact.maxBytes });
+          } finally {
+            body.destroy();
+            await finished(body).catch(() => {});
+          }
         }
         const directory = resolve(reportDir, 'parity');
         report.parity = await compareEntities(
@@ -193,10 +196,15 @@ export async function runScenario(
               },
             }),
           parityEnv,
-          { patterns: parity.config.patterns, maxInvalidRows: parity.config.maxInvalidRows },
+          {
+            patterns: parity.config.patterns,
+            maxFindings: parity.config.maxFindings,
+            maxInvalidRows: parity.config.maxInvalidRows,
+          },
         );
         await writeReports(report.parity, directory, ['html', 'json', 'markdown', 'junit'], {
           entities: parity.config.entities,
+          fileMode: parity.config.report.fileMode,
           displayTimezone: parity.config.report.displayTimezone,
           environment: parity.config.environment,
           configFile: basename(scenario.afterwards!.parity),
@@ -215,7 +223,7 @@ export async function runScenario(
     }
     report.warnings = [...warnings].map((message) => redactSecrets(message, secrets));
     const redactedReport = redactTree(report, secrets);
-    await writeScenarioReport(redactedReport, reportDir);
+    await writeScenarioReport(redactedReport, reportDir, scenario.report.fileMode);
     return redactedReport;
   } catch (error) {
     throw new Error(redactSecrets(errorText(error), secrets));

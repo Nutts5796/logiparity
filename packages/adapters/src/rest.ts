@@ -1,6 +1,8 @@
 import { assertAllowedHost, connectionCause, safeConsole, fieldPath } from '@logiparity/core';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { AdapterContext, DataRow, RestConfig } from '@logiparity/core';
+import { JsonRowLimit } from './json-row-limit.js';
+import { StringDecoder } from 'node:string_decoder';
 import { selectJson, selectOne } from './jsonpath.js';
 
 function environment(name: string, env: NodeJS.ProcessEnv): string {
@@ -22,6 +24,8 @@ async function getPage(
   url: URL,
   config: RestConfig,
   headers: Headers,
+  remainingRows: number,
+  sourceName: string,
 ): Promise<{ body: unknown; link: string | null }> {
   for (let attempt = 0; attempt <= config.retries; attempt++) {
     let response: Response;
@@ -33,7 +37,7 @@ async function getPage(
         continue;
       }
       throw new Error(
-        `GET ${url.origin}${url.pathname} ${connectionCause(error)} after ${config.retries + 1} attempts; ${connectionCause(error) === 'timed out' ? 'check connectivity and timeoutMs' : 'check the host, port and service availability'}.`,
+        `GET ${url.origin}${url.pathname} ${connectionCause(error)} after ${config.retries + 1} ${config.retries ? 'attempts' : 'attempt'}; ${connectionCause(error) === 'timed out' ? 'check connectivity and timeoutMs' : 'check the host, port and service availability'}.`,
       );
     }
     if (response.status >= 300 && response.status < 400) {
@@ -75,24 +79,33 @@ async function getPage(
     try {
       const chunks: Uint8Array[] = [];
       let bytes = 0;
+      const decoder = new StringDecoder('utf8');
+      const rowGuard = new JsonRowLimit(
+        config.items,
+        remainingRows,
+        `${sourceName}: response exceeds maxRows (${config.maxRows}); reduce the export or increase the reviewed limit.`,
+      );
+      const sizeError = `${sourceName}: response exceeds maxResponseBytes (${(config.maxResponseBytes / (1024 * 1024)).toLocaleString('en-US', { maximumFractionDigits: 3 })} MiB).`;
       const declared = Number(response.headers.get('content-length'));
       if (Number.isFinite(declared) && declared > config.maxResponseBytes) {
         await response.body?.cancel();
-        throw new Error(`REST response exceeds maxResponseBytes (${config.maxResponseBytes}).`);
+        throw new Error(sizeError);
       }
       if (response.body)
         for await (const chunk of response.body) {
           bytes += chunk.byteLength;
-          if (bytes > config.maxResponseBytes)
-            throw new Error(`REST response exceeds maxResponseBytes (${config.maxResponseBytes}).`);
+          if (bytes > config.maxResponseBytes) throw new Error(sizeError);
+          rowGuard.consume(decoder.write(chunk));
           chunks.push(chunk);
         }
+      rowGuard.consume(decoder.end());
       return {
         body: JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown,
         link: response.headers.get('link'),
       };
     } catch (error) {
-      if (error instanceof Error && error.message.includes('maxResponseBytes')) throw error;
+      if (error instanceof Error && /maxResponseBytes|maxRows|JSON object key|JSON nesting/.test(error.message))
+        throw error;
       throw new Error(
         `GET ${url.origin}${url.pathname}: response is not valid JSON or body read timed out; check the endpoint and timeoutMs.`,
       );
@@ -120,6 +133,7 @@ export async function* readRest(config: RestConfig, context: AdapterContext): As
       `Basic ${Buffer.from(`${environment(config.auth.usernameEnv, context.env)}:${environment(config.auth.passwordEnv, context.env)}`).toString('base64')}`,
     );
   const pagination = config.pagination;
+  let records = 0;
   let position = pagination?.type === 'page' ? pagination.start : 0;
   const visited = new Set<string>();
   for (let page = 0; page < config.maxPages; page++) {
@@ -129,10 +143,18 @@ export async function* readRest(config: RestConfig, context: AdapterContext): As
     if (visited.has(url.href)) throw new Error('Pagination repeated a URL or cursor; fix the next-page configuration.');
     visited.add(url.href);
     assertAllowedHost(url, context.allowedHosts, 'REST');
-    const { body, link } = await getPage(url, config, headers);
+    const { body, link } = await getPage(
+      url,
+      config,
+      headers,
+      config.maxRows - records,
+      config.label ?? context.sourceName ?? 'REST source',
+    );
     const selected = selectJson(body, config.items);
     const items: unknown[] =
       selected.length === 1 && Array.isArray(selected[0]) ? (selected[0] as unknown[]) : selected;
+    records += items.length;
+    if (records > config.maxRows) throw new Error(`REST source exceeds maxRows (${config.maxRows}).`);
     let more: boolean | undefined;
     if (pagination && 'size' in pagination && items.length > pagination.size)
       throw new Error(

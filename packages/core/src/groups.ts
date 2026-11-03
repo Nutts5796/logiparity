@@ -222,15 +222,15 @@ export function groupFindings(
     const first = bucket[0];
     if (!first || bucket.length < minCount) continue;
     if (first.type !== 'field_mismatch') {
-      groups.push(...strideGroups(bucket, minCount, finalReferenceKeys[first.entity]));
+      for (const group of strideGroups(bucket, minCount, finalReferenceKeys[first.entity])) groups.push(group);
       continue;
     }
     const rule = entities.find((entity) => entity.name === first.entity)?.compare[first.field];
-    groups.push(
-      ...(rule?.type === 'money' || rule?.type === 'datetime'
+    const candidates =
+      rule?.type === 'money' || rule?.type === 'datetime'
         ? deltaGroups(bucket, entities, minCount)
-        : mappingGroups(bucket, minCount)),
-    );
+        : mappingGroups(bucket, minCount);
+    for (const group of candidates) groups.push(group);
   }
   return groups.sort(
     (a, b) =>

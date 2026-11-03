@@ -63,7 +63,7 @@ export async function aiCommand(positionals: string[], values: AiOptions): Promi
   const fields = (values['redact-fields'] ?? []).flatMap((value) => value.split(',').map((field) => field.trim()));
   if (fields.some((field) => !field))
     throw new Error('--redact-fields requires nonempty comma-separated field names or JSONPaths. Nothing was sent.');
-  settings.redactFields.push(...fields);
+  for (const field of fields) settings.redactFields.push(field);
   const config = providerConfig(process.env, settings.timeoutMs, values.send === true);
   const prepared = await prepareDraft(
     task,

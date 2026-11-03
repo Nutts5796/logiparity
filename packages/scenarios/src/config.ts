@@ -1,5 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import {
+  reportFileMode,
   loadYaml,
   sourceSchema,
   ConfigError,
@@ -53,6 +54,7 @@ export const scenarioSchema = z
     version: z.literal(1),
     name: text,
     target: text,
+    report: z.object({ fileMode: reportFileMode }).strict().default({ fileMode: 0o600 }),
     setup: z.object({ fixture: text }).strict().optional(),
     events: z.array(event).min(1),
     wait: z
@@ -112,7 +114,20 @@ export const targetSchema = z
     clock: z.object({ advance: request }).strict().optional(),
     state: z.record(text, sourceSchema).refine((v) => Object.keys(v).length > 0, 'Configure state sources'),
     artifacts: z
-      .array(z.object({ path: text, file: z.string().regex(/^[A-Za-z0-9_-]+\.(csv|xlsx)$/) }).strict())
+      .array(
+        z
+          .object({
+            path: text,
+            file: z.string().regex(/^[A-Za-z0-9_-]+\.(csv|xlsx)$/),
+            maxBytes: z
+              .number()
+              .int()
+              .min(1)
+              .max(1024 * 1024 * 1024)
+              .default(64 * 1024 * 1024),
+          })
+          .strict(),
+      )
       .default([]),
   })
   .strict()
@@ -136,7 +151,7 @@ function parse<T>(schema: z.ZodType<T>, value: unknown, file: string, env: NodeJ
   if (!result.success)
     throw new ConfigError(
       redactSecrets(
-        `${file}: ${formatConfigIssues(schema, value, result.error)}\nFix the listed configuration paths. Mutations require allowedHosts, e.g. allowedHosts: [staging.example.test].`,
+        `${file}: ${formatConfigIssues(schema, value, result.error)}\nFix the listed configuration paths.${result.error.issues.some((issue) => issue.path[0] === 'allowedHosts' && (!value || typeof value !== 'object' || !Object.hasOwn(value, 'allowedHosts'))) ? ' Mutations require allowedHosts, e.g. allowedHosts: [staging.example.test].' : ''}`,
         secretValues(value, env),
       ),
     );

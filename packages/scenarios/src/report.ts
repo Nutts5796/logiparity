@@ -182,7 +182,7 @@ export function scenarioJunit(report: ScenarioReport, timestamp = new Date()): s
 <properties><property name="warnings" value="${report.warnings?.length ?? 0}"/><property name="timing" value="not measured; time=0 is a placeholder"/><property name="timestamp.timezone" value="UTC"/></properties>
 ${results.map(junitCase).join('')}<system-out>${xml((report.warnings ?? []).map((warning) => `Warning: ${warning}`).join('\n'))}</system-out><system-err/></testsuite></testsuites>\n`;
 }
-export async function writeScenarioReport(report: ScenarioReport, directory: string): Promise<void> {
+export async function writeScenarioReport(report: ScenarioReport, directory: string, fileMode = 0o600): Promise<void> {
   await mkdir(directory, { recursive: true });
   const formats: [string, string][] = [
     [
@@ -197,7 +197,7 @@ export async function writeScenarioReport(report: ScenarioReport, directory: str
     ['scenario.md', scenarioMarkdown(report)],
     ['junit.xml', scenarioJunit(report)],
   ];
-  for (const [file, content] of formats) await atomicReportFile(join(directory, file), content);
+  for (const [file, content] of formats) await atomicReportFile(join(directory, file), content, { mode: fileMode });
 }
 export function scenarioConsole(report: ScenarioReport): string {
   report = redactTree(report, []);

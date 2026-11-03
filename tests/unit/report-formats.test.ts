@@ -186,7 +186,7 @@ describe('report formats', () => {
         }
         if (index === 2) {
           expect(xml).toContain('errors="1"');
-          expect(xml).toContain('bad �� XML &amp;');
+          expect(xml).toContain('bad � XML &amp;');
         }
       }
       const invalid = join(dir, 'invalid.xml');

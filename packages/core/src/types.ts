@@ -10,6 +10,7 @@ export function withSourceRow(row: DataRow, position: number): DataRow {
   return row;
 }
 export interface AdapterContext {
+  sourceName?: string;
   baseDir: string;
   env: NodeJS.ProcessEnv;
   reportDir?: string;
@@ -110,6 +111,7 @@ export interface SourceReadContext {
 }
 export interface Report {
   schemaVersion: 1;
+  truncated?: boolean;
   patterns?: { minCount: number };
   findings: Finding[];
   entities: EntitySummary[];

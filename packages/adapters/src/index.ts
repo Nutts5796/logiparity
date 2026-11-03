@@ -9,7 +9,7 @@ import {
   type Config,
 } from '@logiparity/core';
 import { selectJson } from './jsonpath.js';
-import { validateReadOnlySql } from './sql-guard.js';
+import { validateReadOnlySql, sqlConnectionUrl } from './sql-guard.js';
 import { readRest } from './rest.js';
 import { readFileSource } from './file.js';
 import { readUi } from './ui.js';
@@ -20,7 +20,11 @@ export const adapters: Adapter = {
     if (config.type === 'rest') assertAllowedHost(config.baseUrl, context.allowedHosts, 'REST');
     if (config.type === 'ui') assertAllowedHost(config.url, context.allowedHosts, 'UI');
     if (config.type === 'sql' && context.env[config.connectionEnv])
-      assertAllowedHost(context.env[config.connectionEnv] as string, context.allowedHosts, 'SQL');
+      assertAllowedHost(
+        sqlConnectionUrl(context.env[config.connectionEnv] as string, context.env),
+        context.allowedHosts,
+        'SQL',
+      );
     switch (config.type) {
       case 'rest':
         return readRest(config, context);
@@ -79,7 +83,7 @@ export function validateConfig(config: Config, env: NodeJS.ProcessEnv = process.
       if (source.type === 'rest') assertAllowedHost(source.baseUrl, config.allowedHosts, 'REST');
       if (source.type === 'ui') assertAllowedHost(source.url, config.allowedHosts, 'UI');
       if (source.type === 'sql' && env[source.connectionEnv])
-        assertAllowedHost(env[source.connectionEnv] as string, config.allowedHosts, 'SQL');
+        assertAllowedHost(sqlConnectionUrl(env[source.connectionEnv] as string, env), config.allowedHosts, 'SQL');
       validateSource(source);
     }
   }

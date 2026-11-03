@@ -112,3 +112,27 @@ export function validateReadOnlySql(query: string): void {
   };
   walk(statements[0]);
 }
+
+/** Resolve network defaults before the allowlist and pg see the connection. */
+export function sqlConnectionUrl(connection: string, env: NodeJS.ProcessEnv = process.env): URL {
+  let url: URL;
+  try {
+    url = new URL(connection);
+  } catch {
+    throw new Error('Requires an explicit postgres:// or postgresql:// host/database URL.');
+  }
+  if (!['postgres:', 'postgresql:'].includes(url.protocol) || !url.hostname || url.pathname.length < 2)
+    throw new Error('Requires an explicit postgres:// or postgresql:// host/database URL.');
+  for (const key of url.searchParams.keys())
+    if (['host', 'hostaddr', 'port'].includes(key.toLowerCase()))
+      throw new Error(
+        'SQL connection URL cannot override host, hostaddr or port through query parameters. Put the allowed host and port in the URL authority.',
+      );
+  const port = url.port || env.PGPORT || process.env.PGPORT || '5432';
+  if (!/^[0-9]+$/.test(port) || Number(port) < 1 || Number(port) > 65535)
+    throw new Error('SQL port must be between 1 and 65535; check the URL and PGPORT.');
+  // The URL always supplies the host, so PGHOST cannot redirect the client.
+  // Make the selected PGPORT explicit to avoid a second ambient-default lookup.
+  url.port = String(Number(port));
+  return url;
+}
