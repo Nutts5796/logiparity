@@ -64,12 +64,23 @@ it('stops the pasted zsh tag recipe before any git call on a prerelease version 
     const docs = await readFile('docs/release.md', 'utf8');
     const block = [...docs.matchAll(/```sh\n([\s\S]*?)```/g)].map((m) => m[1]!).find((s) => s.includes('git tag -a'))!;
     const log = join(dir, 'git-calls');
-    const result = await run('/bin/zsh', ['-f', '-c', block], {
-      cwd: dir,
-      env: { ...process.env, PATH: join(dir, 'bin') + ':' + process.env.PATH, CALL_LOG: log },
-    }).catch((error) => error);
-    expect(result.code).toBe(2);
-    await expect(access(log)).rejects.toThrow();
+    // Linux CI runners have no zsh; the recipe must also stop under bash.
+    const shells: [string, string[]][] = [['/bin/bash', ['--noprofile', '--norc', '-c', block]]];
+    if (
+      await access('/bin/zsh').then(
+        () => true,
+        () => false,
+      )
+    )
+      shells.push(['/bin/zsh', ['-f', '-c', block]]);
+    for (const [shell, args] of shells) {
+      const result = await run(shell, args, {
+        cwd: dir,
+        env: { ...process.env, PATH: join(dir, 'bin') + ':' + process.env.PATH, CALL_LOG: log },
+      }).catch((error) => error);
+      expect(result.code).toBe(2);
+      await expect(access(log)).rejects.toThrow();
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
