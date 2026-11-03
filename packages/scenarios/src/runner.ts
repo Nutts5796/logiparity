@@ -1,10 +1,10 @@
-import { mkdir } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { finished } from 'node:stream/promises';
 import { basename, join, resolve } from 'node:path';
 import { adapters, validateConfig } from '@logiparity/adapters';
 import {
   atomicReportFile,
+  ensureReportDirectory,
   compareEntities,
   loadConfig,
   reportExitCode,
@@ -112,6 +112,9 @@ export async function runScenario(
         state[name] = [];
         for await (const row of adapters.read(source, {
           baseDir: targetDir,
+          sourceName: name,
+          sourcePath: `state.${name}`,
+          fileMode: scenario.report.fileMode,
           env,
           reportDir,
           warn,
@@ -169,19 +172,24 @@ export async function runScenario(
       for (const check of checks)
         report.invariants.push(await check({ before, after, events: scenario.events, ...affected }));
       if (parity) {
-        await mkdir(artifactDir, { recursive: true });
+        await ensureReportDirectory(artifactDir, reportDir);
         for (const artifact of artifacts) {
           const response = await sendRequest(artifact.plan, target, headers);
           if (!response.body) throw new Error('Empty artifact response');
           const body = Readable.fromWeb(response.body as import('node:stream/web').ReadableStream);
           try {
-            await atomicReportFile(join(artifactDir, artifact.file), body, { maxBytes: artifact.maxBytes });
+            await atomicReportFile(join(artifactDir, artifact.file), body, {
+              maxBytes: artifact.maxBytes,
+              mode: scenario.report.fileMode,
+              rootDir: reportDir,
+            });
           } finally {
             body.destroy();
             await finished(body).catch(() => {});
           }
         }
         const directory = resolve(reportDir, 'parity');
+        await ensureReportDirectory(directory, reportDir);
         report.parity = await compareEntities(
           parity.config.entities,
           (_, source, context) =>
@@ -190,6 +198,8 @@ export async function runScenario(
               env: parityEnv,
               ...(parity.config.allowedHosts ? { allowedHosts: parity.config.allowedHosts } : {}),
               reportDir: directory,
+              fileMode: parity.config.report.fileMode,
+              ...(context.sourcePath ? { sourcePath: context.sourcePath } : {}),
               warn: (message) => {
                 context.warn(message);
                 warn(message);
@@ -205,6 +215,7 @@ export async function runScenario(
         await writeReports(report.parity, directory, ['html', 'json', 'markdown', 'junit'], {
           entities: parity.config.entities,
           fileMode: parity.config.report.fileMode,
+          reportRoot: reportDir,
           displayTimezone: parity.config.report.displayTimezone,
           environment: parity.config.environment,
           configFile: basename(scenario.afterwards!.parity),
@@ -218,7 +229,13 @@ export async function runScenario(
             ? 1
             : 0;
     } catch (error) {
-      report.error = redactSecrets(errorText(error), secrets);
+      const message = errorText(error);
+      report.error = redactSecrets(
+        /connection refused|host not found|timed out|connection reset/i.test(message)
+          ? `Target ${target.name} is unreachable (${basename(targetFile)}). ${message}`
+          : message,
+        secrets,
+      );
       report.exitCode = 2;
     }
     report.warnings = [...warnings].map((message) => redactSecrets(message, secrets));

@@ -1,11 +1,11 @@
 import { limitSourceRows } from './source-limits.js';
 import { createHash } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { requireOptionalAdapter } from './optional.js';
 import {
   atomicReportFile,
+  ensureReportDirectory,
   assertAllowedHost,
   fieldPaths,
   withSourceRow,
@@ -23,6 +23,7 @@ async function* uiRows(config: UiConfig, context: AdapterContext): AsyncIterable
   let session: BrowserContext | undefined;
   let page: Page | undefined;
   let violation: SourceError | undefined;
+  let loginRedirect = false;
   let pageNumber = 1;
   let rowNumber = 1;
   let stage = 'launch Chromium (run npx logiparity install-browser if it is missing)';
@@ -67,6 +68,8 @@ async function* uiRows(config: UiConfig, context: AdapterContext): AsyncIterable
           const location = response.headers().location;
           if (response.status() >= 300 && response.status() < 400 && location) {
             const next = new URL(location, url);
+            if (route.request().isNavigationRequest() && /\/(?:login|sign-in|signin)(?:\/|$)/i.test(next.pathname))
+              loginRedirect = true;
             await response.dispose();
             if (!allowed(next)) throw new SourceError('Redirect Location is outside allowedOrigins.');
             url = next;
@@ -92,6 +95,10 @@ async function* uiRows(config: UiConfig, context: AdapterContext): AsyncIterable
     stage = 'navigate to the configured URL; check login/storageState and allowedOrigins';
     const response = await page.goto(config.url, { waitUntil: 'domcontentloaded' });
     assertOrigin();
+    if (loginRedirect || /\/(?:login|sign-in|signin)(?:\/|$)/i.test(new URL(page.url()).pathname))
+      throw new SourceError(
+        'Login is missing or expired. Run npx logiparity demo login again for the synthetic demo; refresh storageState for other targets.',
+      );
     if (response && !response.ok()) throw new SourceError(`HTTP ${response.status()}`);
     const visited = new Set<string>();
     for (; pageNumber <= config.maxPages; pageNumber++) {
@@ -165,7 +172,7 @@ async function* uiRows(config: UiConfig, context: AdapterContext): AsyncIterable
       const relative = `screenshots/ui-${name}-page-${pageNumber}.png`;
       const directory = context.reportDir ?? resolve(context.baseDir, 'logiparity-report');
       try {
-        await mkdir(join(directory, 'screenshots'), { recursive: true });
+        await ensureReportDirectory(join(directory, 'screenshots'), directory);
         // Viewport evidence stays bounded even when a table contains thousands of rows.
         const png = await page.screenshot({
           fullPage: false,
@@ -177,12 +184,16 @@ async function* uiRows(config: UiConfig, context: AdapterContext): AsyncIterable
           (async function* () {
             yield png;
           })(),
+          { mode: context.fileMode ?? 0o600, rootDir: directory },
         );
         screenshot = relative;
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && /symlink/.test(error.message)) stage += '; refused symlink screenshot directory';
         stage += '; screenshot could not be saved—check report.dir permissions';
       }
     }
+    if (config.storageState && stage.startsWith('load storageState'))
+      stage += '; missing login state. Run npx logiparity demo login again for the synthetic demo';
     const detail = violation ?? error;
     throw new SourceError(
       `UI page ${pageNumber}: failed to ${stage}.${detail instanceof SourceError ? ` ${detail.message}` : ''} Check this test/staging target and its source configuration.`,

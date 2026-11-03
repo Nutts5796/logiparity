@@ -65,7 +65,7 @@ function commandHelp(commands: readonly string[]): string {
   if (command === 'install-browser')
     return 'Usage: logiparity install-browser [--with-deps]\nInstall Chromium for the optional Playwright UI adapter.\n';
   if (command === 'demo')
-    return 'Usage: logiparity demo [--bugs]\n       logiparity demo login\nRun the local synthetic delivery service. DEMO_PORT selects the port; DEMO_DATE selects the synthetic day. Writes logiparity-demo/parity.yaml, target.yaml, parity-scenario.yaml, scenarios/ and fixtures/.\n';
+    return 'Usage: logiparity demo [--bugs]\n       logiparity demo login\nRun the local synthetic delivery service. DEMO_PORT selects the port; DEMO_DATE selects the synthetic day. Writes logiparity-demo/parity.yaml, parity-ui.yaml, target.yaml, parity-scenario.yaml, scenarios/ and fixtures/. For optional browser parity, run logiparity demo login, then check --config logiparity-demo/parity-ui.yaml.\n';
   if (command === 'ai')
     return 'Usage: logiparity ai suggest-config --openapi <spec> --entity <name>\n       logiparity ai scenario --from <description>\n       logiparity ai explain <report.json>\nPreview locally by default; --send requires an explicitly configured provider.\n';
   return help;
@@ -182,9 +182,7 @@ async function main(): Promise<number> {
   try {
     validateConfig(config);
   } catch (error) {
-    throw new Error(
-      `${resolve(values.config)}: ${errorText(error)}\nFix the source configuration or install the named optional packages.`,
-    );
+    throw new Error(`${resolve(values.config)}: ${errorText(error)}\nFix the source configuration.`);
   }
   if (positionals[0] === 'validate') {
     output(
@@ -198,6 +196,8 @@ async function main(): Promise<number> {
       adapters.read(source, {
         baseDir,
         sourceName,
+        sourcePath: context.sourcePath ?? `sources.${sourceName}`,
+        fileMode: config.report.fileMode,
         ...(config.allowedHosts ? { allowedHosts: config.allowedHosts } : {}),
         env: process.env,
         reportDir: resolve(baseDir, config.report.dir),
@@ -210,8 +210,6 @@ async function main(): Promise<number> {
     { patterns: config.patterns, maxFindings: config.maxFindings, maxInvalidRows: config.maxInvalidRows },
   );
   if (warnings.length) report.warnings = [...warnings.map((message) => ({ message })), ...(report.warnings ?? [])];
-  if (config.report.outputs.includes('console'))
-    output(consoleReport(report, { entities: config.entities, displayTimezone: config.report.displayTimezone }));
   await writeReports(report, resolve(baseDir, config.report.dir), config.report.outputs, {
     entities: config.entities,
     fileMode: config.report.fileMode,
@@ -220,6 +218,22 @@ async function main(): Promise<number> {
     configFile: basename(values.config),
     generatedAt: new Date().toISOString(),
   });
+  if (config.report.outputs.includes('console'))
+    output(
+      consoleReport(report, {
+        entities: config.entities,
+        displayTimezone: config.report.displayTimezone,
+        reportFiles: config.report.outputs
+          .filter((output) => output !== 'console')
+          .map((output) =>
+            resolve(
+              baseDir,
+              config.report.dir,
+              output === 'junit' ? 'junit.xml' : `report.${output === 'markdown' ? 'md' : output}`,
+            ),
+          ),
+      }),
+    );
   return reportExitCode(report);
 }
 

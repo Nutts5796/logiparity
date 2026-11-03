@@ -2,11 +2,10 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const peers: Record<string, string> = JSON.parse(
-  readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
-).peerDependencies;
+const manifest = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'));
+const peers: Record<string, string> = manifest.peerDependencies;
 const installCommand = (packages: readonly string[]) =>
-  `npm install --save-dev --save-exact ${packages.map((name) => `${name}@${peers[name]?.match(/>=([0-9.]+)/)?.[1]}`).join(' ')}`;
+  `npm install --save-dev --save-exact ${packages.map((name) => `${name}@${manifest.logiparityTestedPeers[name]}`).join(' ')}`;
 export const optionalAdapters = {
   ui: { packages: ['playwright'], command: installCommand(['playwright']) },
   sql: {

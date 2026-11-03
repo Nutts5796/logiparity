@@ -3,7 +3,7 @@ import { sourceSchema } from '@logiparity/core';
 import { readRest, readSql } from '@logiparity/adapters';
 import { collect } from '../helpers.js';
 afterEach(() => vi.unstubAllGlobals());
-it('refuses redirects once, naming status and destination host (sam)', async () => {
+it('refuses redirects once, naming status without exposing the destination host (sam)', async () => {
   const fetch = vi.fn(
     async () => new Response('', { status: 302, headers: { location: 'http://blocked.test/private' } }),
   );
@@ -17,7 +17,7 @@ it('refuses redirects once, naming status and destination host (sam)', async () 
   });
   if (config.type !== 'rest') throw new Error('fixture');
   await expect(collect(readRest(config, { baseDir: '.', env: {} }))).rejects.toThrow(
-    'redirect refused: 302 to blocked.test',
+    'redirect refused: 302 to another endpoint',
   );
   expect(fetch).toHaveBeenCalledTimes(1);
 });

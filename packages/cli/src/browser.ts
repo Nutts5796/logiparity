@@ -17,10 +17,12 @@ export async function installBrowser(withDeps = false): Promise<number> {
   const child = spawn(process.execPath, [cli, 'install', ...(withDeps ? ['--with-deps'] : []), 'chromium'], {
     stdio: 'inherit',
   });
-  return await new Promise((resolve, reject) => {
+  const code: number = await new Promise((resolve, reject) => {
     child.once('error', reject);
     child.once('exit', (code) => resolve(code ?? 2));
   });
+  if (code === 0) process.stdout.write('Chromium installation completed.\n');
+  return code;
 }
 
 export async function loginDemo(): Promise<string> {
@@ -52,7 +54,13 @@ export async function loginDemo(): Promise<string> {
   try {
     const context = await browser.newContext({ serviceWorkers: 'block' }),
       page = await context.newPage();
-    await page.goto(new URL('/dispatcher', base).href);
+    try {
+      await page.goto(new URL('/dispatcher', base).href);
+    } catch {
+      throw new Error(
+        'Start the local demo first with npx logiparity demo, then run npx logiparity demo login again. Check the generated service port.',
+      );
+    }
     await page.getByLabel('Username', { exact: true }).fill('dispatcher');
     await page.getByLabel('Password', { exact: true }).fill('demo-password');
     await Promise.all([

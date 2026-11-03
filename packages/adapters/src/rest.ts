@@ -1,3 +1,4 @@
+import { resourceLimitMessage } from '@logiparity/core';
 import { assertAllowedHost, connectionCause, safeConsole, fieldPath } from '@logiparity/core';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { AdapterContext, DataRow, RestConfig } from '@logiparity/core';
@@ -26,6 +27,7 @@ async function getPage(
   headers: Headers,
   remainingRows: number,
   sourceName: string,
+  sourcePath: string,
 ): Promise<{ body: unknown; link: string | null }> {
   for (let attempt = 0; attempt <= config.retries; attempt++) {
     let response: Response;
@@ -42,13 +44,7 @@ async function getPage(
     }
     if (response.status >= 300 && response.status < 400) {
       await response.body?.cancel();
-      let host = '(unknown host)';
-      try {
-        host = new URL(response.headers.get('location') ?? '', url).host;
-      } catch {
-        /* Invalid redirect location is refused too. */
-      }
-      throw new Error(`redirect refused: ${response.status} to ${host}`);
+      throw new Error(`redirect refused: ${response.status} to another endpoint`);
     }
     if ((response.status === 429 || response.status >= 500) && attempt < config.retries) {
       const retryAfter = response.headers.get('retry-after');
@@ -83,7 +79,7 @@ async function getPage(
       const rowGuard = new JsonRowLimit(
         config.items,
         remainingRows,
-        `${sourceName}: response exceeds maxRows (${config.maxRows.toLocaleString('en-US')}). Reduce the export, or raise maxRows together with Node memory, for example NODE_OPTIONS=--max-old-space-size=6144.`,
+        resourceLimitMessage(`${sourcePath}.maxRows`, config.maxRows),
       );
       const sizeError = `${sourceName}: response exceeds maxResponseBytes (${(config.maxResponseBytes / (1024 * 1024)).toLocaleString('en-US', { maximumFractionDigits: 3 })} MiB).`;
       const declared = Number(response.headers.get('content-length'));
@@ -149,12 +145,14 @@ export async function* readRest(config: RestConfig, context: AdapterContext): As
       headers,
       config.maxRows - records,
       config.label ?? context.sourceName ?? 'REST source',
+      context.sourcePath ?? `sources.${context.sourceName ?? 'rest'}`,
     );
     const selected = selectJson(body, config.items);
     const items: unknown[] =
       selected.length === 1 && Array.isArray(selected[0]) ? (selected[0] as unknown[]) : selected;
     records += items.length;
-    if (records > config.maxRows) throw new Error(`REST source exceeds maxRows (${config.maxRows}).`);
+    if (records > config.maxRows)
+      throw new Error(resourceLimitMessage(`${context.sourcePath ?? 'sources.rest'}.maxRows`, config.maxRows));
     let more: boolean | undefined;
     if (pagination && 'size' in pagination && items.length > pagination.size)
       throw new Error(

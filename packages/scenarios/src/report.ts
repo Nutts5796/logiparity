@@ -78,6 +78,7 @@ function checks(report: ScenarioReport) {
   return items;
 }
 function summary(report: ScenarioReport): string {
+  if (report.error) return /is unreachable/.test(report.error) ? 'Target unreachable' : 'Scenario runtime error';
   const failed = checks(report).filter((check) => check.failure || check.error).length;
   return failed
     ? `${failed.toLocaleString('en-US')} ${failed === 1 ? 'check needs' : 'checks need'} attention`

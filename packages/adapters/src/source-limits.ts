@@ -1,4 +1,10 @@
-import { SourceError, type SourceConfig, type AdapterContext, type DataRow } from '@logiparity/core';
+import {
+  resourceLimitMessage,
+  SourceError,
+  type SourceConfig,
+  type AdapterContext,
+  type DataRow,
+} from '@logiparity/core';
 export async function* limitSourceRows(
   rows: AsyncIterable<DataRow>,
   config: SourceConfig,
@@ -9,7 +15,10 @@ export async function* limitSourceRows(
   for await (const row of rows) {
     if (++count > limit)
       throw new SourceError(
-        `${config.label ?? context.sourceName ?? config.type}: source exceeds maxRows (${limit.toLocaleString('en-US')}). Reduce the export, or raise maxRows together with Node memory, for example NODE_OPTIONS=--max-old-space-size=6144.`,
+        resourceLimitMessage(
+          `${context.sourcePath ?? 'sources.' + (context.sourceName ?? config.type)}.maxRows`,
+          limit,
+        ),
       );
     yield row;
   }
