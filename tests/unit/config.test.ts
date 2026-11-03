@@ -43,7 +43,7 @@ describe('configuration', () => {
   });
   it('reports file and precise schema path without dumping supplied values', async () => {
     const file = await configFile(valid.replace('type: csv', 'type: unsupported'));
-    await expect(loadConfig(file, { API_URL: 'http://localhost' })).rejects.toThrow('entities.0.sources.export.type');
+    await expect(loadConfig(file, { API_URL: 'http://localhost' })).rejects.toThrow('entities[0].sources.export.type');
   });
   it('preserves injected YAML punctuation inside scalar strings', async () => {
     const file = await configFile(valid.replace('file: ./out/{{date}}.csv', 'file: ${LOCAL_FILE}'));

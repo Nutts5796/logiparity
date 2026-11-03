@@ -46,6 +46,21 @@ export async function checkInstalledDemo(bin, directory) {
     const report = JSON.parse(await readFile(join(cwd, 'report/report.json'), 'utf8'));
     assert.deepEqual(report.findings, []);
     assert.deepEqual(report.entities[0].counts, { api: 2750, export: 2750, csv: 2750 });
+    for (const command of ['validate', 'run'])
+      await run(
+        process.execPath,
+        [
+          bin,
+          'scenario',
+          command,
+          'logiparity-demo/scenarios/02-vehicle-breakdown.yaml',
+          '--target',
+          'logiparity-demo/target.yaml',
+          ...(command === 'run' ? ['--report-dir', 'scenario-report'] : []),
+        ],
+        { cwd: directory, timeout: 30000 },
+      );
+    assert.equal(JSON.parse(await readFile(join(directory, 'scenario-report/scenario.json'), 'utf8')).exitCode, 0);
   } finally {
     if (child.exitCode === null) {
       const stopped = once(child, 'exit');

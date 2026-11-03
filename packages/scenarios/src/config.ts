@@ -135,7 +135,10 @@ function parse<T>(schema: z.ZodType<T>, value: unknown, file: string, env: NodeJ
   const result = schema.safeParse(value);
   if (!result.success)
     throw new ConfigError(
-      redactSecrets(`${file}: ${formatConfigIssues(schema, value, result.error)}`, secretValues(value, env)),
+      redactSecrets(
+        `${file}: ${formatConfigIssues(schema, value, result.error)}\nFix the listed configuration paths. Mutations require allowedHosts, e.g. allowedHosts: [staging.example.test].`,
+        secretValues(value, env),
+      ),
     );
   rememberEnvironment(result.data, { secrets: secretValues(value, env), references: referencedEnvironment(value) });
   validateEnvironment(result.data, env, {}, file);

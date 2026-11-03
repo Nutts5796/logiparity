@@ -44,7 +44,7 @@ try {
     await mkdir(dirname(destination), { recursive: true });
     await cp(join(root, file), destination);
   }
-  await npm(['ci', '--ignore-scripts', '--no-audit', '--no-fund']);
+  await npm(['ci']);
   await npm(['run', 'build']);
   demo = spawn(process.execPath, ['apps/demo-delivery/dist/main.js'], {
     cwd: temporary,
@@ -97,7 +97,7 @@ try {
     assert.equal(error.code, 1);
     return error;
   });
-  assert.match(freight.stdout, /12 findings/);
+  assert.match(freight.stdout, /16 findings/);
   const readme = await readFile(join(temporary, 'README.md'), 'utf8');
   const staging = readme.split('## Try it on your staging')[1].split('## Disruption scenarios')[0];
   const yaml = staging.match(/```yaml\n([\s\S]*?)```/)[1];
@@ -134,7 +134,7 @@ try {
           node: process.version,
           seconds,
           cleanSourceCopy: true,
-          install: 'npm ci --ignore-scripts',
+          install: 'npm ci',
           rowsPerSource: 2750,
           findings: 0,
           freightExample: true,

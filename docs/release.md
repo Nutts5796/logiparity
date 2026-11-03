@@ -9,7 +9,8 @@ The owner created the `logiparity` npm organization on 2026-11-03; the scope is 
 ## Prepare and publish
 
 ```sh
-npm run release:bump -- 1.1.0
+# Set VERSION to the intended release version first.
+npm run release:bump -- "$VERSION"
 npm install --package-lock-only --ignore-scripts
 npm ci --ignore-scripts
 npm run lint
@@ -28,7 +29,7 @@ npm run release:prepare
 Use the intended next version in the bump command. It updates all first-party manifests, lockfile records and the CLI version module. Review changelog and generated assets, set the publication date only when publishing, and commit. After release approval:
 
 ```sh
-VERSION=$(node -p "require('./package.json').version")
+VERSION=$(node -p "require('./node_modules/logiparity/package.json').version")
 git tag -a "v$VERSION" -m "LogiParity $VERSION"
 git push origin main
 git push origin "v$VERSION"
@@ -47,7 +48,7 @@ After publishing 1.1.0, copy the verified image index digests from the release n
 ## Verify
 
 ```sh
-VERSION=$(node -p "require('./package.json').version")
+VERSION=$(node -p "require('./node_modules/logiparity/package.json').version")
 gh release download "v$VERSION" --repo Nutts5796/logiparity --pattern "logiparity-$VERSION.tgz" --pattern "logiparity-$VERSION.tgz.sha256"
 shasum -a 256 -c "logiparity-$VERSION.tgz.sha256"
 gh attestation verify "logiparity-$VERSION.tgz" --repo Nutts5796/logiparity
@@ -64,11 +65,19 @@ Set `LOGIPARITY_IMAGE` to a digest-pinned full or slim reference from the releas
 The CLI bundles first-party code only. A standalone CLI tarball cannot resolve unbundled dependencies without registry access or a populated cache. The release therefore includes `logiparity-offline-<version>.tgz` and its SHA-256 file. The kit contains the identical CLI archive, verified registry tarballs and committed consumer locks for two profiles. It contains no Chromium binaries.
 
 ```sh
-VERSION=$(node -p "require('./package.json').version")
+VERSION=$(node -p "require('./node_modules/logiparity/package.json').version")
 shasum -a 256 -c "logiparity-offline-$VERSION.tgz.sha256"
 tar -xzf "logiparity-offline-$VERSION.tgz"
 node "logiparity-offline-$VERSION/install.mjs" default /absolute/path/to/empty/project
 # Or select full to include Playwright and all three PostgreSQL peers.
 ```
 
-Run these commands from a directory containing downloaded or locally prepared release assets. The installer refuses nonempty destinations, verifies each local file, creates an empty temporary npm cache, seeds it only from local integrity-checked tarballs, and runs `npm ci --offline` without suppressing audit. The cache is removed afterwards. Normal online `npm install`, `npm ci` and `npm audit` are checked independently for both profiles on npm 10 and 11. `npm audit signatures` verifies registry-installed dependencies after publication; local kit archives are protected by checksums and GitHub provenance. Docker full and slim builds consume the same kit.
+Run these commands from a directory containing downloaded or locally prepared release assets. The installer refuses nonempty destinations, verifies each local file, creates an empty temporary npm cache, seeds it only from local integrity-checked tarballs, and runs `npm ci --offline` for integrity-verified installation; no online vulnerability audit is performed. The cache is removed afterwards. Normal online `npm install`, `npm ci` and `npm audit` are checked independently for both profiles on npm 10 and 11. `npm audit signatures` verifies registry-installed dependencies after publication; local kit archives are protected by checksums and GitHub provenance. Docker full and slim builds consume the same kit.
+
+## Publication environment and retries
+
+The npm job uses the GitHub environment named `npm`. Before a reviewed release, create that environment in repository Settings → Environments. In npm's trusted publisher settings for the logiparity package, select GitHub Actions, owner `Nutts5796`, repository `logiparity`, workflow `release.yml`, environment `npm`. Keep the environment name identical on both services; configure any required reviewers in GitHub. The owner performs publication after review.
+
+Use **Re-run failed jobs** after a partial failure. The tagged commit runs the reusable CI matrix before preparation. Existing drafts are inspected with contents:write access. An existing image digest is verified and reused without attributing its build to the retry. Offline kits use sorted entries, fixed ownership and zero timestamps; gzip carries no source filename or clock. Offline installs verify dependency integrity and do not perform an online vulnerability audit.
+
+Container templates use `LOGIPARITY_IMAGE` for the exact `ghcr.io/nutts5796/logiparity` reference. After 1.1.0 is published, replace the clearly marked placeholder digest in a small follow-up commit with the verified digest from release notes. The image and CLI versions must agree; do not substitute a 1.0.0 image.

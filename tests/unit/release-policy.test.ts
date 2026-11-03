@@ -5,11 +5,13 @@ it('keeps release authority separate and only publishes npm on tag pushes', asyn
   const release = parse(await readFile('.github/workflows/release.yml', 'utf8'));
   expect(release.permissions).toEqual({});
   expect(release.concurrency.group).toBe('release-${{ inputs.tag || github.ref_name }}');
-  expect(release.jobs.build.permissions).toEqual({});
+  expect(release.jobs.build.permissions).toEqual({ contents: 'write' });
   expect(release.jobs.npm.permissions).toEqual({ 'id-token': 'write' });
   expect(release.jobs.npm.if).toBe("github.event_name == 'push'");
   expect(release.jobs.notes.needs).toContain('images');
-  for (const job of Object.values(release.jobs) as { steps: { uses?: string; with?: Record<string, unknown> }[] }[])
+  for (const job of Object.values(release.jobs).filter(
+    (job: unknown) => !!job && typeof job === 'object' && 'steps' in job,
+  ) as { steps: { uses?: string; with?: Record<string, unknown> }[] }[])
     for (const step of job.steps) {
       if (step.uses?.startsWith('actions/checkout@')) expect(step.with?.['persist-credentials']).toBe(false);
       if (step.uses?.startsWith('actions/setup-node@')) {

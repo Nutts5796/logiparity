@@ -1,1 +1,18 @@
-export * from '@logiparity/core';
+export {
+  compareEntities,
+  loadConfig,
+  configSchema,
+  entitySchema,
+  sourceSchema,
+  ruleSchema,
+  normalize,
+  moneyMinor,
+  equalValues,
+  reportExitCode,
+  writeReports,
+  jsonReport,
+  consoleReport,
+  htmlReport,
+  markdownReport,
+  junitReport,
+} from '@logiparity/core';

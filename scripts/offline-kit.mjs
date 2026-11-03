@@ -1,3 +1,4 @@
+import { deterministicArchive } from './deterministic-tar.mjs';
 import { Buffer } from 'node:buffer';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -29,7 +30,11 @@ export async function buildOfflineKit(archive, destination) {
       await mkdir(directory);
       const dependencies = {
         logiparity: `file:../${filename}`,
-        ...(profile === 'full' ? manifest.peerDependencies : {}),
+        ...(profile === 'full'
+          ? Object.fromEntries(
+              Object.keys(manifest.peerDependencies).map((name) => [name, manifest.devDependencies[name]]),
+            )
+          : {}),
       };
       await writeFile(
         join(directory, 'package.json'),
@@ -89,7 +94,7 @@ export async function buildOfflineKit(archive, destination) {
     );
     await mkdir(destination, { recursive: true });
     const kit = resolve(destination, name + '.tgz');
-    await execute('tar', ['-czf', kit, '-C', temporary, name], { env: { ...process.env, COPYFILE_DISABLE: '1' } });
+    await deterministicArchive(root, name, kit);
     const digest = createHash('sha256')
       .update(await readFile(kit))
       .digest('hex');

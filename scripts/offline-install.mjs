@@ -38,7 +38,12 @@ try {
     .map((path) => join(root, path));
   await npm(['cache', 'add', '--offline', ...tarballs]);
   const result = await npm(['ci', '--offline', '--ignore-scripts', '--no-fund']);
-  process.stdout.write(result.stdout);
+  process.stdout.write(
+    result.stdout
+      .replace(/^found \d+ vulnerabilities.*$/gm, '')
+      .replace(/^\d+ packages are looking for funding.*$/gm, ''),
+  );
+  console.log('Offline installation verified archive integrity; no online vulnerability audit was performed.');
   console.log(
     `Installed ${manifest.version} (${profile}) using only verified local tarballs and an initially empty npm cache.`,
   );

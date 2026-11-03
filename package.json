@@ -54,7 +54,8 @@
     "vitest": "4.1.12",
     "yaml": "2.9.1",
     "pg-query-stream": "4.17.1",
-    "pgsql-ast-parser": "12.0.2"
+    "pgsql-ast-parser": "12.0.2",
+    "ajv": "6.15.0"
   },
   "description": "Test/staging logistics data parity and disruption scenario checks.",
   "bin": {
@@ -80,7 +81,8 @@
     "THIRD_PARTY_LICENSES.txt",
     "examples/freight/*.csv",
     "examples/freight/*.yaml",
-    "examples/freight/README.md"
+    "examples/freight/README.md",
+    "docs/*.json"
   ],
   "dependencies": {
     "@logiparity/adapters": "1.1.0",
@@ -142,10 +144,10 @@
     "url": "https://github.com/Nutts5796/logiparity/issues"
   },
   "peerDependencies": {
-    "playwright": "1.64.1",
-    "pg": "8.23.1",
-    "pg-query-stream": "4.17.1",
-    "pgsql-ast-parser": "12.0.2"
+    "playwright": ">=1.63.0 <1.65.0",
+    "pg": ">=8.16.0 <9.0.0",
+    "pg-query-stream": ">=4.17.1 <5.0.0",
+    "pgsql-ast-parser": ">=12.0.2 <13.0.0"
   },
   "peerDependenciesMeta": {
     "playwright": {

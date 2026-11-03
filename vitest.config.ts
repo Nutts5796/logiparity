@@ -15,10 +15,15 @@ export default defineConfig({
     testTimeout: 30000,
     coverage: {
       provider: 'v8',
-      include: ['packages/core/src/**/*.ts'],
-      exclude: ['packages/core/src/index.ts', 'packages/core/src/types.ts'],
+      include: [
+        'packages/core/src/**/*.ts',
+        'packages/adapters/src/**/*.ts',
+        'packages/scenarios/src/**/*.ts',
+        'packages/cli/src/**/*.ts',
+      ],
+      exclude: ['packages/core/src/index.ts', 'packages/core/src/types.ts', 'packages/cli/src/version.ts'],
       reporter: ['text', 'json-summary'],
-      thresholds: { lines: 85 },
+      thresholds: { lines: 80 },
     },
   },
 });

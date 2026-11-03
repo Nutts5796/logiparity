@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 const version = process.argv[2];
 if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error('Usage: npm run release:bump -- <major.minor.patch>');
 const root = fileURLToPath(new URL('../', import.meta.url));
+const previous = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8')).version;
 const manifests = ['package.json'];
 for (const directory of ['packages', 'apps'])
   for (const entry of await readdir(resolve(root, directory))) manifests.push(`${directory}/${entry}/package.json`);
@@ -33,3 +34,14 @@ await writeFile(lockPath, JSON.stringify(lock, null, 2) + '\n');
 console.log(
   `Updated first-party versions to ${version}. Run npm install --package-lock-only, checks, then review the diff. Nothing tagged or published.`,
 );
+
+for (const file of [
+  'README.md',
+  'docs/release.md',
+  'templates/github-actions.yml',
+  'templates/github-actions-container.yml',
+  'templates/gitlab-ci.yml',
+]) {
+  const path = resolve(root, file);
+  await writeFile(path, (await readFile(path, 'utf8')).replaceAll(previous, version));
+}

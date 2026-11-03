@@ -17,7 +17,7 @@
       JS
     - logiparity validate --allow-missing-env --config parity.yaml
     - >-
-      curl --max-time 60 --retry 3 --fail --silent --show-error
+      curl --max-time 60 --retry 3 --retry-connrefused -fsS
       -H "Authorization: Bearer $STAGING_API_TOKEN"
       "$STAGING_API_URL/exports/shipments.csv" --output shipments.csv
     - logiparity check --config parity.yaml

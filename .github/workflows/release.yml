@@ -16,15 +16,22 @@ env:
   TAG: ${{ inputs.tag || github.ref_name }}
   IMAGE: ghcr.io/nutts5796/logiparity
 jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ inputs.tag || github.ref }}
   build:
+    needs: verify
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.version.outputs.value }}
     steps:
       - name: Require an exact tag ref for image-only retries
         env:
-          EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
         run: test "$REF" = "refs/tags/$TAG"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -61,7 +68,9 @@ jobs:
         with: { name: release-files, path: output/release }
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: output/release/*.tgz
+          subject-path: |
+            output/release/*.tgz
+            output/release/*.cdx.json
   draft:
     needs: [build, attest]
     runs-on: ubuntu-latest
@@ -80,6 +89,7 @@ jobs:
           IMAGE_ONLY: ${{ github.event_name == 'workflow_dispatch' }}
         run: node scripts/publish-release.mjs github
   npm:
+    environment: npm
     needs: [build, draft]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -131,6 +141,7 @@ jobs:
           SUFFIX: ${{ matrix.suffix }}
         run: node scripts/build-release-image.mjs
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        if: steps.image.outputs.reused != 'true'
         with:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.image.outputs.digest }}

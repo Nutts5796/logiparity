@@ -57,7 +57,7 @@ try {
   for (const name of ['luxon', 'playwright', 'unzipper', 'saxes'])
     assert(
       sbom.components.some((component) => component.name === name),
-      `Missing bundled ${name}`,
+      `Missing installed runtime dependency ${name}`,
     );
   assert(!sbom.components.some((component) => ['vitest', 'eslint', 'typescript'].includes(component.name)));
   await writeFile(join(output, `logiparity-${packed.version}.cdx.json`), JSON.stringify(sbom, null, 2) + '\n');

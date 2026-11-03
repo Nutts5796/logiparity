@@ -294,7 +294,7 @@ export const aggregateSchema = z.discriminatedUnion('type', [
     })
     .strict(),
 ]);
-const category = z.enum(findingCategories);
+const category = z.enum(findingCategories, { error: `Choose a failOn category: ${findingCategories.join(', ')}` });
 export const failOnSchema = z
   .union([z.array(category), z.partialRecord(category, z.number().int().min(0).max(Number.MAX_SAFE_INTEGER))])
   .default([...findingCategories]);
@@ -658,6 +658,13 @@ export function formatConfigIssues(schema: z.ZodType, raw: unknown, error: z.Zod
     return input;
   };
   return error.issues
+    .filter((issue) => {
+      if (issue.path.at(-1) !== 'key') return true;
+      let parent: unknown = raw;
+      for (const part of issue.path.slice(0, -1))
+        parent = parent && typeof parent === 'object' ? Reflect.get(parent, part) : undefined;
+      return !parent || typeof parent !== 'object' || !Object.hasOwn(parent, 'kee');
+    })
     .map((issue) => {
       let current = schema;
       let value = raw;
@@ -677,7 +684,7 @@ export function formatConfigIssues(schema: z.ZodType, raw: unknown, error: z.Zod
       }
       current = unwrap(current, value);
       const keys = current instanceof z.ZodObject ? Object.keys(current.shape).sort() : [];
-      return `  ${issue.path.join('.') || '<root>'}: ${issue.message}${issue.code === 'unrecognized_keys' && keys.length ? `. Valid keys: ${keys.join(', ')}` : ''}`;
+      return `  ${issue.path.map((part, index) => (typeof part === 'number' ? `[${part}]` : `${index ? '.' : ''}${String(part)}`)).join('') || '<root>'}: ${issue.message}${issue.code === 'unrecognized_keys' && keys.length ? `. Valid keys: ${keys.join(', ')}` : ''}`;
     })
     .join('\n');
 }

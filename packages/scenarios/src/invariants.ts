@@ -1,5 +1,4 @@
 import { isDeepStrictEqual } from 'node:util';
-import { createJiti } from 'jiti';
 import { selectJson } from '@logiparity/adapters';
 import { z } from 'zod';
 import { resolve, relative, isAbsolute } from 'node:path';
@@ -189,7 +188,10 @@ function invariantExplanation(name: string, count: number, max: number): string 
     capacity_respected: 'Assigned drivers and vehicles must be available and within capacity.',
     eta_updated_for_affected: 'Replanning must update the ETA of every affected active order.',
     customer_notified_for_affected: 'Every affected customer needs a new notification after the baseline snapshot.',
-    sla_window_violations: `At most ${max.toLocaleString('en-US')} orders may exceed their delivery window.`,
+    sla_window_violations:
+      max === 0
+        ? 'No order may exceed its delivery window.'
+        : `At most ${max.toLocaleString('en-US')} orders may exceed their delivery window.`,
   };
   return explanations[name] ?? `${count.toLocaleString('en-US')} checks require review.`;
 }
@@ -230,6 +232,7 @@ export async function prepareInvariant(definition: Invariant, baseDir: string, a
   const local = relative(root, entry);
   if (isAbsolute(definition.module) || local === '..' || local.startsWith('../') || isAbsolute(local))
     throw new Error('Invariant module must stay within the scenario directory');
+  const { createJiti } = await import('jiti');
   const jiti = createJiti(import.meta.url, { fsCache: false, moduleCache: false, interopDefault: false });
   const module = await jiti.import<{ default?: unknown }>(entry);
   if (typeof module.default !== 'function')

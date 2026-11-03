@@ -35,10 +35,10 @@ try {
   const files = new Set(dry.files.map((file) => file.path));
   for (const file of [
     'bin/logiparity.js',
-    'node_modules/@logiparity/core/assets/fonts/manrope-latin.woff2',
-    'node_modules/@logiparity/core/assets/fonts/jetbrainsmono-latin.woff2',
-    'node_modules/@logiparity/core/assets/fonts/manrope-OFL.txt',
-    'node_modules/@logiparity/core/assets/fonts/jetbrainsmono-OFL.txt',
+    'lib/core/assets/fonts/manrope-latin.woff2',
+    'lib/core/assets/fonts/jetbrainsmono-latin.woff2',
+    'lib/core/assets/fonts/manrope-OFL.txt',
+    'lib/core/assets/fonts/jetbrainsmono-OFL.txt',
     'README.md',
     'LICENSE',
     'CODE_OF_CONDUCT.md',
@@ -62,8 +62,8 @@ try {
       'Unwanted package content ' + path,
     );
   for (const name of ['cli', 'core', 'adapters', 'scenarios', 'ai']) {
-    for (const file of ['package.json', 'LICENSE', `dist/${name === 'cli' ? 'main' : 'index'}.js`])
-      assert(files.has(`node_modules/@logiparity/${name}/${file}`), `Missing bundled ${name}/${file}`);
+    for (const file of [`dist/${name === 'cli' ? 'main' : 'index'}.js`])
+      assert(files.has(`lib/${name}/${file}`), `Missing bundled ${name}/${file}`);
   }
   for (const file of files) {
     assert(
@@ -128,17 +128,10 @@ try {
   assert.match((await npm(['audit'], full)).stdout, /found 0 vulnerabilities/);
   const manifest = JSON.parse((await run('tar', ['-xOf', archive, 'package/package.json'])).stdout);
   for (const field of ['scripts', 'devDependencies', 'workspaces']) assert(!Object.hasOwn(manifest, field));
-  assert.deepEqual(
-    dry.bundled.toSorted(),
-    Object.keys(manifest.dependencies)
-      .filter((name) => name.startsWith('@logiparity/'))
-      .toSorted(),
-  );
-  assert(
-    [...files]
-      .filter((path) => path.startsWith('node_modules/'))
-      .every((path) => path.startsWith('node_modules/@logiparity/')),
-  );
+  assert(!Object.keys(manifest.dependencies).some((name) => name.startsWith('@logiparity/')));
+  assert(![...files].some((path) => path.startsWith('node_modules/')));
+  await npm(['audit', 'signatures'], install);
+  await npm(['audit', 'signatures'], full);
   for (const [profile, directory] of [
     ['default', install],
     ['full', full],
@@ -167,7 +160,7 @@ try {
         (value) => ({ code: 0, ...value }),
         (error) => error,
       );
-      assert.equal(result.code, profile === 'default' ? 2 : 0);
+      assert.equal(result.code, profile === 'default' ? 2 : 0, result.stderr || result.stdout);
       if (profile === 'default')
         assert(
           result.stderr.includes(
@@ -314,8 +307,8 @@ export {provider};
     (error) => assert.equal(error.code, 1),
   );
   const freight = JSON.parse(await readFile(join(work, 'freight-example/logiparity-report/report.json'), 'utf8'));
-  assert.equal(freight.findings.length, 12);
-  assert.deepEqual(freight.entities.find((entity) => entity.entity === 'load').counts, { rate: 40, settlement: 151 });
+  assert.equal(freight.findings.length, 16);
+  assert.deepEqual(freight.entities.find((entity) => entity.entity === 'load').counts, { rate: 120, settlement: 379 });
   for (const name of ['github-actions.yml', 'github-actions-container.yml', 'gitlab-ci.yml'])
     assert(
       !/REPLACE_WITH|<release digest>/.test(
@@ -386,6 +379,9 @@ export {provider};
           consumerOverrides: true,
           consumerCi: true,
           consumerAudit: true,
+          consumerSignatures: true,
+          rootPackageImports: true,
+          installedScenario: true,
           npm: npmVersion,
           cliSmoke: true,
           files: [...files],

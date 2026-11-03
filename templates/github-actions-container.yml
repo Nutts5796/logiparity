@@ -26,7 +26,7 @@ jobs:
         run: |
           node --input-type=module <<'JS'
           import {execFileSync} from 'node:child_process';
-          const match=process.env.LOGIPARITY_IMAGE.match(/:(\d+\.\d+\.\d+)(?:-slim)?@sha256:[a-f0-9]{64}$/);
+          const match=process.env.LOGIPARITY_IMAGE.match(/^ghcr\.io\/nutts5796\/logiparity:(\d+\.\d+\.\d+)(?:-slim)?@sha256:[a-f0-9]{64}$/);
           if(!match || execFileSync('logiparity',['--version'],{encoding:'utf8'}).trim()!==match[1]) throw new Error('Set a verified digest-pinned LOGIPARITY_IMAGE with its matching CLI version');
           JS
           logiparity validate --allow-missing-env --config parity.yaml
@@ -34,7 +34,7 @@ jobs:
         env:
           STAGING_API_TOKEN: ${{ secrets.STAGING_API_TOKEN }}
         run: >-
-          curl --max-time 60 --retry 3 --fail --silent --show-error
+          curl --max-time 60 --retry 3 --retry-connrefused -fsS
           -H "Authorization: Bearer $STAGING_API_TOKEN"
           "$STAGING_API_URL/exports/shipments.csv" --output shipments.csv
       - name: Compare staging sources
@@ -57,3 +57,4 @@ jobs:
           name: logiparity-report
           path: logiparity-report/
           retention-days: 7
+          if-no-files-found: warn

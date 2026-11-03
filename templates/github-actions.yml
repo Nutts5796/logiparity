@@ -27,7 +27,7 @@ jobs:
         env:
           STAGING_API_TOKEN: ${{ secrets.STAGING_API_TOKEN }}
         run: >-
-          curl --max-time 60 --retry 3 --fail --silent --show-error
+          curl --max-time 60 --retry 3 --retry-connrefused -fsS
           -H "Authorization: Bearer $STAGING_API_TOKEN"
           "$STAGING_API_URL/exports/shipments.csv" --output shipments.csv
       - name: Compare staging sources

@@ -34,7 +34,11 @@ async function run(args: string[], cwd: string, env: NodeJS.ProcessEnv = {}) {
 }
 it('prints the installed version without configuration', async () => {
   const result = await run(['--version'], await dir());
-  expect(result).toEqual({ code: 0, stdout: '1.1.0\n', stderr: '' });
+  expect(result).toEqual({
+    code: 0,
+    stdout: JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8')).version + '\n',
+    stderr: '',
+  });
 });
 it('validates schema, field references and extraction syntax without reading files or contacting servers', async () => {
   const d = await dir();
@@ -179,7 +183,7 @@ it('redacts a configured arbitrary-name credential in console errors and every r
 it('runs the documented freight example', async () => {
   const result = await run(['check', '--config', resolve('examples/freight/parity.yaml')], await dir());
   expect(result.code, result.stdout + result.stderr).toBe(1);
-  expect(result.stdout).toContain('12 findings');
+  expect(result.stdout).toContain('16 findings');
 });
 
 it('retains secret interpolation metadata through engine and all reports', async () => {

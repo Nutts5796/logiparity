@@ -7,6 +7,7 @@ export const starterConfig = `# LogiParity starter — TEST AND STAGING ENVIRONM
 # Keep secrets in environment variables; do not write credentials here.
 version: 1
 environment: test
+publicEnv: [STAGING_API_URL]
 entities:
   - name: shipment
     label: Order

@@ -24,7 +24,7 @@ const output = (text: string) => process.stdout.write(safeConsole(redactSecrets(
 const help = `LogiParity ${version} — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
 
 Usage: logiparity demo [--bugs]
-       logiparity install-browser
+       logiparity install-browser [--with-deps]
        logiparity check --config <parity.yaml>
        logiparity scenario validate <scenario.yaml> --target <target.yaml>
        logiparity scenario run <scenario.yaml> --target <target.yaml> [--report-dir <dir>] [--allow-modules]
@@ -61,13 +61,17 @@ function commandHelp(commands: readonly string[]): string {
   if (command === 'init')
     return 'Usage: logiparity init [--config <parity.yaml>]\nCreate a starter without overwriting an existing file; then run validate and check.\n';
   if (command === 'install-browser')
-    return 'Usage: logiparity install-browser\nInstall Chromium for the optional Playwright UI adapter.\n';
-  if (command === 'demo') return 'Usage: logiparity demo [--bugs]\nRun the local synthetic delivery service.\n';
+    return 'Usage: logiparity install-browser [--with-deps]\nInstall Chromium for the optional Playwright UI adapter.\n';
+  if (command === 'demo')
+    return 'Usage: logiparity demo [--bugs]\nRun the local synthetic delivery service. DEMO_PORT selects the port; DEMO_DATE selects the synthetic day. Writes logiparity-demo/parity.yaml, target.yaml, parity-scenario.yaml, scenarios/ and fixtures/.\n';
   if (command === 'ai')
     return 'Usage: logiparity ai suggest-config --openapi <spec> --entity <name>\n       logiparity ai scenario --from <description>\n       logiparity ai explain <report.json>\nPreview locally by default; --send requires an explicitly configured provider.\n';
   return help;
 }
 async function main(): Promise<number> {
+  const known = new Set(['demo', 'install-browser', 'scenario', 'ai', 'init', 'validate', 'check']);
+  const first = process.argv.slice(2).find((item) => !item.startsWith('-'));
+  if (first && !known.has(first) && process.argv[2] === first) throw new Error(`Unknown command ${first}; see --help.`);
   const { values, positionals } = parseArgs({
     options: {
       config: { type: 'string', short: 'c' },
@@ -77,6 +81,7 @@ async function main(): Promise<number> {
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
       'allow-modules': { type: 'boolean' },
+      'with-deps': { type: 'boolean' },
       'allow-missing-env': { type: 'boolean' },
       openapi: { type: 'string' },
       entity: { type: 'string' },
@@ -102,7 +107,8 @@ async function main(): Promise<number> {
     await startDemo({ allBugs: values.bugs === true, writeExample: true });
     return 0;
   }
-  if (positionals[0] === 'install-browser' && positionals.length === 1) return installBrowser();
+  if (positionals[0] === 'install-browser' && positionals.length === 1)
+    return installBrowser(values['with-deps'] === true);
   if (positionals[0] === 'scenario' && positionals[1] === 'validate' && positionals[2] && values.target) {
     await validateScenario(positionals[2], values.target, process.env);
     output('The scenario configuration is valid. Sources were not opened and no mutations were performed.\n');
@@ -139,6 +145,9 @@ async function main(): Promise<number> {
       { allowModules: values['allow-modules'] === true },
     );
     output(scenarioConsole(report));
+    output(
+      `Reports: ${resolve(values['report-dir'] ?? `logiparity-scenario-report/${basename(positionals[2], '.yaml')}`)}\n`,
+    );
     return report.exitCode;
   }
   if (values['allow-modules']) throw new Error('--allow-modules requires scenario run');
@@ -160,7 +169,11 @@ async function main(): Promise<number> {
   configuredSecrets = secretValues(config);
   for (const warning of positionals[0] === 'validate' || !config.report.outputs.includes('console') ? warnings : [])
     process.stderr.write(safeConsole(redactSecrets(`Warning: ${warning}\n`, configuredSecrets)));
-  validateConfig(config);
+  try {
+    validateConfig(config);
+  } catch (error) {
+    throw new Error(`${resolve(values.config)}: ${errorText(error)}\nFix the listed configuration paths.`);
+  }
   if (positionals[0] === 'validate') {
     output(
       `The configuration is valid.${missingEnv.length ? ` Missing environment allowed: ${missingEnv.join(', ')}.` : ''} Source availability was not checked.\n`,
@@ -199,7 +212,9 @@ async function main(): Promise<number> {
 try {
   process.exitCode = await main();
 } catch (error) {
-  const message = safeConsole(redactSecrets(errorText(error), configuredSecrets));
+  const raw = errorText(error);
+  const option = raw.match(/Unknown option ['"]([^'"]+)/)?.[1];
+  const message = safeConsole(redactSecrets(option ? `Unknown option ${option}; see --help.` : raw, configuredSecrets));
   process.stderr.write(`LogiParity: ${message}\n`);
   process.exitCode = 2;
 }

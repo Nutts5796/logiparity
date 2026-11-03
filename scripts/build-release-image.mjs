@@ -46,6 +46,7 @@ try {
 } catch (error) {
   if (!/not found|manifest unknown/i.test(error.stderr ?? error.message)) throw error;
 }
+const reused = !!digest;
 const metadata = `output/release/${target}-image.json`;
 if (!digest) {
   const revision = (await run('git', ['rev-parse', 'HEAD'])).stdout.trim();
@@ -76,5 +77,5 @@ if (!digest) {
   digest = JSON.parse(await readFile(metadata, 'utf8'))['containerimage.digest'];
 } else await writeFile(metadata, JSON.stringify({ 'containerimage.digest': digest, reused: true }) + '\n');
 if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new Error('Invalid registry image digest');
-await appendFile(process.env.GITHUB_OUTPUT, `digest=${digest}\n`);
+await appendFile(process.env.GITHUB_OUTPUT, `digest=${digest}\nreused=${reused}\n`);
 console.log(`Verified ${reference}@${digest}`);

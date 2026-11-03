@@ -1,7 +1,7 @@
 import type { EntityConfig } from './config.js';
 import type { Finding, FindingType, Report } from './types.js';
 
-export const findingCategories = ['missing', 'extra', 'mismatch', 'aggregate', 'duplicate'] as const;
+export const findingCategories = ['missing', 'extra', 'mismatch', 'aggregate', 'duplicate', 'invalid'] as const;
 export type FindingCategory = (typeof findingCategories)[number];
 export type FailurePolicy = Partial<Record<FindingCategory, number>>;
 const categories: Record<Exclude<FindingType, 'source_error'>, FindingCategory> = {
@@ -11,7 +11,7 @@ const categories: Record<Exclude<FindingType, 'source_error'>, FindingCategory> 
   aggregate_mismatch: 'aggregate',
   duplicate_key: 'duplicate',
   duplicate_value: 'duplicate',
-  invalid_value: 'mismatch',
+  invalid_value: 'invalid',
 };
 
 export function isBlocking(finding: Finding): boolean {
@@ -30,6 +30,13 @@ export function applyFailurePolicies(report: Report, entities: EntityConfig[]): 
         const category = categories[f.type];
         counts[category] = (counts[category] ?? 0) + 1;
       }
+    if ((counts.invalid ?? 0) > 0 && policy.invalid === undefined) {
+      report.warnings ??= [];
+      report.warnings.push({
+        entity: entity.name,
+        message: 'Invalid values are allowed by failOn. Include invalid in failOn to block bad input.',
+      });
+    }
     for (const f of findings) {
       if (f.type === 'source_error') {
         f.blocking = true;
