@@ -55,7 +55,7 @@ function redactCredentials(text: string, collect: (...values: string[]) => void)
     return `${scheme}${redacted}@`;
   });
   text = text.replace(
-    /\b((?:proxy-)?authorization)[ \t]*[=:][ \t]*([A-Za-z][A-Za-z0-9_-]*)[ \t]+([^\r\n,;]+)/gi,
+    /\b((?:proxy-)?authorization)[ \t]*[=:][ \t]*(\S+)[ \t]+([^\r\n,;]+)/gi,
     (_, name: string, scheme: string, credentials: string) => {
       collect(credentials, decoded(credentials));
       return `${name}: ${scheme} ${redacted}`;

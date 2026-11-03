@@ -71,3 +71,12 @@ it.each(['/a/..;x/b', '/a/%2e%2e%3bx/b', '/a/%252e%252e%253bx/b'])('rejects semi
   });
   expect(() => requestPlan(target, { method: 'POST', path }, {})).toThrow('dot-segments');
 });
+
+it('masks authorization schemes containing punctuation as well as Basic', () => {
+  for (const scheme of ['Basic', 'Custom.v2', 'Custom+v2']) {
+    const credential = 'AuthorizationSecret777';
+    const result = redactInput({ note: `Authorization: ${scheme} ${credential}`, copy: credential });
+    expect(JSON.stringify(result.data)).not.toContain(credential);
+    expect(JSON.stringify(result.data)).toContain(`${scheme} [REDACTED]`);
+  }
+});
