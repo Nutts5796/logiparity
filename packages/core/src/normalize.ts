@@ -219,7 +219,15 @@ export function normalize(value: unknown, rule: ComparisonRule | undefined, sour
     const local: unknown = Reflect.get(value, wallClock);
     if (typeof local === 'string' && rule?.type === 'datetime') {
       const isoRule = { ...rule, format: undefined };
-      return normalizeDatetime(local, isoRule, source);
+      try {
+        return normalizeDatetime(local, isoRule, source);
+      } catch (error) {
+        if (error instanceof Error && /ambiguous/.test(error.message))
+          throw new Error(
+            'Excel date serial is ambiguous during daylight saving; use a time zone column or export text with an offset.',
+          );
+        throw error;
+      }
     }
     value = value.toISOString();
   }
@@ -264,6 +272,7 @@ export function normalize(value: unknown, rule: ComparisonRule | undefined, sour
 }
 
 export function equalValues(a: NormalizedValue, b: NormalizedValue, rule?: ComparisonRule): boolean {
+  if (!rule) return a == null || b == null ? a === b : String(a).trim() === String(b).trim();
   if (typeof a === 'bigint' && typeof b === 'bigint') return (a > b ? a - b : b - a) <= BigInt(rule?.tolerance ?? 0);
   if (typeof a === 'number' && typeof b === 'number')
     return Math.abs(a - b) <= (rule?.type === 'datetime' ? rule.toleranceSeconds * 1000 : (rule?.tolerance ?? 0));

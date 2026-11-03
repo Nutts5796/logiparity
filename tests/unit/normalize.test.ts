@@ -51,7 +51,7 @@ describe('normalization', () => {
     expect(equalValues(1, 1.05, number)).toBe(true);
     expect(equalValues(1, 1.2, number)).toBe(false);
     expect(equalValues(1, 1)).toBe(true);
-    expect(equalValues('1', 1)).toBe(false);
+    expect(equalValues('1', 1)).toBe(true);
     expect(() => normalize('9'.repeat(400), number, 'a')).toThrow('finite');
   });
   it('uses integer money tolerance in both directions', () => {

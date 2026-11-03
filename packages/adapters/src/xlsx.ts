@@ -122,10 +122,11 @@ async function cellValue(
     case 'e':
       return new Error('Unsupported or error XLSX cell; export a scalar value.');
     case 'd': {
-      const text = cell.value.replace(/(?:Z|[+-]\d{2}:?\d{2})$/i, '');
-      const date = new Date(text + 'Z');
+      const text = cell.value;
+      const explicit = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+      const date = new Date(explicit ? text : text + 'Z');
       if (Number.isNaN(date.getTime())) return new Error('Invalid XLSX date.');
-      Object.defineProperty(date, wallClock, { value: text });
+      if (!explicit) Object.defineProperty(date, wallClock, { value: text });
       return date;
     }
     case '':
