@@ -212,6 +212,8 @@ export async function* xlsxRows(file: string, sheetName: string): AsyncIterable<
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const errorRow = error && typeof error === 'object' ? Reflect.get(error, 'row') : undefined;
+    if (typeof errorRow === 'number') currentRow = errorRow;
     throw new Error(
       message.includes('(sheet ')
         ? message

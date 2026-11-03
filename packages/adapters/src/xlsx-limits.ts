@@ -10,6 +10,12 @@ export const xlsxLimits = {
 };
 export class XmlBudget {
   private inTag = false;
+  private tagPrefix = '';
+  private row = 0;
+  private rowSeen = false;
+  private limit(message: string): Error {
+    return Object.assign(new Error(message), { row: this.row || undefined });
+  }
   private quote = '';
   private length = 0;
   private bytes = 0;
@@ -22,7 +28,15 @@ export class XmlBudget {
     for (const character of chunk) {
       if (this.inTag) {
         this.length++;
-        if (this.length > xlsxLimits.tagChars) throw new Error('XLSX XML tag or attribute exceeds the 32 KiB limit.');
+        if (this.tagPrefix.length < 128) this.tagPrefix += character;
+        if (!this.rowSeen && /^row(?:\s|>)/.test(this.tagPrefix)) {
+          const number = this.tagPrefix.match(/\br\s*=\s*["'](\d+)["']/)?.[1];
+          if (number || character === '>') {
+            this.row = number ? Number(number) : this.row + 1;
+            this.rowSeen = true;
+          }
+        }
+        if (this.length > xlsxLimits.tagChars) throw this.limit('XLSX XML tag or attribute exceeds the 32 KiB limit.');
         if (this.quote) {
           if (character === this.quote) this.quote = '';
         } else if (character === '"' || character === "'") this.quote = character;
@@ -33,8 +47,10 @@ export class XmlBudget {
       } else if (character === '<') {
         this.inTag = true;
         this.length = 0;
+        this.tagPrefix = '';
+        this.rowSeen = false;
       } else if (++this.length > xlsxLimits.textChars)
-        throw new Error('XLSX XML text exceeds the 256 KiB token limit.');
+        throw this.limit('XLSX XML text exceeds the 256 KiB token limit.');
     }
   }
 }

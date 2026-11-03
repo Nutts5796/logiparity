@@ -105,3 +105,7 @@ it.each(['SIGINT', 'SIGTERM', 'SIGHUP'] as const)('removes owned temporary strin
     await rm(directory, { recursive: true, force: true });
   }
 });
+it('preserves the physical worksheet row when quota checks precede SAX parsing', async () => {
+  const input = entry('<worksheet><row r="1"></row><row r="2"><c value="', 40000);
+  await expect(collect(xmlEvents(input.file))).rejects.toMatchObject({ row: 2 });
+});
