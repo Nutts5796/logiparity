@@ -109,9 +109,10 @@ export function createOperations(data: DemoData, bugs: DemoBugs) {
       const fresh = seedData(p.date);
       fresh.clock = p.clock;
       for (const v of fresh.vehicles) v.capacity = 60;
-      for (const o of fresh.shipments) {
+      for (const [index, o] of fresh.shipments.entries()) {
         o.status = 'in_transit';
         o.delivered_at = null;
+        o.eta = new Date(Date.parse(p.clock) + (60 + ((index * 13) % 480)) * 60000).toISOString().replace('.000Z', 'Z');
       }
       fresh.notifications = [];
       Object.assign(data, fresh);

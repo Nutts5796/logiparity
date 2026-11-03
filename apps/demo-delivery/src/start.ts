@@ -25,19 +25,31 @@ export async function startDemo(options: { allBugs?: boolean; writeExample?: boo
   const enabled = Object.entries(bugs)
     .filter(([, value]) => value)
     .map(([name]) => bugNames[name as keyof typeof bugNames]);
+  const date = process.env.DEMO_DATE;
+  if (
+    date &&
+    (!/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+      !Number.isFinite(Date.parse(date + 'T12:00:00Z')) ||
+      new Date(date + 'T12:00:00Z').toISOString().slice(0, 10) !== date)
+  )
+    throw new Error('DEMO_DATE must be a valid calendar date in YYYY-MM-DD format, e.g. 2026-11-02.');
   const { server, data } = createDemoServer({
     ...(process.env.DEMO_DATE ? { date: process.env.DEMO_DATE } : {}),
     bugs,
   });
   server.on('error', (error) => {
-    process.stderr.write(`Demo server: ${error.message}. Check DEMO_PORT and stop any conflicting server.\n`);
+    process.stderr.write(
+      'code' in error && error.code === 'EADDRINUSE'
+        ? `LogiParity demo: port ${port} is in use. Choose another DEMO_PORT or stop the service using it.\n`
+        : `LogiParity demo: ${error.message}. Check DEMO_PORT.\n`,
+    );
     process.exitCode = 2;
   });
   server.listen(port, '127.0.0.1', () => {
     const address = server.address();
     if (address && typeof address !== 'string') {
       if (options.writeExample)
-        void writeDemoExample(address.port).catch((error) => {
+        void writeDemoExample(address.port, data.date).catch((error) => {
           process.stderr.write(String(error) + '\n');
           process.exitCode = 2;
           server.close();

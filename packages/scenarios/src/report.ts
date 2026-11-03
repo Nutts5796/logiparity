@@ -120,7 +120,7 @@ function invariantRows(report: ScenarioReport): string {
   return report.invariants
     .map((check) => {
       const count =
-        check.name === 'custom' && !check.affectedKeys.length
+        !invariantLabels[check.name] && !check.affectedKeys.length
           ? ''
           : `: ${check.affectedKeys.length.toLocaleString('en-US')}`;
       const affected = check.affectedKeys.join(', ') || (check.passed ? 'No violations' : 'Not available');
@@ -208,7 +208,7 @@ export function scenarioConsole(report: ScenarioReport): string {
   ];
   for (const result of report.invariants) {
     const count =
-      result.name === 'custom' && !result.affectedKeys.length
+      !invariantLabels[result.name] && !result.affectedKeys.length
         ? ''
         : `: ${result.affectedKeys.length.toLocaleString('en-US')}`;
     lines.push(

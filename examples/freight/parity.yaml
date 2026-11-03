@@ -19,6 +19,7 @@ entities:
           status: Status
           delivered_at: { path: Delivered at, label: Delivery time }
           posting: Posting
+          facility_zone: Facility zone
       settlement:
         type: csv
         label: Carrier settlement
@@ -32,17 +33,18 @@ entities:
           status: Status
           delivered_at: Delivered at
           posting: Posting
+          facility_zone: Facility zone
         unique: [tender_id]
         rollup:
           by: load_id
           sum: [carrier_pay]
-          first: [tender_id, status, delivered_at]
+          first: [tender_id, status, delivered_at, facility_zone]
           where: { charge: [linehaul, fuel, detention, stop, lumper, layover, tonu, claim_deduction] }
           duplicates: { by: [load_id, charge] }
     compare:
       carrier_pay: { type: money, currency: USD }
       status: { type: enum }
-      delivered_at: { type: datetime }
+      delivered_at: { type: datetime, displayTimezoneField: facility_zone }
     aggregates:
       - { name: total, label: Total carrier pay, type: sum, field: carrier_pay }
       - { name: delivered_count, label: Delivered loads, type: count, where: { status: delivered } }
@@ -68,6 +70,21 @@ entities:
           sum: [amount]
           duplicates: { by: [load_id, charge] }
     compare:
+      charge:
+        {
+          type: enum,
+          map:
+            {
+              linehaul: Linehaul,
+              fuel: Fuel,
+              detention: Detention,
+              stop: STP,
+              tonu: TONU,
+              lumper: Lumper,
+              layover: Layover,
+              claim_deduction: Claim deduction,
+            },
+        }
       amount: { type: money, currency: USD }
     aggregates:
       - { name: total, label: Total charges, type: sum, field: amount }

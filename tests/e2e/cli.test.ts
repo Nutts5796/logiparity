@@ -1,3 +1,4 @@
+import { parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
 import { once } from 'node:events';
@@ -154,7 +155,9 @@ interface JsonReport {
 }
 const id = (i: number) => `S${String(i).padStart(6, '0')}`;
 // Frozen affected keys for the realistic synthetic payout fixture.
-const roundingKeys = JSON.parse(await readFile(resolve('tests/fixtures/demo-rounding-keys.json'), 'utf8')) as string[];
+const roundingKeys = parseCheckedJson(
+  await readFile(resolve('tests/fixtures/demo-rounding-keys.json'), 'utf8'),
+) as string[];
 const droppedKeys = [...Array.from({ length: 13 }, (_, i) => (i + 1) * 200), 2750].map(id);
 
 describe.sequential('CLI against the actual demo executable', () => {
@@ -196,7 +199,7 @@ describe.sequential('CLI against the actual demo executable', () => {
     const result = await runCli(['check', '--config', join(dir, 'parity.yaml')], tmpdir());
     expect(result.stderr).toBe('');
     expect(result.code).toBe(drop || rounding ? 1 : 0);
-    const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
+    const report = parseCheckedJson(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
     expect(report.schemaVersion).toBe(1);
     expect(report.entities[0]?.counts).toEqual({ api: 2750, export: drop ? 2736 : 2750, csv: 2750 });
     expect(report.findings.filter((f) => f.type === 'missing_in_source').map((f) => f.key)).toEqual(
@@ -290,7 +293,7 @@ describe.sequential('CLI against the actual demo executable', () => {
       ['console', 'html', 'junit', 'json', 'markdown'],
     );
     expect((await runCli(['check', '--config', 'parity.yaml'], dir)).code).toBe(1);
-    const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
+    const report = parseCheckedJson(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
     const aggregates = report.findings.filter((f) => f.type === 'aggregate_mismatch');
     expect(aggregates.map((f) => [f.source, f.field])).toEqual([
       ['export', 'delivered_count'],
@@ -329,7 +332,7 @@ describe.sequential('CLI against the actual demo executable', () => {
       await writeConfig(dir, url, { failOn }, ['console', 'json', 'junit']);
       const result = await runCli(['check', '--config', 'parity.yaml'], dir);
       expect(result.code).toBe(code);
-      const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
+      const report = parseCheckedJson(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
       expect(report.findings).toHaveLength(82);
       expect(report.findings.filter((f) => f.blocking)).toHaveLength(code === 1 ? 14 : 0);
       if (code === 0) expect(await readFile(join(dir, 'report/junit.xml'), 'utf8')).toContain('skipped="2"');
@@ -382,9 +385,11 @@ describe.sequential('CLI against the actual demo executable', () => {
     const result = await runCli(['check', '--config', 'parity.yaml'], dir);
     expect(result.stderr).toBe('');
     expect(result.code).toBe(stale || timezone ? 1 : 0);
-    const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
+    const report = parseCheckedJson(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
     expect(report.entities[0]?.counts).toEqual({ api: 2750, export: 2750, csv: 2750, ui: 2750 });
-    const staleKeys = JSON.parse(await readFile(resolve('tests/fixtures/demo-stale-keys.json'), 'utf8')) as string[];
+    const staleKeys = parseCheckedJson(
+      await readFile(resolve('tests/fixtures/demo-stale-keys.json'), 'utf8'),
+    ) as string[];
     expect(report.findings.filter((f) => f.source === 'ui' && f.field === 'status').map((f) => f.key)).toEqual(
       stale ? staleKeys : [],
     );
@@ -407,7 +412,7 @@ describe.sequential('CLI against the actual demo executable', () => {
     await saveExport(url, dir, 'csv');
     await writeUiConfig(dir, url, { table: 'table#missing', timeoutMs: 500 });
     expect((await runCli(['check', '--config', 'parity.yaml'], dir)).code).toBe(2);
-    const report = JSON.parse(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
+    const report = parseCheckedJson(await readFile(join(dir, 'report/report.json'), 'utf8')) as JsonReport;
     expect(report.findings).toHaveLength(1);
     const error = report.findings[0];
     expect(error?.type).toBe('source_error');
@@ -545,7 +550,7 @@ describe.sequential('Operational scenario bug flags through the demo executable'
     );
     expect(result.code).toBe(1);
     expect(result.stderr).toBe('');
-    const report = JSON.parse(await readFile(join(dir, 'scenario-report/scenario.json'), 'utf8')) as {
+    const report = parseCheckedJson(await readFile(join(dir, 'scenario-report/scenario.json'), 'utf8')) as {
       invariants: { name: string; passed: boolean; affectedKeys: string[] }[];
     };
     expect(report.invariants.find((i) => i.name === invariant)).toMatchObject({

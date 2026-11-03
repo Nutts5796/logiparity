@@ -1,3 +1,4 @@
+import { parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
@@ -188,8 +189,8 @@ it.each([
     expect((await stat(join(dir, output))).mode & 0o777).toBe(0o600);
     if (output.endsWith('.yaml')) expect(parse(content)).toHaveProperty('version', 1);
     const previewJson = result.stdout.slice(result.stdout.indexOf('{'), result.stdout.lastIndexOf('}\n') + 1);
-    const preview = JSON.parse(previewJson) as { body: unknown };
-    expect(preview.body).toEqual(JSON.parse(provider.requests[0]!.body));
+    const preview = parseCheckedJson(previewJson) as { body: unknown };
+    expect(preview.body).toEqual(parseCheckedJson(provider.requests[0]!.body));
     if (output === 'explanation.md') {
       expect(provider.requests[0]?.body).not.toContain('@example.test');
       expect(result.stdout).not.toContain('@example.test');

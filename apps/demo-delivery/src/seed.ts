@@ -43,7 +43,11 @@ export function majorUnits(cents: number): string {
 }
 
 export function seedData(date = DEMO_DATE): DemoData {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date)
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    !Number.isFinite(Date.parse(`${date}T00:00:00Z`)) ||
+    new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date
+  )
     throw new Error('Demo date must be a valid ISO date (YYYY-MM-DD).');
   const drivers = Array.from({ length: 55 }, (_, i) => ({
     id: `D${String(i + 1).padStart(2, '0')}`,

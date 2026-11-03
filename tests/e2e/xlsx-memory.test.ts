@@ -1,3 +1,4 @@
+import { parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -40,7 +41,7 @@ it('streams a shared-string workbook in a fresh process within a bounded RSS bud
     await writeFile(file, await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
     const script = `import {xlsxRows} from ${JSON.stringify(new URL('file://' + resolve('packages/adapters/dist/xlsx.js')).href)};let count=0;for await(const row of xlsxRows(process.argv[1],'Data')){if(!String(row.values[0]).startsWith('unique shared string'))throw Error('Wrong shared string');count++;}console.log(JSON.stringify({count,rss:process.resourceUsage().maxRSS*1024}));`;
     const result = await run(process.execPath, ['--input-type=module', '-e', script, file], { timeout: 30000 });
-    const data = JSON.parse(result.stdout) as { count: number; rss: number };
+    const data = parseCheckedJson(result.stdout) as { count: number; rss: number };
     expect(data.count).toBe(count);
     expect(data.rss).toBeLessThan(192 * 1024 * 1024);
   } finally {

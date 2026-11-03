@@ -1,3 +1,4 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { once } from 'node:events';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { chromium, type Browser } from 'playwright';
@@ -49,26 +50,28 @@ beforeAll(async () => {
     ],
   });
   const data = seedData();
-  report = await compareEntities([entity], async function* (source) {
-    for (let index = 0; index < data.shipments.length; index++) {
-      if (source === 'export' && ((index + 1) % 200 === 0 || index + 1 === data.shipments.length)) continue;
-      const shipment = data.shipments[index]!;
-      const exported = exportValues(shipment, {
-        roundingPayout: true,
-        timezoneShift: true,
-        dropLastRow: false,
-        staleUi: false,
-        loseOrder: false,
-        doubleAssign: false,
-      });
-      yield {
-        id: shipment.id,
-        payout: source === 'api' ? shipment.driver_payout : exported[2],
-        delivered_at: source === 'api' ? shipment.delivered_at : exported[3],
-        status: shipment.status,
-      };
-    }
-  });
+  report = await checkedReport(
+    compareEntities([entity], async function* (source) {
+      for (let index = 0; index < data.shipments.length; index++) {
+        if (source === 'export' && ((index + 1) % 200 === 0 || index + 1 === data.shipments.length)) continue;
+        const shipment = data.shipments[index]!;
+        const exported = exportValues(shipment, {
+          roundingPayout: true,
+          timezoneShift: true,
+          dropLastRow: false,
+          staleUi: false,
+          loseOrder: false,
+          doubleAssign: false,
+        });
+        yield {
+          id: shipment.id,
+          payout: source === 'api' ? shipment.driver_payout : exported[2],
+          delivered_at: source === 'api' ? shipment.delivered_at : exported[3],
+          status: shipment.status,
+        };
+      }
+    }),
+  );
   html = htmlReport(report, {
     entities: [entity],
     environment: 'test',
@@ -111,7 +114,7 @@ it('opens the complete report offline with zero requests, correct default review
     expect(await page.locator('.pats article').count()).toBe(3);
     const timezone = page.locator('.pat').filter({ hasText: '6 hours earlier' });
     expect(await timezone.locator('.next-step').innerText()).toBe(
-      'Next step: Set sourceTimezones for CSV export and Excel export to the zones each export writes in.',
+      'Next step: Check facility-local timestamps and the configured source time zones in CSV export and Excel export.',
     );
     const dialLabel = await timezone.locator('svg[role=img]').getAttribute('aria-label');
     expect(dialLabel).toContain('2:14 PM UTC');
@@ -266,10 +269,11 @@ it('persists the theme and shows visible Chicago times, UTC toggle, KPIs and mob
     await page.getByRole('button', { name: 'UTC', exact: true }).click();
     expect(await second.locator('[data-col=delivered_at]').innerText()).toContain('2:14 PM');
     await page.setViewportSize({ width: 375, height: 900 });
+    await page.waitForURL('**pageSize=50**');
     expect(await page.locator('#shipments thead').isVisible()).toBe(false);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.getByRole('button', { name: 'Next page', exact: true }).click();
-    expect(await page.locator('#shipments [data-col=id]').first().innerText()).toBe('S000201');
+    expect(await page.locator('#shipments [data-col=id]').first().innerText()).toBe('S000051');
   } finally {
     await context.close();
   }

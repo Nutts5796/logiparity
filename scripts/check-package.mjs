@@ -1,3 +1,4 @@
+import { parseCheckedJson } from './validate-report.mjs';
 import { buildOfflineKit } from './offline-kit.mjs';
 import { checkInstalledDemo } from './check-installed-demo.mjs';
 import { packArtifact } from './pack.mjs';
@@ -11,7 +12,7 @@ import assert from 'node:assert/strict';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const run = promisify(execFile);
-const version = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version;
+const version = parseCheckedJson(await readFile(join(root, 'package.json'), 'utf8')).version;
 const temporary = await mkdtemp(join(tmpdir(), 'logiparity-package-'));
 const npmCli = process.env.npm_execpath;
 const npm = (args, cwd = root) =>
@@ -25,7 +26,7 @@ try {
   await assert.rejects(npm(['pack', '--dry-run']), /pack:artifact/);
   const suppliedArchive = process.env.LOGIPARITY_TARBALL ? resolve(process.env.LOGIPARITY_TARBALL) : undefined;
   const dry = suppliedArchive
-    ? JSON.parse(
+    ? parseCheckedJson(
         (await npm(['pack', suppliedArchive, '--dry-run', '--ignore-scripts', '--offline', '--json'])).stdout,
       )[0]
     : await packArtifact(temporary);
@@ -44,6 +45,8 @@ try {
     'CODE_OF_CONDUCT.md',
     'docs/ci.md',
     'docs/faq.md',
+    'docs/report-schema.json',
+    'docs/scenario-report-schema.json',
     'examples/staging/driver-no-show-target.yaml',
     'examples/staging/driver-no-show.yaml',
     'examples/freight/parity.yaml',
@@ -120,13 +123,13 @@ try {
   const full = join(temporary, 'consumer-full');
   await mkdir(full);
   await npm(['init', '-y'], full);
-  const optional = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).peerDependencies;
+  const optional = parseCheckedJson(await readFile(join(root, 'package.json'), 'utf8')).peerDependencies;
   await npm(['install', archive, ...Object.entries(optional).map(([name, value]) => `${name}@${value}`)], full);
   const fullLock = await readFile(join(full, 'package-lock.json'), 'utf8');
   await npm(['ci'], full);
   assert.equal(await readFile(join(full, 'package-lock.json'), 'utf8'), fullLock);
   assert.match((await npm(['audit'], full)).stdout, /found 0 vulnerabilities/);
-  const manifest = JSON.parse((await run('tar', ['-xOf', archive, 'package/package.json'])).stdout);
+  const manifest = parseCheckedJson((await run('tar', ['-xOf', archive, 'package/package.json'])).stdout);
   for (const field of ['scripts', 'devDependencies', 'workspaces']) assert(!Object.hasOwn(manifest, field));
   assert(!Object.keys(manifest.dependencies).some((name) => name.startsWith('@logiparity/')));
   assert(![...files].some((path) => path.startsWith('node_modules/')));
@@ -165,8 +168,8 @@ try {
         assert(
           result.stderr.includes(
             kind === 'ui'
-              ? 'npm install --save-dev playwright@1.64.1'
-              : 'npm install --save-dev pg@8.23.1 pg-query-stream@4.17.1 pgsql-ast-parser@12.0.2',
+              ? 'npm install --save-dev --save-exact playwright@1.63.0'
+              : 'npm install --save-dev --save-exact pg@8.16.0 pg-query-stream@4.17.1 pgsql-ast-parser@12.0.2',
           ),
         );
     }
@@ -179,7 +182,7 @@ try {
   );
   await npm(['install', archive], overridden);
   assert.equal(
-    JSON.parse(await readFile(join(overridden, 'node_modules/luxon/package.json'), 'utf8')).version,
+    parseCheckedJson(await readFile(join(overridden, 'node_modules/luxon/package.json'), 'utf8')).version,
     '3.7.1',
   );
   await run(process.execPath, [join(overridden, 'node_modules/logiparity/bin/logiparity.js'), '--help'], {
@@ -212,7 +215,7 @@ try {
     { cwd: overridden },
   );
   const npmVersion = (await npm(['--version'])).stdout.trim();
-  const publicProbe = `import {createRequire} from 'node:module'; const require=createRequire(import.meta.url); for (const [name,symbol] of [['core','compareEntities'],['adapters','adapters'],['scenarios','runScenario'],['ai','prepareDraft']]) { const m = await import('logiparity/'+name); if (!m[symbol]) throw new Error('Missing public API '+name); } if(Object.keys(require.cache).some(path=>['pg','pg-query-stream','pgsql-ast-parser','playwright'].some(name=>path.includes('/node_modules/'+name+'/'))))throw new Error('An unused optional adapter was loaded');`;
+  const publicProbe = `import {createRequire} from 'node:module'; const require=createRequire(import.meta.url); for (const [name,symbol] of [['core','compareEntities'],['adapters','adapters'],['scenarios','runScenario'],['ai','prepareDraft']]) { const m = await import('logiparity/'+name); if (!m[symbol]) throw new Error('Missing public API '+name); } for (const schema of ['report-schema.json','scenario-report-schema.json']) { const data=require('node:fs').readFileSync(require.resolve('logiparity/'+schema),'utf8'); if(JSON.parse(data).properties.schemaVersion.const!==1)throw new Error('Invalid public schema export'); } const legacy=await import('logiparity/core'); for(const name of ['SourceError','ConfigError','isBlocking','findingCategories','applyFailurePolicies','failOnSchema'])if(!legacy[name])throw new Error('Missing 1.0 compatibility export '+name); if(Object.keys(require.cache).some(path=>['pg','pg-query-stream','pgsql-ast-parser','playwright'].some(name=>path.includes('/node_modules/'+name+'/'))))throw new Error('An unused optional adapter was loaded');`;
   await run(process.execPath, ['--input-type=module', '-e', publicProbe], { cwd: install });
   await run(process.execPath, ['--input-type=module', '-e', publicProbe], { cwd: full });
   await writeFile(
@@ -244,7 +247,9 @@ export {provider};
     { cwd: install },
   );
   const bin = join(install, 'node_modules/logiparity/bin/logiparity.js');
-  await checkInstalledDemo(bin, join(temporary, 'installed-demo'));
+  await checkInstalledDemo(join(full, 'node_modules/logiparity/bin/logiparity.js'), join(temporary, 'installed-demo'), {
+    ui: true,
+  });
   const work = join(temporary, 'work');
   await mkdir(work);
   const cli = (args) =>
@@ -282,7 +287,7 @@ export {provider};
     exit = error.code;
   }
   assert.equal(exit, 1);
-  const report = JSON.parse(await readFile(join(work, 'report/report.json'), 'utf8'));
+  const report = parseCheckedJson(await readFile(join(work, 'report/report.json'), 'utf8'));
   assert.equal(report.findings.length, 2);
   assert.deepEqual(
     report.groups.map((group) => group.kind),
@@ -306,9 +311,9 @@ export {provider};
     },
     (error) => assert.equal(error.code, 1),
   );
-  const freight = JSON.parse(await readFile(join(work, 'freight-example/logiparity-report/report.json'), 'utf8'));
+  const freight = parseCheckedJson(await readFile(join(work, 'freight-example/logiparity-report/report.json'), 'utf8'));
   assert.equal(freight.findings.length, 16);
-  assert.deepEqual(freight.entities.find((entity) => entity.entity === 'load').counts, { rate: 120, settlement: 379 });
+  assert.deepEqual(freight.entities.find((entity) => entity.entity === 'load').counts, { rate: 120, settlement: 360 });
   for (const name of ['github-actions.yml', 'github-actions-container.yml', 'gitlab-ci.yml'])
     assert(
       !/REPLACE_WITH|<release digest>/.test(

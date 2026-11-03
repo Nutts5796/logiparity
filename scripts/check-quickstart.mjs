@@ -1,3 +1,4 @@
+import { parseCheckedJson } from './validate-report.mjs';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { once } from 'node:events';
@@ -79,7 +80,7 @@ try {
     { cwd: temporary, env, timeout: 30000 },
   );
   assert.match(checked.stdout, /0 findings \(0 blocking findings\)/);
-  const report = JSON.parse(await readFile(join(temporary, 'logiparity-report/report.json'), 'utf8'));
+  const report = parseCheckedJson(await readFile(join(temporary, 'logiparity-report/report.json'), 'utf8'));
   assert.deepEqual(report.findings, []);
   assert.deepEqual(report.entities[0].counts, { api: 2750, export: 2750, csv: 2750 });
   for (const file of ['report.html', 'report.md', 'junit.xml'])
@@ -119,7 +120,7 @@ try {
   });
   assert.match(staged.stdout, /The configuration is valid/);
   assert.match(staged.stdout, /0 findings \(0 blocking findings\)/);
-  const stagingReport = JSON.parse(await readFile(join(temporary, 'logiparity-report/report.json'), 'utf8'));
+  const stagingReport = parseCheckedJson(await readFile(join(temporary, 'logiparity-report/report.json'), 'utf8'));
   assert.deepEqual(stagingReport.findings, []);
   assert.deepEqual(stagingReport.entities[0].counts, { api: 2750, export: 2750 });
   const seconds = Number(((performance.now() - started) / 1000).toFixed(2));

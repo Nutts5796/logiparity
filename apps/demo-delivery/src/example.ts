@@ -1,9 +1,19 @@
+import { atomicReportFile } from '@logiparity/core';
 import { mkdir, writeFile, readFile, cp } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-export async function writeDemoExample(port: number): Promise<void> {
+export async function writeDemoExample(port: number, date = '2026-11-02'): Promise<void> {
   const directory = resolve('logiparity-demo');
   await mkdir(directory, { recursive: true });
+  await atomicReportFile(
+    resolve(directory, '.service.json'),
+    JSON.stringify({ baseUrl: `http://127.0.0.1:${port}` }) + '\n',
+  );
+  try {
+    await writeFile(resolve(directory, '.gitignore'), 'auth/\nreport/\nreport-ui/\n*.csv\n*.xlsx\n', { flag: 'wx' });
+  } catch (error) {
+    if (!error || typeof error !== 'object' || Reflect.get(error, 'code') !== 'EEXIST') throw error;
+  }
   await cp(new URL('../../../examples/demo/scenarios/', import.meta.url), resolve(directory, 'scenarios'), {
     recursive: true,
     force: false,
@@ -30,6 +40,23 @@ export async function writeDemoExample(port: number): Promise<void> {
   } catch (error) {
     if (!error || typeof error !== 'object' || Reflect.get(error, 'code') !== 'EEXIST') throw error;
     await warnStalePort(resolve(directory, 'parity-scenario.yaml'), port);
+  }
+  const ui = (await readFile(new URL('../../../examples/demo/parity-ui.yaml', import.meta.url), 'utf8'))
+    .replaceAll('${DEMO_API_URL}', `http://127.0.0.1:${port}`)
+    .replaceAll('${DEMO_UI_URL}', `http://127.0.0.1:${port}`)
+    .replaceAll('./out/shipments-{{date}}.xlsx', './shipments.xlsx')
+    .replaceAll('./out/shipments-{{date}}.csv', './shipments.csv')
+    .replace("date: '2026-11-02'", `date: '${date}'`)
+    .replace('dir: ../../logiparity-report', 'dir: ./report-ui')
+    .replace(
+      'Run demo:export and demo:login before this check.',
+      'Download the exports and run npx logiparity demo login before this optional check.',
+    );
+  try {
+    await writeFile(resolve(directory, 'parity-ui.yaml'), ui, { flag: 'wx' });
+  } catch (error) {
+    if (!error || typeof error !== 'object' || Reflect.get(error, 'code') !== 'EEXIST') throw error;
+    await warnStalePort(resolve(directory, 'parity-ui.yaml'), port);
   }
   const fields = `shipment_id: 'Shipment ID', status: Status, payout: 'Driver payout', delivered_at: 'Delivered at'`;
   const config = `# Synthetic closed-day data; no production credentials.
@@ -89,7 +116,7 @@ In another terminal, from the same project directory:
   curl --max-time 60 --retry 3 --retry-connrefused -fsS http://127.0.0.1:${port}/exports/shipments.csv -o shipments.csv
   npx logiparity validate --config parity.yaml
   npx logiparity check --config parity.yaml
-Scenario files and target are in logiparity-demo/scenarios and logiparity-demo/target.yaml. Scenarios reset demo state; restart the demo afterwards to return to the original dataset.
+Optional browser comparison: install Playwright, run npx logiparity demo login from the project directory, then npx logiparity check --config logiparity-demo/parity-ui.yaml.\nScenario files and target are in logiparity-demo/scenarios and logiparity-demo/target.yaml. Scenarios reset demo state; restart the demo afterwards to return to the original dataset.
 Open logiparity-demo/report/report.html from the project directory. Stop the service with Ctrl+C.
 `);
 }

@@ -44,7 +44,7 @@ entities:
           payout: '[data-col=payout]'
           delivered_at: 'td[data-col=delivered_at] .parity-time'
     compare:
-      status: { type: enum, map: { 'In transit': in_transit, Delivered: delivered } }
+      status: { type: enum, map: { 'In transit': in_transit, Delivered: delivered, Cancelled: cancelled } }
       payout: { type: money, currency: USD, allowCurrencySymbol: true, tolerance: 0 }
       delivered_at:
         type: datetime

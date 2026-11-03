@@ -1,3 +1,4 @@
+import { parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
@@ -36,7 +37,7 @@ it('prints the installed version without configuration', async () => {
   const result = await run(['--version'], await dir());
   expect(result).toEqual({
     code: 0,
-    stdout: JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8')).version + '\n',
+    stdout: parseCheckedJson(await readFile(new URL('../../package.json', import.meta.url), 'utf8')).version + '\n',
     stderr: '',
   });
 });

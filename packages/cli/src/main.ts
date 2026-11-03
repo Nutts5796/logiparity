@@ -15,7 +15,7 @@ import {
 } from '@logiparity/core';
 import { runScenario, validateScenario, scenarioConsole } from '@logiparity/scenarios';
 import { aiCommand } from './ai.js';
-import { installBrowser } from './browser.js';
+import { installBrowser, loginDemo } from './browser.js';
 import { version } from './version.js';
 import { initConfig } from './init.js';
 
@@ -24,6 +24,7 @@ const output = (text: string) => process.stdout.write(safeConsole(redactSecrets(
 const help = `LogiParity ${version} — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
 
 Usage: logiparity demo [--bugs]
+       logiparity demo login
        logiparity install-browser [--with-deps]
        logiparity check --config <parity.yaml>
        logiparity scenario validate <scenario.yaml> --target <target.yaml>
@@ -42,6 +43,7 @@ Exit codes: 0 = parity, 1 = findings, 2 = configuration or runtime error.
 Money defaults to decimal strings. Numeric input requires allowNumber: true.
 Money tolerance uses integer minor units.
 Outputs: console, HTML, JUnit XML, JSON, Markdown.
+Aliases: -c for --config, -h for --help, -v for --version.
 failOn: category list or allowed counts (e.g. {missing: 2}); runtime errors always exit 2.
 AI commands preview locally by default. Add --send to call the explicitly configured provider.
 AI options: --ai-config <ai.yaml>, --redact-fields <field,...> (repeatable), --output <new file>.
@@ -63,7 +65,7 @@ function commandHelp(commands: readonly string[]): string {
   if (command === 'install-browser')
     return 'Usage: logiparity install-browser [--with-deps]\nInstall Chromium for the optional Playwright UI adapter.\n';
   if (command === 'demo')
-    return 'Usage: logiparity demo [--bugs]\nRun the local synthetic delivery service. DEMO_PORT selects the port; DEMO_DATE selects the synthetic day. Writes logiparity-demo/parity.yaml, target.yaml, parity-scenario.yaml, scenarios/ and fixtures/.\n';
+    return 'Usage: logiparity demo [--bugs]\n       logiparity demo login\nRun the local synthetic delivery service. DEMO_PORT selects the port; DEMO_DATE selects the synthetic day. Writes logiparity-demo/parity.yaml, target.yaml, parity-scenario.yaml, scenarios/ and fixtures/.\n';
   if (command === 'ai')
     return 'Usage: logiparity ai suggest-config --openapi <spec> --entity <name>\n       logiparity ai scenario --from <description>\n       logiparity ai explain <report.json>\nPreview locally by default; --send requires an explicitly configured provider.\n';
   return help;
@@ -72,7 +74,8 @@ async function main(): Promise<number> {
   const known = new Set(['demo', 'install-browser', 'scenario', 'ai', 'init', 'validate', 'check']);
   const first = process.argv.slice(2).find((item) => !item.startsWith('-'));
   if (first && !known.has(first) && process.argv[2] === first) throw new Error(`Unknown command ${first}; see --help.`);
-  const { values, positionals } = parseArgs({
+  const { values, positionals, tokens } = parseArgs({
+    tokens: true,
     options: {
       config: { type: 'string', short: 'c' },
       target: { type: 'string' },
@@ -94,12 +97,19 @@ async function main(): Promise<number> {
     allowPositionals: true,
     strict: true,
   });
+  if (tokens.filter((token) => token.kind === 'option' && token.name === 'config').length > 1)
+    throw new Error('Option --config may be specified only once.');
   if (values.help) {
     output(commandHelp(positionals));
     return 0;
   }
   if (values.version) {
+    if (positionals.length) throw new Error('--version does not accept arguments.');
     output(version + '\n');
+    return 0;
+  }
+  if (positionals[0] === 'demo' && positionals[1] === 'login' && positionals.length === 2) {
+    output(await loginDemo());
     return 0;
   }
   if (positionals[0] === 'demo' && positionals.length === 1) {
@@ -161,7 +171,7 @@ async function main(): Promise<number> {
     return 0;
   }
   if (positionals.length !== 1 || !['check', 'validate'].includes(positionals[0] ?? '') || !values.config)
-    throw new Error('Use logiparity check --config <parity.yaml> or logiparity init; see --help for usage.');
+    throw new Error(commandHelp([positionals[0] ?? 'check']).trim());
   const { config, baseDir, missingEnv, warnings } = await loadConfig(values.config, process.env, {
     allowMissingEnv: values['allow-missing-env'] === true,
     command: positionals[0] === 'validate' ? 'validate' : 'check',
@@ -184,9 +194,10 @@ async function main(): Promise<number> {
   }
   const report = await compareEntities(
     config.entities,
-    (_, source, context) =>
+    (sourceName, source, context) =>
       adapters.read(source, {
         baseDir,
+        sourceName,
         ...(config.allowedHosts ? { allowedHosts: config.allowedHosts } : {}),
         env: process.env,
         reportDir: resolve(baseDir, config.report.dir),
@@ -217,7 +228,14 @@ try {
 } catch (error) {
   const raw = errorText(error);
   const option = raw.match(/Unknown option ['"]([^'"]+)/)?.[1];
-  const message = safeConsole(redactSecrets(option ? `Unknown option ${option}; see --help.` : raw, configuredSecrets));
+  const missingValue =
+    error && typeof error === 'object' && Reflect.get(error, 'code') === 'ERR_PARSE_ARGS_INVALID_OPTION_VALUE';
+  const diagnostic = missingValue
+    ? `Option ${raw.match(/--[A-Za-z-]+/)?.[0] ?? 'flag'} requires a value; see --help.`
+    : raw;
+  const message = safeConsole(
+    redactSecrets(option ? `Unknown option ${option}; see --help.` : diagnostic, configuredSecrets),
+  );
   process.stderr.write(`LogiParity: ${message}\n`);
   process.exitCode = 2;
 }

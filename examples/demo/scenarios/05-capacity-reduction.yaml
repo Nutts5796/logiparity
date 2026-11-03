@@ -6,7 +6,7 @@ setup:
 events:
   - step: 1
     type: capacity_change
-    params: { vehicle: V08, capacity: 25, at: '2026-11-02T22:00:00Z' }
+    params: { vehicle: V08, capacity: 25, at: '2026-11-02T14:50:00Z' }
 wait:
   until: { replan_status: completed }
   timeoutSeconds: 60

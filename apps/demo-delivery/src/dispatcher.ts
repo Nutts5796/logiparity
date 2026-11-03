@@ -4,7 +4,6 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { DemoData, Shipment } from './seed.js';
 
 export const demoCredentials = { username: 'dispatcher', password: 'demo-password' };
-const pageSize = 200;
 const escape = (s: string) =>
   s
     .replaceAll('&', '&amp;')
@@ -34,7 +33,18 @@ const style =
 `;
 
 function html(response: ServerResponse, status: number, title: string, body: string): void {
-  const script = `(() => {${themeScript}})();`;
+  const script = `(() => {${themeScript}
+if (document.querySelector('#shipments')) {
+  const resize = () => {
+    const url = new URL(location.href);
+    const size = matchMedia('(max-width: 860px)').matches ? '50' : '200';
+    if ((url.searchParams.get('pageSize') ?? '200') !== size) {
+      url.searchParams.set('pageSize', size); url.searchParams.set('page', '1'); location.replace(url);
+    }
+  };
+  resize(); addEventListener('resize', resize);
+}
+})();`;
   const hash = createHash('sha256').update(script).digest('base64');
   response.writeHead(status, {
     'content-type': 'text/html; charset=utf-8',
@@ -168,13 +178,18 @@ export function createDispatcher(data: DemoData, bugs: { staleUi: boolean }) {
         response,
         400,
         'Unknown date',
-        `<p>Synthetic data exists only for ${escape(data.date)}. Correct the date filter.</p>`,
+        `<p>Synthetic data exists only for ${escape(new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', dateStyle: 'long' }).format(new Date(data.date + 'T12:00:00Z')))}.</p><p><a href="/dispatcher">Return to today’s deliveries</a></p>`,
       );
       return true;
     }
     const status = url.searchParams.get('status') ?? '';
     if (!['', 'delivered', 'in_transit', 'cancelled'].includes(status)) {
-      html(response, 400, 'Unknown status', '<p>Choose Delivered, In transit or All statuses.</p>');
+      html(
+        response,
+        400,
+        'Unknown status',
+        '<p>Choose Delivered, In transit, Cancelled or All statuses. <a href="/dispatcher">Return to deliveries</a>.</p>',
+      );
       return true;
     }
     const pageText = url.searchParams.get('page') ?? '1';
@@ -182,6 +197,7 @@ export function createDispatcher(data: DemoData, bugs: { staleUi: boolean }) {
       html(response, 400, 'Invalid page', '<p>Page must be a positive integer.</p>');
       return true;
     }
+    const pageSize = url.searchParams.get('pageSize') === '50' ? 50 : 200;
     const page = Number(pageText);
     const snapshot = data.clock;
     const filtered = data.shipments.filter((s) => !status || uiStatus(s, bugs.staleUi, snapshot) === status);
@@ -208,7 +224,7 @@ export function createDispatcher(data: DemoData, bugs: { staleUi: boolean }) {
         return `<tr><td data-l="Shipment"><code data-col="id">${escape(s.id)}</code><span class="sub-l">Zone ${escape(s.zone.replace('Z', ''))}</span></td><td data-l="Status"><span data-col="status" class="tag ${state === 'delivered' ? 't-ok' : 't-info'}">${state === 'delivered' ? 'Delivered' : state === 'cancelled' ? 'Cancelled' : 'In transit'}</span></td><td class="drv" data-l="Driver">${escape(s.driver_id)}<span class="sub-l">Vehicle ${escape(s.vehicle_id)}</span></td><td data-col="eta" data-l="ETA">${displayTime(s.eta, zone)}</td><td data-col="delivered_at" data-l="Delivered">${displayTime(s.delivered_at, zone)}</td><td class="num" data-l="Driver payout"><span data-col="payout">$${escape(s.driver_payout)}</span></td></tr>`;
       })
       .join('');
-    const hidden = `<input type="hidden" name="date" value="${data.date}"><input type="hidden" name="status" value="${status}"><input type="hidden" name="tz" value="${zone}">`;
+    const hidden = `<input type="hidden" name="pageSize" value="${pageSize}"><input type="hidden" name="date" value="${data.date}"><input type="hidden" name="status" value="${status}"><input type="hidden" name="tz" value="${zone}">`;
     const delivered = data.shipments.filter((s) => uiStatus(s, bugs.staleUi, snapshot) === 'delivered').length;
     const transit = data.shipments.filter((s) => uiStatus(s, bugs.staleUi, snapshot) === 'in_transit').length;
     const kpis = [
@@ -243,14 +259,14 @@ export function createDispatcher(data: DemoData, bugs: { staleUi: boolean }) {
     const timezoneButtons = ['America/Chicago', 'UTC']
       .map(
         (tz) =>
-          `<form method="get" action="/dispatcher"><input type="hidden" name="date" value="${data.date}"><input type="hidden" name="status" value="${status}"><button name="tz" value="${tz}" aria-pressed="${zone === tz}">${tz === 'UTC' ? 'UTC' : 'Depot time (Chicago)'}</button></form>`,
+          `<form method="get" action="/dispatcher"><input type="hidden" name="date" value="${data.date}"><input type="hidden" name="status" value="${status}"><input type="hidden" name="pageSize" value="${pageSize}"><button name="tz" value="${tz}" aria-pressed="${zone === tz}">${tz === 'UTC' ? 'UTC' : 'Depot time (Chicago)'}</button></form>`,
       )
       .join('');
     html(
       response,
       200,
       'Dispatcher',
-      `<div class="title"><div><h1>Today's deliveries</h1><div class="lead">${data.shipments.length.toLocaleString('en-US')} orders · ${data.drivers.length} synthetic drivers · Snapshot ${escape(snapshotText)}</div></div><div class="seg" role="group" aria-label="Time zone">${timezoneButtons}</div></div><section class="kpis">${kpis}</section><h3>Orders</h3><section class="card orders"><form class="filters" method="get" action="/dispatcher"><div><label for="date">Date</label><select id="date" name="date" aria-label="Date"><option value="${data.date}">${escape(new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(data.date + 'T12:00:00Z')))}</option></select></div><div><label for="status">Status</label><select id="status" name="status"><option value="">All statuses</option><option value="delivered"${status === 'delivered' ? ' selected' : ''}>Delivered</option><option value="in_transit"${status === 'in_transit' ? ' selected' : ''}>In transit</option><option value="cancelled"${status === 'cancelled' ? ' selected' : ''}>Cancelled</option></select></div><input type="hidden" name="tz" value="${zone}"><button class="btn btn-primary" type="submit">Apply filters</button><span class="order-pager">${filtered.length.toLocaleString('en-US')} orders · Page ${page} of ${pages}</span></form><table id="shipments"><thead><tr><th>Shipment</th><th>Status</th><th>Driver</th><th>ETA (${zoneName})</th><th>Delivered (${zoneName})</th><th class="num">Driver payout</th></tr></thead><tbody>${rowHtml}</tbody></table><nav class="pager" aria-label="Order pages"><form method="get" action="/dispatcher">${hidden}<input type="hidden" name="page" value="${page - 1}"><button class="btn btn-soft" aria-label="Previous page"${page === 1 ? ' disabled' : ''}>Previous</button></form><span>${page} / ${pages}</span><form method="get" action="/dispatcher">${hidden}<input type="hidden" name="page" value="${page + 1}"><button class="btn btn-soft" aria-label="Next page"${page === pages ? ' disabled' : ''}>Next</button></form></nav></section><form class="signout" method="post" action="/logout"><button class="btn btn-soft" type="submit">Sign out</button></form>`,
+      `<div class="title"><div><h1>Today's deliveries</h1><div class="lead">${data.shipments.length.toLocaleString('en-US')} orders · ${data.drivers.length} synthetic drivers · Snapshot ${escape(snapshotText)}</div></div><div class="seg" role="group" aria-label="Time zone">${timezoneButtons}</div></div><section class="kpis">${kpis}</section><h3>Orders</h3><section class="card orders"><form class="filters" method="get" action="/dispatcher"><div><label for="date">Date</label><select id="date" name="date" aria-label="Date"><option value="${data.date}">${escape(new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(data.date + 'T12:00:00Z')))}</option></select></div><div><label for="status">Status</label><select id="status" name="status"><option value="">All statuses</option><option value="delivered"${status === 'delivered' ? ' selected' : ''}>Delivered</option><option value="in_transit"${status === 'in_transit' ? ' selected' : ''}>In transit</option><option value="cancelled"${status === 'cancelled' ? ' selected' : ''}>Cancelled</option></select></div><input type="hidden" name="tz" value="${zone}"><input type="hidden" name="pageSize" value="${pageSize}"><button class="btn btn-primary" type="submit">Apply filters</button><span class="order-pager">${filtered.length.toLocaleString('en-US')} orders · Page ${page} of ${pages}</span></form><table id="shipments"><thead><tr><th>Shipment</th><th>Status</th><th>Driver</th><th>ETA (${zoneName})</th><th>Delivered (${zoneName})</th><th class="num">Driver payout</th></tr></thead><tbody>${rowHtml}</tbody></table>${filtered.length ? '' : '<p>No orders match this filter. <a href="/dispatcher">Show all orders</a>.</p>'}<nav${filtered.length ? '' : ' hidden'} class="pager" aria-label="Order pages"><form method="get" action="/dispatcher">${hidden}<input type="hidden" name="page" value="${page - 1}"><button class="btn btn-soft" aria-label="Previous page"${page === 1 ? ' disabled' : ''}>Previous</button></form><span>${page} / ${pages}</span><form method="get" action="/dispatcher">${hidden}<input type="hidden" name="page" value="${page + 1}"><button class="btn btn-soft" aria-label="Next page"${page === pages ? ' disabled' : ''}>Next</button></form></nav></section><form class="signout" method="post" action="/logout"><button class="btn btn-soft" type="submit">Sign out</button></form>`,
     );
     return true;
   };

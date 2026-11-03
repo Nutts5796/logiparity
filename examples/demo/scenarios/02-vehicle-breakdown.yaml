@@ -6,7 +6,7 @@ setup:
 events:
   - step: 1
     type: vehicle_breakdown
-    params: { driver: D17, at: '2026-11-02T19:20:00Z' }
+    params: { driver: D17, at: '2026-11-02T14:20:00Z' }
 wait:
   until: { replan_status: completed }
   timeoutSeconds: 60

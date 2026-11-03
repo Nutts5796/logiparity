@@ -1,3 +1,4 @@
+import { parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { execFile, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { promisify } from 'node:util';
@@ -59,7 +60,7 @@ async function run(scenario: string, target: string, directory: string, url: str
   return { code, stdout, stderr };
 }
 async function readReport(directory: string) {
-  return JSON.parse(await readFile(join(directory, 'report/scenario.json'), 'utf8')) as ScenarioReport;
+  return parseCheckedJson(await readFile(join(directory, 'report/scenario.json'), 'utf8')) as ScenarioReport;
 }
 async function variant(
   directory: string,

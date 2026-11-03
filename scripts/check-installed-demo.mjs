@@ -1,3 +1,4 @@
+import { parseCheckedJson } from './validate-report.mjs';
 import { setTimeout, clearTimeout } from 'node:timers';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -6,7 +7,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
 const run = promisify(execFile);
-export async function checkInstalledDemo(bin, directory) {
+export async function checkInstalledDemo(bin, directory, { ui = false } = {}) {
   await mkdir(directory, { recursive: true });
   const child = spawn(process.execPath, [bin, 'demo'], {
     cwd: directory,
@@ -43,9 +44,16 @@ export async function checkInstalledDemo(bin, directory) {
     }
     await run(process.execPath, [bin, 'validate', '--config', 'parity.yaml'], { cwd });
     await run(process.execPath, [bin, 'check', '--config', 'parity.yaml'], { cwd });
-    const report = JSON.parse(await readFile(join(cwd, 'report/report.json'), 'utf8'));
+    const report = parseCheckedJson(await readFile(join(cwd, 'report/report.json'), 'utf8'));
     assert.deepEqual(report.findings, []);
     assert.deepEqual(report.entities[0].counts, { api: 2750, export: 2750, csv: 2750 });
+    if (ui) {
+      await run(process.execPath, [bin, 'demo', 'login'], { cwd: directory, timeout: 30000 });
+      await run(process.execPath, [bin, 'check', '--config', 'parity-ui.yaml'], { cwd, timeout: 60000 });
+      const uiReport = parseCheckedJson(await readFile(join(cwd, 'report-ui/report.json'), 'utf8'));
+      assert.deepEqual(uiReport.findings, []);
+      assert.equal(uiReport.entities[0].counts.ui, 2750);
+    }
     for (const command of ['validate', 'run'])
       await run(
         process.execPath,
@@ -60,7 +68,10 @@ export async function checkInstalledDemo(bin, directory) {
         ],
         { cwd: directory, timeout: 30000 },
       );
-    assert.equal(JSON.parse(await readFile(join(directory, 'scenario-report/scenario.json'), 'utf8')).exitCode, 0);
+    assert.equal(
+      parseCheckedJson(await readFile(join(directory, 'scenario-report/scenario.json'), 'utf8')).exitCode,
+      0,
+    );
   } finally {
     if (child.exitCode === null) {
       const stopped = once(child, 'exit');

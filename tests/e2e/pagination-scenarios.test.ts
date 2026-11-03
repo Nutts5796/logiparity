@@ -1,3 +1,4 @@
+import { parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { createServer, type Server, type RequestListener } from 'node:http';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -73,7 +74,7 @@ it.each([true, false])(
     );
     const result = await run(['check', '--config', 'config.yaml'], directory);
     expect(result.code).toBe(2);
-    const report = JSON.parse(await readFile(join(directory, 'report/report.json'), 'utf8')) as {
+    const report = parseCheckedJson(await readFile(join(directory, 'report/report.json'), 'utf8')) as {
       findings: { type: string; message: string }[];
     };
     if (signal) {
@@ -200,7 +201,7 @@ it.each([
   );
   const result = await run(['check', '--config', 'parity.yaml'], directory);
   expect(result.code, result.stdout + result.stderr).toBe(expected);
-  const report = JSON.parse(await readFile(join(directory, 'report/report.json'), 'utf8')) as {
+  const report = parseCheckedJson(await readFile(join(directory, 'report/report.json'), 'utf8')) as {
     findings: { type: string }[];
   };
   expect(report.findings.map((f) => f.type)).toEqual(expected === 0 ? [] : ['invalid_value']);
@@ -253,7 +254,7 @@ it('renders real HTTP groups in every report without losing findings or normaliz
   expect(result.code).toBe(1);
   expect(result.stdout).toContain('Nov 2, 2026, 1:01 PM UTC');
   expect(result.stdout).toContain('−6 h');
-  const report = JSON.parse(await readFile(join(directory, 'report/report.json'), 'utf8')) as {
+  const report = parseCheckedJson(await readFile(join(directory, 'report/report.json'), 'utf8')) as {
     schemaVersion: number;
     groups: { kind: string }[];
     findings: { expected: string | number; field: string }[];
