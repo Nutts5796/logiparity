@@ -356,7 +356,7 @@ export function htmlReport(report: Report, presentation: ReportPresentation = {}
       const info = kindInfo[card.kind],
         group = groups[card.groups[0] ?? -1],
         words = group ? patternWords(group, presentation) : undefined;
-      return `<article class="card pat" style="--c:var(--c-${info.color});--soft:var(--c-${info.color}-soft)"><div class="ic">${icon(info.path)}</div><div class="kind">${escape(card.label)}</div><div class="delta">${escape(card.headline)}</div><p>${escape(card.hint)}</p><div class="viz" title="${escape(words?.sentence ?? '')}">${card.chart}</div><p class="next-step"><b>Next step:</b> ${escape([...new Set(card.groups.map((index) => (groups[index] ? patternWords(groups[index], presentation).nextStep : '')))].join(' ') || 'Review source values.')}</p><button class="btn btn-soft" data-card="${index}" type="button" aria-pressed="false">Show these findings</button></article>`;
+      return `<article class="card pat" style="--c:var(--c-${info.color});--soft:var(--c-${info.color}-soft)"><div class="ic">${icon(info.path)}</div><div class="kind">${escape(card.label)}</div><div class="delta">${escape(card.headline)}</div><p>${escape(card.hint)}</p><div class="viz" title="${escape(words?.sentence ?? '')}">${card.chart}</div><p class="next-step"><b>Next step:</b> ${escape(card.nextStep)}</p><button class="btn btn-soft" data-card="${index}" type="button" aria-pressed="false">Show these findings</button></article>`;
     })
     .join('');
   const options = (values: [string, string][]) =>

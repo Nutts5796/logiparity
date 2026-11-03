@@ -224,7 +224,12 @@ export function mergedPatternWords(groups: readonly FindingGroup[], presentation
           )
           .join(' and ') +
         `. ${words.label}: ${first.delta ? durationOrMoney(first, presentation) : `every ${first.stride}th row`}.`,
-      nextStep: [...new Set(values.map((group) => patternWords(group, presentation).nextStep))].join(' '),
+      nextStep:
+        first.kind === 'datetime_offset'
+          ? first.cause === 'timezone'
+            ? `Set sourceTimezones for ${values.map((group) => labels.source(group.entity, group.source)).join(' and ')} to the zones each export writes in.`
+            : `Compare original timestamps and clock settings in ${values.map((group) => labels.source(group.entity, group.source)).join(' and ')}.`
+          : [...new Set(values.map((group) => patternWords(group, presentation).nextStep))].join(' '),
     };
   });
 }

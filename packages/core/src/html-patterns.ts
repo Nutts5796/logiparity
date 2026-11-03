@@ -42,13 +42,13 @@ export interface PatternCard {
   label: string;
   headline: string;
   hint: string;
+  nextStep: string;
   chart: string;
 }
 const fmt = (value: number) => value.toLocaleString('en-US');
 const svg = (width: number, height: number, label: string, contents: string) =>
   `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escape(label)}">${contents}</svg>`;
 const caption = (text: string) => `<div class="cap">${escape(text)}</div>`;
-const hourLabel = (hour: number, zone = 'UTC') => `${hour % 12 || 12} ${hour < 12 ? 'AM' : 'PM'} ${zone}`;
 
 export function patternCards(report: Report, presentation: ReportPresentation): PatternCard[] {
   const groups = reportGroups(report, presentation);
@@ -93,6 +93,7 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
               ? `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, group.currency ?? rule.currency)}`.replace('-', '−')
               : 'Consistent mapping',
         hint: patternWords(group, presentation).hint,
+        nextStep: patternWords(group, presentation).nextStep,
       };
       cards.set(key, card);
     }
@@ -105,7 +106,10 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
       card.groups.flatMap((index) => (groups[index] ? [groups[index]] : [])),
       presentation,
     )[0];
-    if (words) card.hint = `${words.sentence} ${words.hint}`;
+    if (words) {
+      card.hint = `${words.sentence} ${words.hint}`;
+      card.nextStep = words.nextStep;
+    }
     const summary = report.entities.find((entity) => entity.entity === first.entity);
     const reference = summary?.reference ?? '';
     const sources = [...new Set(card.groups.map((index) => labels.source(first.entity, groups[index]!.source)))].join(
@@ -143,26 +147,24 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
           `1 row lost at the end of each ${fmt(size)}-row page. ${sources}: rows kept per page${card.groups.length > 1 ? ` in ${labels.source(first.entity, first.source)}` : ''}.`,
         );
     } else if (first.kind === 'datetime_offset') {
-      const typical = (field: 'expected' | 'actual') => {
-        const hours = Array.from({ length: 24 }, () => 0);
-        for (const index of members) {
-          const value = report.findings[index]![field];
-          if (typeof value === 'number') {
-            const hour = Number(
-              new Intl.DateTimeFormat('en-US', {
-                timeZone: presentation.displayTimezone ?? 'UTC',
-                hour: 'numeric',
-                hourCycle: 'h23',
-              }).format(new Date(value)),
-            );
-            hours[hour] = (hours[hour] ?? 0) + 1;
-          }
-        }
-        return hours.indexOf(Math.max(...hours));
-      };
       const zone = presentation.displayTimezone ?? 'UTC';
-      const ref = typical('expected'),
-        src = typical('actual');
+      const example = report.findings[members[0] ?? -1];
+      const sampleHour = (field: 'expected' | 'actual') => {
+        const value = example?.[field];
+        if (typeof value !== 'number') return 0;
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: zone,
+          hour: 'numeric',
+          minute: '2-digit',
+          hourCycle: 'h23',
+        }).formatToParts(new Date(value));
+        return (
+          Number(parts.find((part) => part.type === 'hour')?.value ?? 0) +
+          Number(parts.find((part) => part.type === 'minute')?.value ?? 0) / 60
+        );
+      };
+      const ref = sampleHour('expected'),
+        src = sampleHour('actual');
       const point = (hour: number, radius: number): [number, number] => {
         const angle = (hour / 24) * Math.PI * 2 - Math.PI / 2;
         return [80 + Math.cos(angle) * radius, 80 + Math.sin(angle) * radius];
@@ -182,7 +184,7 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
         svg(
           160,
           160,
-          `24-hour ${zone} dial: ${labels.source(first.entity, reference)} around ${hourLabel(ref, zone)}, ${sources} around ${hourLabel(src, zone)}. Shift ${card.headline}.`,
+          `24-hour ${zone} dial: ${labels.source(first.entity, reference)} ${typeof example?.expected === 'number' ? readableDatetime(example.expected, zone) : 'unknown'}, ${sources} ${typeof example?.actual === 'number' ? readableDatetime(example.actual, zone) : 'unknown'}. Shift ${card.headline}.`,
           shapes,
         ) +
         caption(
