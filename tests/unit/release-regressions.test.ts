@@ -5,7 +5,7 @@ const entity=entitySchema.parse({name:'load',key:'load_id',sources:{reference:so
 it.each(['reference','lines'])('reports first-field conflicts in rolled-up %s without guessing a mapping',async name=>{
   const e=entitySchema.parse({...entity,sources:{reference:{...source,...(name==='reference'?{rollup:{by:'load_id',sum:['pay'],first:['status']}}:{})},lines:entity.sources.lines}});
   const report=await compareEntities([e],async function*(sourceName){yield {load_id:'L1',pay:sourceName===name?'1.00':'2.00',status:'delivered'};if(sourceName===name)yield {load_id:'L1',pay:'1.00',status:'cancelled'};});
-  expect(report.findings).toHaveLength(1);expect(report.findings[0]).toMatchObject({reason:'rollup_conflict',field:'status',expected:'delivered',actual:'cancelled'});expect(report.groups).toEqual([]);
+  expect(report.findings).toHaveLength(1);expect(report.findings[0]).toMatchObject({reason:'rollup_conflict',field:'status',values:[{line:1,value:'delivered'},{line:2,value:'cancelled'}]});expect(report.groups).toEqual([]);
 });
 it('flags blank money in a rollup and skips comparisons and aggregates that depend on it',async()=>{
   const report=await compareEntities([entity],async function*(name){yield {load_id:'L1',pay:'1.00',status:'delivered'};if(name==='lines')yield {load_id:'L1',pay:'',status:'delivered'};});

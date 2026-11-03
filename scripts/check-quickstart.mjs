@@ -46,7 +46,7 @@ try {
   assert.equal(yaml, await readFile(join(temporary, 'starter.yaml'), 'utf8'), 'README staging YAML must match init verbatim');
   await writeFile(join(temporary, 'parity.yaml'), yaml);
   const staged = await run('sh', ['-eu', '-c', commands.replace('http://127.0.0.1:3010', url)], {cwd: temporary, env, timeout: 30000});
-  assert.match(staged.stdout, /Configuration valid/); assert.match(staged.stdout, /0 findings \(0 blocking\)/);
+  assert.match(staged.stdout, /The configuration is valid/); assert.match(staged.stdout, /0 findings \(0 blocking\)/);
   const stagingReport = JSON.parse(await readFile(join(temporary, 'logiparity-report/report.json'), 'utf8'));
   assert.deepEqual(stagingReport.findings, []); assert.deepEqual(stagingReport.entities[0].counts, {api:2750, export:2750});
   const seconds = Number(((performance.now() - started) / 1000).toFixed(2)); assert(seconds < 600, `Quickstart exceeded 10 minutes: ${seconds}s`);

@@ -30,11 +30,12 @@ export function validateSource(config: SourceConfig): void {
 
 /** Shared semantic checks for validate and check, with no source I/O. */
 export function validateConfig(config: Config): void {
-  for (const entity of config.entities) {
+  for (const [index,entity] of config.entities.entries()) {
     const reference = Object.values(entity.sources)[0]!;
     for (const [field, rule] of Object.entries(entity.compare)) {
-      if (!Object.hasOwn(reference.fields, field)) throw new Error(`Comparison field ${field} is not mapped in the reference source`);
-      for (const name of Object.keys(rule.sourceTimezones)) if (!Object.hasOwn(entity.sources, name)) throw new Error(`Unknown sourceTimezones source ${name}`);
+      if (!Object.hasOwn(reference.fields, field)) throw new Error(`entities[${index}].compare.${field}: comparison field is not mapped in the reference source`);
+      if(rule.format&&typeof rule.format==='object')for(const name of Object.keys(rule.format))if(!Object.hasOwn(entity.sources,name))throw new Error(`entities[${index}].compare.${field}.format.${name}: unknown source`);
+      for (const name of Object.keys(rule.sourceTimezones)) if (!Object.hasOwn(entity.sources, name)) throw new Error(`entities[${index}].compare.${field}.sourceTimezones.${name}: unknown source`);
     }
     for (const source of Object.values(entity.sources)) validateSource(source);
   }

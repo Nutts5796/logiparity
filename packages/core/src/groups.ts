@@ -11,7 +11,7 @@ function duration(value: bigint): string {
   return String(value);
 }
 const label = (value: NormalizedValue) => typeof value === 'string' ? JSON.stringify(value) : String(value);
-export function groupFindings(findings: readonly Finding[], entities: readonly EntityConfig[] = []): FindingGroup[] {
+export function groupFindings(findings: readonly Finding[], entities: readonly EntityConfig[] = [], finalReferenceKeys: Readonly<Record<string,string>> = {}): FindingGroup[] {
   const buckets = new Map<string, Finding[]>();
   for (const finding of findings) if (!finding.reason && ['field_mismatch', 'missing_in_source', 'extra_in_source'].includes(finding.type)) {
     const key = JSON.stringify([finding.entity, finding.source, finding.field, finding.type]);
@@ -35,7 +35,12 @@ export function groupFindings(findings: readonly Finding[], entities: readonly E
           while (end < keys.length && keys[end]!.number - keys[end - 1]!.number === stride) end++;
           const count = end - start;
           if (count >= 3) {
-            groups.push({ entity, source, field: '', count, kind: first.type === 'missing_in_source' ? 'missing_stride' : 'extra_stride', stride: String(stride), summary: `${count.toLocaleString('en-US')} ${first.type} keys in ${source} follow a stride of ${stride}, from ${keys[start]!.key} to ${keys[end - 1]!.key} (likely page boundary).` });
+            const covered=keys.slice(start,end).map((item)=>item.key);
+            const final=finalReferenceKeys[entity];const finalMatch=final?.match(/^(.*?)(\d+)$/);
+            const firstMatch=keys[start]!.key.match(/^(.*?)(\d+)$/)!;
+            const last=keys[end-1]!;
+            if(first.type==='missing_in_source'&&final&&finalMatch&&finalMatch[1]===firstMatch[1]&&BigInt(finalMatch[2]!)>last.number&&BigInt(finalMatch[2]!)<last.number+stride&&bucket.some((finding)=>finding.key===final))covered.push(final);
+            groups.push({ entity, source, field: '', count:covered.length, keys:covered, kind: first.type === 'missing_in_source' ? 'missing_stride' : 'extra_stride', stride: String(stride), summary: `${covered.length.toLocaleString('en-US')} ${first.type} keys in ${source}: ${count} follow a stride of ${stride}, from ${keys[start]!.key} to ${last.key}${covered.length>count?`; final reference key ${final} is also missing from the last page`:''} (likely page boundary).` });
             start = end;
           } else start++;
         }
@@ -51,7 +56,7 @@ export function groupFindings(findings: readonly Finding[], entities: readonly E
       if (delta !== undefined && delta !== 0n && deltas.every((value) => value === delta)) {
         const kind = rule.type === 'money' ? 'money_delta' : 'datetime_offset';
         const difference = kind === 'money_delta' ? `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, rule.currency!, rule.locale)} (${moneyUnits(delta, rule.currency!)})` : duration(delta);
-        const hint = kind === 'money_delta' ? 'likely rounding or a fixed adjustment' : delta % 900000n === 0n ? 'likely timezone' : 'consistent datetime offset';
+        const hint = kind === 'money_delta' ? (delta>=-3n&&delta<=3n?'likely rounding':'consistent fixed difference') : delta % 900000n === 0n ? 'likely timezone' : 'consistent datetime offset';
         groups.push({ entity, source, field, count, kind, delta: delta.toString(), summary: `${prefix} ${verb('differ', 'differs')} by exactly ${difference} (${hint}).` }); continue;
       }
     }
@@ -62,4 +67,11 @@ export function groupFindings(findings: readonly Finding[], entities: readonly E
 }
 export function reportGroups(report: Report, presentation: ReportPresentation = {}): FindingGroup[] {
   return report.groups ?? groupFindings(report.findings, presentation.entities);
+}
+
+// Keep findings with no matching explanation ahead of grouped rows in truncated presentations.
+export function presentationFindings(report: Report,presentation: ReportPresentation={}): Finding[] {
+  const groups=reportGroups(report,presentation);
+  const explained=(finding:Finding)=>!finding.reason&&groups.some((group)=>group.entity===finding.entity&&group.source===finding.source&&(group.kind.endsWith('_stride')?group.keys?.includes(finding.key)&&finding.type===(group.kind==='missing_stride'?'missing_in_source':'extra_in_source'):finding.type==='field_mismatch'&&group.field===finding.field));
+  return [...report.findings.filter((finding)=>!explained(finding)),...report.findings.filter(explained)];
 }

@@ -8,7 +8,7 @@ export function escapeMarkup(input: string): string {
 }
 export const displayValue = (value: NormalizedValue | undefined): string => value === undefined ? '—' : value === null ? 'null' : String(value);
 export function findingDetail(f: Finding): string {
-  return `${f.source} | key=${f.key || '—'} | field=${f.field || '—'} | ${isBlocking(f) ? 'blocking' : 'allowed'}\n${f.message}${f.expected !== undefined ? `\nExpected: ${displayValue(f.expected)}\nActual: ${displayValue(f.actual)}` : ''}`;
+  return `${f.source} | key=${f.key || '—'} | field=${f.field || '—'} | ${isBlocking(f) ? 'blocking' : 'allowed'}\n${f.message}${f.expected !== undefined ? `\nExpected: ${displayValue(f.expected)}\nActual: ${displayValue(f.actual)}` : ''}${f.values?`\nObserved: ${f.values.map((item)=>`line ${item.line}: ${displayValue(item.value)}`).join('; ')}`:''}`;
 }
 export function verdict(report: Report): string {
   if (report.findings.some((f) => f.type === 'source_error')) return 'Runtime error';

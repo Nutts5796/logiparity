@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon';
+import type { ExplainedFormat } from 'luxon';
 import type { ComparisonRule } from './config.js';
 import type { NormalizedValue } from './types.js';
 
@@ -42,6 +43,13 @@ function moneyText(input: string, currency: string, locale: string, options: Mon
     if (parentheses && signed) throw new Error('Money has conflicting signs; use one sign or negative parentheses.');
     return (parentheses ? '-' : signed) + text;
   }
+  text = stripCurrencySymbol(text,currency,locale,options);
+  if (signed && /^[+-]/.test(text) || parentheses && (signed || /^[+-]/.test(text))) throw new Error('Money has conflicting signs; use one sign or negative parentheses.');
+  return (parentheses ? '-' : signed) + text;
+}
+
+// Accept at most one symbol for the configured currency, retaining strict grouping and precision checks.
+function stripCurrencySymbol(text: string,currency: string,locale: string,options: MoneyInputOptions): string {
   const cacheKey = `${locale}|${currency}`;
   let tokens = currencySymbols.get(cacheKey);
   if (!tokens) {
@@ -55,8 +63,7 @@ function moneyText(input: string, currency: string, locale: string, options: Mon
     text = (text.startsWith(token) ? text.slice(token.length) : text.slice(0, -token.length)).trim();
     if (/\p{Sc}/u.test(text) || tokens.some((item) => text.includes(item))) throw new Error(`Use one currency symbol matching configured ${currency}.`);
   }
-  if (signed && /^[+-]/.test(text) || parentheses && (signed || /^[+-]/.test(text))) throw new Error('Money has conflicting signs; use one sign or negative parentheses.');
-  return (parentheses ? '-' : signed) + text;
+  return text;
 }
 
 export function moneyMinor(input: string, currency: string, locale = 'en-US', options: MoneyInputOptions = {}): bigint {
@@ -81,6 +88,30 @@ function expandNumber(text: string): string {
   const [, sign = '', whole = '', fraction = '', exponent = '0'] = match;
   const digits = whole + fraction; const point = whole.length + Number(exponent);
   return sign + (point <= 0 ? `0.${'0'.repeat(-point)}${digits}` : point >= digits.length ? digits + '0'.repeat(point - digits.length) : `${digits.slice(0, point)}.${digits.slice(point)}`);
+}
+
+// Match the chosen source format before diagnosing offsets, so an ISO API and formatted export can coexist.
+function normalizeDatetime(text: string,rule: ComparisonRule,source: string): number {
+  const format=typeof rule.format==='string'?rule.format:rule.format?.[source];
+  const zone=rule.sourceTimezones[source];const iso=text.replace(' ','T');
+  const explanation=format?DateTime.fromFormatExplain(text,format,{locale:rule.locale}):undefined;
+  if(format&&(!explanation?.rawMatches||explanation.invalidReason))throw new Error(`Datetime value does not match configured format "${format}" for source ${source}.`);
+  const hasTime=format?explanation!.tokens.some((token)=>!token.literal&&/^[HhmsSatTfF]/.test(token.val)):/[T:]/.test(iso);
+  if(!hasTime&&(format||DateTime.fromISO(iso,{zone:'UTC'}).isValid))throw new Error('Datetime date has no time; supply a date and time, or a format that includes time.');
+  const explicitZone=format?typeof explanation!.matches?.Z==='number':/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+  const date=format?DateTime.fromFormat(text,format,{zone:zone??'UTC',setZone:true,locale:rule.locale}):DateTime.fromISO(iso,{zone:zone??'UTC',setZone:true});
+  if(!date.isValid)throw new Error(`Invalid ${format?'formatted':'ISO'} datetime or timezone for source ${source}${format?` with configured format "${format}"`:''}; check the date and sourceTimezones.`);
+  if(!explicitZone&&!zone&&!explanation?.zone)throw new Error(`Datetime has no offset; set sourceTimezones.${source} or supply an ISO 8601 offset.`);
+  validateLocalTime(date,explicitZone,explanation,iso);
+  return date.toUTC().toMillis();
+}
+// Luxon shifts nonexistent local times; reject that shift and require explicit offsets for overlaps.
+function validateLocalTime(date: DateTime,explicitZone: boolean,explanation: ExplainedFormat|undefined,iso: string): void {
+  if(explicitZone)return;
+  if(date.getPossibleOffsets().length>1)throw new Error('Datetime is ambiguous during a daylight-saving transition; include an explicit UTC offset.');
+  const parsed:Record<string,unknown>=explanation?.result??{};
+  const changed=explanation?(['year','month','day','hour','minute','second','millisecond']as const).some((part)=>typeof parsed[part]==='number'&&parsed[part]!==date[part]):date.toFormat("yyyy-MM-dd'T'HH:mm")!==iso.slice(0,16);
+  if(changed)throw new Error('Datetime falls in a daylight-saving gap; include a valid UTC offset.');
 }
 
 export function normalize(value: unknown, rule: ComparisonRule | undefined, source: string): NormalizedValue {
@@ -112,21 +143,7 @@ export function normalize(value: unknown, rule: ComparisonRule | undefined, sour
       if (!Number.isFinite(number)) throw new Error('Expected a finite decimal number.');
       return number;
     }
-    case 'datetime': {
-      const zone = rule.sourceTimezones[source];
-      const iso = text.replace(' ', 'T');
-      const explanation = rule.format ? DateTime.fromFormatExplain(text, rule.format, {locale: rule.locale}) : undefined;
-      if (rule.format ? !explanation!.tokens.some((token) => !token.literal && /^[HhmsSatTfF]/.test(token.val)) : !/[T:]/.test(iso) && DateTime.fromISO(iso, {zone:'UTC'}).isValid) throw new Error('Datetime date has no time; supply a date and time, or a format that includes time.');
-      const explicitZone = rule.format ? typeof explanation!.matches?.Z === 'number' : /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
-      if (!explicitZone && !zone && !explanation?.zone) throw new Error(`Datetime has no offset; set sourceTimezones.${source} or supply an ISO 8601 offset.`);
-      const date = rule.format ? DateTime.fromFormat(text, rule.format, {zone:zone ?? 'UTC', setZone:true, locale:rule.locale}) : DateTime.fromISO(iso, {zone:zone ?? 'UTC', setZone:true});
-      if (!date.isValid) throw new Error(`Invalid ${rule.format ? 'formatted' : 'ISO'} datetime or timezone for source ${source}; check the date, format and sourceTimezones.`);
-      if (!explicitZone && date.getPossibleOffsets().length > 1) throw new Error('Datetime is ambiguous during a daylight-saving transition; include an explicit UTC offset.');
-      const parsed: Record<string, unknown> = explanation?.result ?? {};
-      const changed = rule.format ? (['year','month','day','hour','minute','second','millisecond'] as const).some((part) => typeof parsed[part] === 'number' && parsed[part] !== date[part]) : date.toFormat("yyyy-MM-dd'T'HH:mm") !== iso.slice(0,16);
-      if (!explicitZone && changed) throw new Error('Datetime falls in a daylight-saving gap; include a valid UTC offset.');
-      return date.toUTC().toMillis();
-    }
+    case 'datetime': return normalizeDatetime(text,rule,source);
   }
 }
 

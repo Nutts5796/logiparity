@@ -76,7 +76,7 @@ export async function* readRest(config: RestConfig, context: AdapterContext): As
       if (signals.some((value) => value !== signals[0])) throw new Error(`${location}; completion signals disagree. Correct the response metadata or pagination paths.`);
       more = signals[0];
       if (more === undefined && page === 0 && items.length < pagination.size) {
-        const message = `${location}; no completion signal is configured. Set totalPath, totalPagesPath or hasMorePath to verify completeness.`;
+        const message = `${location}; no completion signal is configured. This is an unverified short first page. Set totalPath, totalPagesPath or hasMorePath to verify completeness.`;
         if (!pagination.allowShortFirstPage) throw new Error(`${message} Set allowShortFirstPage: true only to explicitly accept an unverified short first page.`);
         (context.warn ?? console.warn)(safeConsole(message));
       }

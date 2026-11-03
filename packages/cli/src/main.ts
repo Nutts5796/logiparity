@@ -56,11 +56,13 @@ async function main(): Promise<number> {
     return 0;
   }
   if (positionals.length !== 1 || !['check', 'validate'].includes(positionals[0] ?? '') || !values.config) throw new Error('Use logiparity check --config <parity.yaml> or logiparity init; see --help for usage.');
-  const { config, baseDir, missingEnv } = await loadConfig(values.config, process.env, { allowMissingEnv: values['allow-missing-env'] === true });
+  const { config, baseDir, missingEnv, warnings } = await loadConfig(values.config, process.env, { allowMissingEnv: values['allow-missing-env'] === true, command:positionals[0] === 'validate' ? 'validate' : 'check' });
   configuredSecrets = secretValues(config);
+  for(const warning of warnings)process.stderr.write(safeConsole(redactSecrets(`Warning: ${warning}\n`,configuredSecrets)));
   validateConfig(config);
-  if (positionals[0] === 'validate') { output(`Configuration valid.${missingEnv.length ? ` Missing environment allowed: ${missingEnv.join(', ')}.` : ''} No sources were read.\n`); return 0; }
-  const report = await compareEntities(config.entities, (_, source) => adapters.read(source, { baseDir, env: process.env, reportDir: resolve(baseDir, config.report.dir), warn: (message) => process.stderr.write(safeConsole(redactSecrets(message, configuredSecrets)) + '\n') }));
+  if (positionals[0] === 'validate') { output(`The configuration is valid.${missingEnv.length ? ` Missing environment allowed: ${missingEnv.join(', ')}.` : ''} Source availability was not checked.\n`); return 0; }
+  const report = await compareEntities(config.entities, (_, source, context) => adapters.read(source, { baseDir, env: process.env, reportDir: resolve(baseDir, config.report.dir), warn: (message) => {context.warn(message);process.stderr.write(safeConsole(redactSecrets(`Warning: ${message}`, configuredSecrets)) + '\n');} }));
+  if(warnings.length)report.warnings=[...warnings.map((message)=>({message})),...(report.warnings??[])];
   if (config.report.outputs.includes('console')) output(consoleReport(report, { entities: config.entities }));
   await writeReports(report, resolve(baseDir, config.report.dir), config.report.outputs, { entities: config.entities });
   return reportExitCode(report);

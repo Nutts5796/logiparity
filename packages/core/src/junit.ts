@@ -25,9 +25,9 @@ export function junitReport(report: Report, timestamp = new Date()): string {
       return `    <testcase name="${type}" classname="${xml(`logiparity.${entity}`)}" time="0">${result}</testcase>`;
     });
     return `  <testsuite name="${xml(entity)}" package="logiparity" id="${index}" timestamp="${timestamp.toISOString().slice(0, 19)}" hostname="localhost" tests="${findingTypes.length}" failures="${failures}" errors="${errors}" skipped="${skipped}" time="0">
-    <properties><property name="timestamp.timezone" value="UTC"/><property name="timing" value="not measured; time=0 is the schema-required placeholder"/></properties>
+    <properties><property name="warnings" value="${report.warnings?.length??0}"/><property name="timestamp.timezone" value="UTC"/><property name="timing" value="not measured; time=0 is the schema-required placeholder"/></properties>
 ${cases.join('\n')}
-    <system-out/>
+    <system-out>${xml((report.warnings ?? []).map((warning)=>`Warning: ${warning.message}`).join('\n'))}</system-out>
     <system-err/>
   </testsuite>`;
   });

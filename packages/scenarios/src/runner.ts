@@ -23,6 +23,7 @@ export async function runScenario(scenarioFile: string, targetFile: string, repo
     const custom = scenario.invariants.some((i) => typeof i === 'object' && !('sla_window_violations' in i));
     const stateNames = [...new Set([...(custom ? Object.keys(target.state) : required), ...(wait ? [wait.source] : [])])];
     const warnings = new Set<string>();
+    if(scenario.invariants.every((invariant)=>invariant==='no_order_lost'||invariant==='single_assignment'))warnings.add('These invariants cannot detect a replan that never ran. Add a completion or reassignment check. See https://github.com/Nutts5796/logiparity/blob/main/docs/scenarios.md#select-only-the-state-you-need');
     const warn = (message: string) => { if (!warnings.has(message)) { warnings.add(message); console.warn(safeConsole(redactSecrets(message, secrets))); } };
     if (wait && !target.state[wait.source]) throw new Error(`Missing wait state source ${wait.source}`);
     const fixture: unknown = scenario.setup ? JSON.parse(await readFile(resolve(baseDir, scenario.setup.fixture), 'utf8')) : undefined;
@@ -41,7 +42,7 @@ export async function runScenario(scenarioFile: string, targetFile: string, repo
     const parityEnv = { ...env, LOGIPARITY_SCENARIO_ARTIFACT_DIR: artifactDir };
     const parity = scenario.afterwards ? await loadConfig(resolve(baseDir, scenario.afterwards.parity), parityEnv) : undefined;
     if (parity) validateConfig(parity.config);
-    const report: ScenarioReport = { schemaVersion: 1, kind: 'scenario', name: scenario.name, target: target.name, environment: target.environment, events: events.map(({ event }) => ({ step: event.step, type: event.type, completed: false })), invariants: [], exitCode: 2 };
+    const report: ScenarioReport = { schemaVersion: 1, kind: 'scenario', name: scenario.name, target: target.name, environment: target.environment, events: events.map(({ event }) => ({ step: event.step, type: event.type, completed: false })), invariants: [], warnings:[], exitCode: 2 };
     const read = async (names = stateNames): Promise<Snapshot> => {
       const state: Snapshot = {};
       for (const name of names) {
@@ -80,11 +81,12 @@ export async function runScenario(scenarioFile: string, targetFile: string, repo
           await pipeline(Readable.fromWeb(response.body as import('node:stream/web').ReadableStream), createWriteStream(join(artifactDir, artifact.file)));
         }
         const directory = resolve(reportDir, 'parity');
-        report.parity = await compareEntities(parity.config.entities, (_, source) => adapters.read(source, { baseDir: parity.baseDir, env: parityEnv, reportDir: directory, warn }), parityEnv);
+        report.parity = await compareEntities(parity.config.entities, (_, source, context) => adapters.read(source, { baseDir: parity.baseDir, env: parityEnv, reportDir: directory, warn:(message)=>{context.warn(message);warn(message);} }), parityEnv);
         await writeReports(report.parity, directory, ['html', 'json', 'markdown', 'junit'], { entities: parity.config.entities });
       }
       report.exitCode = report.parity && reportExitCode(report.parity) === 2 ? 2 : report.invariants.some((i) => !i.passed) || report.parity && reportExitCode(report.parity) === 1 ? 1 : 0;
     } catch (error) { report.error = redactSecrets(errorText(error), secrets); report.exitCode = 2; }
+    report.warnings=[...warnings].map((message)=>redactSecrets(message,secrets));
     await writeScenarioReport(report, reportDir);
     return report;
   } catch (error) { throw new Error(redactSecrets(errorText(error), secrets)); }

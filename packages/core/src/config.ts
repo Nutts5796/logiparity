@@ -1,4 +1,4 @@
-import { redactSecrets, secretValues, referencedEnvironment, rememberEnvironment } from './diagnostics.js';
+import { redactSecrets, secretValues, referencedEnvironment, rememberEnvironment, shortSecretWarnings } from './diagnostics.js';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { parseDocument } from 'yaml';
@@ -55,7 +55,7 @@ export const sourceSchema = z.discriminatedUnion('type', [
 ]);
 export const ruleSchema = z.object({
   type: z.enum(['string', 'number', 'money', 'datetime', 'enum']),
-  allowCurrencySymbol: z.boolean().default(false), negativeParentheses: z.boolean().default(false), format: name.optional(),
+  allowCurrencySymbol: z.boolean().default(false), negativeParentheses: z.boolean().default(false), format: z.union([name,z.record(name,name)]).optional(),
   allowNumber: z.boolean().default(false), caseFold: z.boolean().default(false), emptyAsNull: z.boolean().default(true),
   locale: name.default('en-US'), currency: z.string().regex(/^[A-Z]{3}$/).optional(),
   tolerance: z.number().finite().nonnegative().default(0),
@@ -123,8 +123,8 @@ export type ComparisonRule = z.infer<typeof ruleSchema>;
 export type EntityConfig = z.infer<typeof entitySchema>;
 export type AggregateConfig = z.infer<typeof aggregateSchema>;
 export type Config = z.infer<typeof configSchema>;
-export interface LoadedConfig { config: Config; baseDir: string; file: string; secrets: string[]; referencedEnv: string[]; missingEnv: string[] }
-export interface LoadOptions { allowMissingEnv?: boolean }
+export interface LoadedConfig { config: Config; baseDir: string; file: string; secrets: string[]; referencedEnv: string[]; missingEnv: string[]; warnings: string[] }
+export interface LoadOptions { allowMissingEnv?: boolean; command?: 'validate' | 'check' | 'scenario' }
 
 export class ConfigError extends Error {}
 
@@ -143,11 +143,12 @@ export async function loadYaml(file: string, env: NodeJS.ProcessEnv = process.en
   try { raw = doc.toJS({ maxAliasCount: 50 }); }
   catch { throw new ConfigError(`${absolute}: too many YAML aliases; use a plain configuration.`); }
   const secrets = secretValues(raw, env); const references = referencedEnvironment(raw);
+  let missingSubstitution=false;
   const walk = (value: unknown, field = ''): unknown => {
     if (typeof value === 'string') return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, key: string) => {
       const item = Object.hasOwn(env, key) ? env[key] : undefined;
       if (!item) {
-        if (!options.allowMissingEnv) throw new ConfigError(redactSecrets(`${absolute}: environment variable ${key} is missing or empty; set it before running check.`, secrets));
+        missingSubstitution=true;
         return field === 'baseUrl' || field === 'url' || /URL$/i.test(key) ? 'https://missing-env.invalid' : 'LOGIPARITY_MISSING_ENV';
       }
       return item;
@@ -158,6 +159,7 @@ export async function loadYaml(file: string, env: NodeJS.ProcessEnv = process.en
   };
   raw = walk(raw);
   rememberEnvironment(raw, { secrets, references });
+  if(missingSubstitution&&!options.allowMissingEnv)validateEnvironment(raw,env,options,absolute);
   return raw;
 }
 
@@ -184,12 +186,12 @@ export async function loadConfig(file: string, env: NodeJS.ProcessEnv = process.
   if (!result.success) throw new ConfigError(redactSecrets(`${absolute}: invalid configuration:\n${formatConfigIssues(configSchema, raw, result.error)}\nFix the listed configuration paths.`, secrets));
   rememberEnvironment(result.data, { secrets, references });
   const missingEnv = validateEnvironment(result.data, env, options, absolute);
-  return { config: result.data, baseDir: dirname(absolute), file: absolute, secrets: secretValues(result.data, env), referencedEnv: referencedEnvironment(result.data), missingEnv };
+  return { config: result.data, baseDir: dirname(absolute), file: absolute, secrets: secretValues(result.data, env), referencedEnv: referencedEnvironment(result.data), missingEnv, warnings: shortSecretWarnings(result.data,env) };
 }
 
 export function validateEnvironment(value: unknown, env: NodeJS.ProcessEnv, options: LoadOptions = {}, location = 'Configuration'): string[] {
   const names = referencedEnvironment(value); const missing = names.filter((name) => !Object.hasOwn(env, name) || !env[name]);
-  if (missing.length && !options.allowMissingEnv) throw new ConfigError(redactSecrets(`${location}: environment variable${missing.length === 1 ? '' : 's'} ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} missing or empty; set every referenced variable or use validate --allow-missing-env.`, secretValues(value, env)));
+  if (missing.length && !options.allowMissingEnv) throw new ConfigError(redactSecrets(`${location}: environment variable${missing.length === 1 ? '' : 's'} ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} missing or empty; set every referenced variable${options.command === 'validate' ? ' or use validate --allow-missing-env' : ''}.`, secretValues(value, env)));
   return missing;
 }
 

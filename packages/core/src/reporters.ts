@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { errorText, type Config } from './config.js';
 import type { Report } from './types.js';
-import { reportGroups } from './groups.js';
+import { reportGroups, presentationFindings } from './groups.js';
 import { displayValue } from './report-utils.js';
 import { formatDatetimeUtc, formatMoneyMajor, moneyUnits } from './money-display.js';
 import { isBlocking } from './policy.js';
@@ -25,7 +25,8 @@ export function consoleReport(report: Report, presentation: ReportPresentation =
   for (const f of report.findings) counts.set(f.type, (counts.get(f.type) ?? 0) + 1);
   const findings = report.findings.filter((f) => f.type !== 'source_error');
   const errors = report.findings.length - findings.length;
-  const lines = [`LogiParity: ${report.entities.length} ${report.entities.length === 1 ? 'entity' : 'entities'}, ${findings.length} ${findings.length === 1 ? 'finding' : 'findings'} (${findings.filter(isBlocking).length} blocking)${errors ? `, ${errors} configuration/source ${errors === 1 ? 'error' : 'errors'}` : ''}`];
+  const lines = [`LogiParity: ${report.entities.length} ${report.entities.length === 1 ? 'entity' : 'entities'}, ${findings.length} ${findings.length === 1 ? 'finding' : 'findings'} (${findings.filter(isBlocking).length} blocking)${report.warnings?.length ? `, ${report.warnings.length} ${report.warnings.length===1?'warning':'warnings'}` : ''}${errors ? `, ${errors} configuration/source ${errors === 1 ? 'error' : 'errors'}` : ''}`];
+  for(const warning of report.warnings??[])lines.push(`  [warning] ${warning.message}`);
   for (const [type, count] of [...counts].sort(([a], [b]) => a < b ? -1 : 1)) lines.push(`  ${type}: ${count}`);
   for (const group of reportGroups(report, presentation)) lines.push(`  [pattern] ${[group.entity, group.source, group.field].filter(Boolean).join('/') }: ${group.summary}`);
   const value = (input: import('./types.js').NormalizedValue | undefined, entity: string, field: string, aggregate: boolean): string => {
@@ -36,7 +37,7 @@ export function consoleReport(report: Report, presentation: ReportPresentation =
     if (rule?.type === 'money' && rule.currency && (typeof input === 'bigint' || typeof input === 'string' && /^-?\d+$/.test(input))) return `${formatMoneyMajor(BigInt(input), rule.currency, rule.locale)} (${moneyUnits(BigInt(input), rule.currency)})`;
     return iso ? `${displayValue(input)} (${iso})` : displayValue(input);
   };
-  for (const f of report.findings.slice(0, 10)) lines.push(`  [${f.type}${isBlocking(f) ? '' : '; allowed'}] ${[ [f.entity, f.source].filter(Boolean).join('/'), f.key ? `key=${f.key}` : '', f.field ? `field=${f.field}` : '' ].filter(Boolean).join(' ')}: ${f.message}${f.expected !== undefined ? ` Expected=${value(f.expected, f.entity, f.field, f.type === 'aggregate_mismatch')} Actual=${value(f.actual, f.entity, f.field, f.type === 'aggregate_mismatch')}` : ''}`);
+  for (const f of presentationFindings(report,presentation).slice(0, 10)) lines.push(`  [${f.type}${isBlocking(f) ? '' : '; allowed'}] ${[ [f.entity, f.source].filter(Boolean).join('/'), f.key ? `key=${f.key}` : '', f.field ? `field=${f.field}` : '' ].filter(Boolean).join(' ')}: ${f.message}${f.expected !== undefined ? ` Expected=${value(f.expected, f.entity, f.field, f.type === 'aggregate_mismatch')} Actual=${value(f.actual, f.entity, f.field, f.type === 'aggregate_mismatch')}` : ''}${f.values ? ` Observed=${f.values.map((item)=>`line ${item.line}: ${value(item.value,f.entity,f.field,false)}`).join('; ')}` : ''}`);
   if (report.findings.length > 10) lines.push(`  ... ${report.findings.length - 10} more ${report.findings.length === 11 ? 'finding' : 'findings'}.`);
   return safeConsole(lines.join('\n') + '\n');
 }
