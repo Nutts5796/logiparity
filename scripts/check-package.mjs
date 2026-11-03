@@ -1,3 +1,4 @@
+import { checkInstalledDemo } from './check-installed-demo.mjs';
 import { packArtifact } from './pack.mjs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -118,6 +119,7 @@ export {provider};
     { cwd: install },
   );
   const bin = join(install, 'node_modules/logiparity/bin/logiparity.js');
+  await checkInstalledDemo(bin, join(temporary, 'installed-demo'));
   const work = join(temporary, 'work');
   await mkdir(work);
   const cli = (args) =>
