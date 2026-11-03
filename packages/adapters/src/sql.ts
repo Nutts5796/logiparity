@@ -17,16 +17,14 @@ export async function* readSql(config: SqlConfig, context: AdapterContext): Asyn
   const [{ default: pg }, { default: QueryStream }] = await Promise.all([import('pg'), import('pg-query-stream')]);
   const connection = Object.hasOwn(context.env, config.connectionEnv) ? context.env[config.connectionEnv] : undefined;
   if (!connection)
-    throw new SourceError(
-      `SQL connection environment variable ${config.connectionEnv} is missing; set a test/staging PostgreSQL URL for a read-only role.`,
-    );
+    throw new SourceError(`Set ${config.connectionEnv} to the test/staging PostgreSQL URL for a read-only role.`);
   try {
     const url = new URL(connection);
     if (!['postgres:', 'postgresql:'].includes(url.protocol) || !url.hostname || url.pathname.length < 2)
       throw new Error('Invalid URL');
   } catch {
     throw new SourceError(
-      `SQL ${config.connectionEnv} must contain an explicit postgres:// or postgresql:// host/database URL; correct the environment variable.`,
+      `${config.connectionEnv} requires a postgres:// or postgresql:// URL with an explicit host and database.`,
     );
   }
   for (const key of new URL(connection).searchParams.keys())
@@ -68,7 +66,7 @@ export async function* readSql(config: SqlConfig, context: AdapterContext): Asyn
         const column = fieldPath(mapping);
         if (!Object.hasOwn(record, column))
           throw new SourceError(
-            `SQL ${config.connectionEnv}, row ${row}: column ${column} for field ${field} is missing; correct SELECT aliases or fields.`,
+            `SQL ${config.connectionEnv}, record ${row}: missing column ${column} for ${field}; correct the SELECT alias.`,
           );
         values[field] = record[column];
       }
@@ -86,7 +84,7 @@ export async function* readSql(config: SqlConfig, context: AdapterContext): Asyn
         : '';
     const failure = stage === 'connect' ? connectionCause(error) : `failed to ${stage}${code}`;
     throw new SourceError(
-      `SQL ${config.connectionEnv}: ${failure}; check target availability, SELECT columns/permissions and timeoutMs. Credentials and server error text are not printed.`,
+      `SQL ${config.connectionEnv}: ${failure}. ${stage === 'connect' ? 'Check the host, port and service.' : 'Check SELECT permissions and timeoutMs.'}`,
     );
   } finally {
     if (stream) {

@@ -110,7 +110,9 @@ it('opens the complete report offline with zero requests, correct default review
     expect(await page.locator('#findings tbody tr').count()).toBe(report.coverage!.needsReview);
     expect(await page.locator('.pats article').count()).toBe(3);
     const timezone = page.locator('.pat').filter({ hasText: '6 hours earlier' });
-    expect(await timezone.locator('.next-step').innerText()).toBe('Next step: Set sourceTimezones for CSV export and Excel export to the zones each export writes in.');
+    expect(await timezone.locator('.next-step').innerText()).toBe(
+      'Next step: Set sourceTimezones for CSV export and Excel export to the zones each export writes in.',
+    );
     const dialLabel = await timezone.locator('svg[role=img]').getAttribute('aria-label');
     expect(dialLabel).toContain('2:14 PM UTC');
     expect(dialLabel).toContain('8:14 AM UTC');
