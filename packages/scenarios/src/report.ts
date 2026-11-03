@@ -1,7 +1,17 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { safeConsole, reportGroups, type Report } from '@logiparity/core';
-import type { InvariantResult } from './invariants.js';
+import {
+  safeConsole,
+  studioStyle,
+  brandMark,
+  themeButton,
+  themeScript,
+  humanize,
+  markdownCell,
+  type Report,
+} from '@logiparity/core';
+import { createHash } from 'node:crypto';
+import { invariantLabels, type InvariantResult } from './invariants.js';
 
 export interface ScenarioReport {
   schemaVersion: 1;
@@ -12,6 +22,8 @@ export interface ScenarioReport {
   events: { step: number; type: string; completed: boolean }[];
   invariants: InvariantResult[];
   warnings?: string[];
+  synthetic?: boolean;
+  sourceLabels?: Record<string, string>;
   parity?: Report;
   error?: string;
   exitCode: 0 | 1 | 2;
@@ -32,24 +44,55 @@ const xml = (value: string) =>
       })
       .join(''),
   );
-const cell = (value: string) => escape(value).replaceAll('\\', '\\\\').replaceAll('|', '\\|').replace(/\r?\n/g, '<br>');
+const cell = markdownCell;
 export function scenarioMarkdown(report: ScenarioReport): string {
-  return `# ${cell(report.name)}\n\nSynthetic test/staging scenario · Target: ${cell(report.target)} · Exit: ${report.exitCode}\n\n${report.warnings?.length ? `Warnings (${report.warnings.length}):\n${report.warnings.map((warning) => `- ${cell(warning)}`).join('\n')}\n\n` : ''}${report.error ? `Runtime error: ${cell(report.error)}\n\n` : ''}| Invariant | Result | Affected keys | Explanation |\n| --- | --- | --- | --- |\n${report.invariants.map((i) => `| ${cell(i.name)} | ${i.passed ? 'PASS' : 'FAIL'} | ${cell(i.affectedKeys.join(', '))} | ${cell(i.explanation)} |`).join('\n')}\n\n${report.parity ? '[Post-scenario Parity report](parity/report.md)\n' : ''}`;
+  return `# ${cell(report.name)}\n\nTest or staging scenario · Target: ${cell(report.target)} · Exit: ${report.exitCode}\n\n${report.warnings?.length ? `Warnings (${report.warnings.length}):\n${report.warnings.map((warning) => `- ${cell(warning)}`).join('\n')}\n\n` : ''}${report.error ? `Runtime error: ${cell(report.error)}\n\n` : ''}| Invariant | Result | Affected keys | Explanation |\n| --- | --- | --- | --- |\n${report.invariants.map((i) => `| ${cell(label(i, report))} | ${i.passed ? 'PASS' : 'FAIL'} | ${cell(i.affectedKeys.join(', '))} | ${cell(i.explanation + (i.assignments?.length ? ` Drivers: ${assignmentText(i)}` : ''))} |`).join('\n')}\n\n${report.parity ? '[Post-scenario Parity report](parity/report.md)\n' : ''}`;
+}
+function label(result: InvariantResult, report: ScenarioReport): string {
+  const name = invariantLabels[result.name] ?? humanize(result.name);
+  return result.name === 'no_order_lost' && report.events.some((event) => event.type === 'vehicle_breakdown')
+    ? 'Orders lost after the breakdown'
+    : name;
+}
+function assignmentText(result: InvariantResult): string {
+  return (result.assignments ?? [])
+    .map(
+      (item) =>
+        `${item.key}: ${item.before.length ? item.before.join(', ') : 'none'} → ${item.after.length ? item.after.join(', ') : 'none'}`,
+    )
+    .join('; ');
 }
 export function scenarioHtml(report: ScenarioReport): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'"><title>${escape(report.name)}</title><style>body{font:16px/1.5 system-ui;background:#f5f7f3;color:#19392e;margin:0}main{max-width:1200px;margin:auto;padding:32px}h1{letter-spacing:-1px}table{border-collapse:collapse;background:white;width:100%}td,th{padding:14px;border-bottom:1px solid #dae3d5;text-align:left;vertical-align:top}td.keys{max-width:300px;overflow-wrap:anywhere;font-family:monospace}.scroll{overflow:auto}.fail{color:#a42d23}.pass,a{color:#126c4f}.badge{font-size:13px;text-transform:uppercase;letter-spacing:.06em}</style></head><body><main><p class="badge">LogiParity · Test/staging only</p><h1>${escape(report.name)}</h1><p>Target ${escape(report.target)} · ${escape(report.environment)} · ${report.events.filter((e) => e.completed).length}/${report.events.length} events completed · Exit ${report.exitCode}</p>${report.warnings?.length ? `<section><h2>Warnings (${report.warnings.length})</h2><ul>${report.warnings.map((warning) => `<li>${escape(warning)}</li>`).join('')}</ul></section>` : ''}${report.error ? `<p class="fail">Runtime error: ${escape(report.error)}</p>` : ''}<div class="scroll"><table><thead><tr><th>Invariant</th><th>Result</th><th>Affected keys</th><th>Explanation</th></tr></thead><tbody>${report.invariants.map((i) => `<tr><td>${escape(i.name)}</td><td class="${i.passed ? 'pass' : 'fail'}">${i.passed ? 'PASS' : 'FAIL'}</td><td class="keys">${escape(i.affectedKeys.join(', ') || '—')}</td><td>${escape(i.explanation)}</td></tr>`).join('')}</tbody></table></div>${
-    report.parity && reportGroups(report.parity).length
-      ? `<section><h2>Patterns to investigate</h2><ul>${reportGroups(report.parity)
-          .map((g) => `<li>${escape(g.entity)}: ${escape(g.summary)}</li>`)
-          .join('')}</ul></section>`
-      : ''
-  }${report.parity ? '<p><a href="parity/report.html">Open post-scenario Parity report</a></p>' : ''}<p>Events and replanning mutate only the explicitly configured test/staging target. Demo data is synthetic.</p></main></body></html>`;
+  const script = `(()=>{${themeScript}})();`;
+  const hash = createHash('sha256').update(script).digest('base64');
+  const failed = report.invariants.filter((check) => !check.passed).length;
+  const warnings = (report.warnings ?? [])
+    .map(
+      (warning) =>
+        `<li>${escape(warning.replace(/https:\/\/\S+/g, ''))} <a href="https://github.com/Nutts5796/logiparity/blob/main/docs/scenarios.md#affected_reassigned">Read scenario checks</a></li>`,
+    )
+    .join('');
+  const rows = report.invariants
+    .map(
+      (check) =>
+        `<tr><td data-l="Check"><strong>${escape(label(check, report))}: ${check.affectedKeys.length.toLocaleString('en-US')}</strong><span class="sub-l">${escape(check.explanation)}</span></td><td data-l="Result"><span class="tag ${check.passed ? 't-ok' : 't-rev'}">${check.passed ? 'Passed' : 'Needs review'}</span></td><td data-l="Affected orders"><code>${escape(check.affectedKeys.join(', ') || 'None')}</code>${check.assignments?.length ? `<span class="details">Drivers: ${escape(assignmentText(check))}</span>` : ''}</td></tr>`,
+    )
+    .join('');
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; font-src data:; connect-src 'none'; base-uri 'none'"><title>${escape(report.name)} · LogiParity</title><style>${studioStyle}</style></head><body><main class="wrap"><header class="top"><div class="brand">${brandMark}LogiParity <span class="sub">/ Scenario report</span></div><div class="top-r"><span class="chip">${escape(report.target)} · ${escape(report.environment)}</span>${themeButton}</div></header><section class="hero"><div class="card"><span class="status ${report.exitCode ? '' : 'passed'}" title="Exit code ${report.exitCode}">${report.exitCode ? 'Failed' : 'Passed'}</span><h1>${escape(report.name)}</h1><div class="big">${failed.toLocaleString('en-US')} checks need attention</div><p class="lead">${report.events.filter((event) => event.completed).length} of ${report.events.length} events completed.</p><div class="srcs">${Object.values(
+    report.sourceLabels ?? {},
+  )
+    .map((source) => `<span class="chip">${escape(source)}</span>`)
+    .join(
+      '',
+    )}</div></div><div class="card"><h2>After the disruption</h2><p>Review affected orders and their assignments against the baseline.</p>${report.parity ? '<a class="btn btn-soft" href="parity/report.html">Open reconciliation report</a>' : ''}</div></section>${warnings ? `<h3>Warnings</h3><section class="card"><ul>${warnings}</ul></section>` : ''}${report.error ? `<section class="card"><h2>Runtime error</h2><p>${escape(report.error)}</p></section>` : ''}<h3>Checks</h3><section class="card findings"><table><thead><tr><th>Check</th><th>Result</th><th>Affected orders and drivers</th></tr></thead><tbody>${rows}</tbody></table></section><footer>Events modify only the configured test or staging target.${report.synthetic ? ' Demo data is synthetic.' : ''}</footer></main><script>${script}</script></body></html>`;
 }
 export function scenarioJunit(report: ScenarioReport, timestamp = new Date()): string {
   const checks = [
     ...report.invariants.map((i) => ({
-      name: i.name,
-      failure: i.passed ? '' : `${i.explanation} Affected keys: ${i.affectedKeys.join(', ')}`,
+      name: label(i, report),
+      failure: i.passed
+        ? ''
+        : `${i.explanation}${i.assignments?.length ? ` Drivers: ${assignmentText(i)}` : ''} Affected keys: ${i.affectedKeys.join(', ')}`,
       error: '',
     })),
     ...(report.parity
@@ -84,6 +127,6 @@ export async function writeScenarioReport(report: ScenarioReport, directory: str
 }
 export function scenarioConsole(report: ScenarioReport): string {
   return safeConsole(
-    `Scenario: ${report.name} (${report.target}/${report.environment})\n${report.invariants.map((i) => `  ${i.passed ? 'PASS' : 'FAIL'} ${i.name}: ${i.explanation}${i.affectedKeys.length ? ` Keys: ${i.affectedKeys.join(', ')}` : ''}`).join('\n')}\n${report.warnings?.length ? `Warnings: ${report.warnings.length}\n${report.warnings.map((warning) => `  Warning: ${warning}`).join('\n')}\n` : ''}${report.error ? `  Runtime error: ${report.error}\n` : ''}Exit: ${report.exitCode}\n`,
+    `Scenario: ${report.name} (${report.target}/${report.environment})\n${report.invariants.map((i) => `  ${i.passed ? 'PASS' : 'FAIL'} ${label(i, report)}: ${i.affectedKeys.length.toLocaleString('en-US')} — ${i.explanation}${i.assignments?.length ? ` Drivers: ${assignmentText(i)}` : ''}${i.affectedKeys.length ? ` Keys: ${i.affectedKeys.join(', ')}` : ''}`).join('\n')}\n${report.warnings?.length ? `Warnings: ${report.warnings.length}\n${report.warnings.map((warning) => `  Warning: ${warning}`).join('\n')}\n` : ''}${report.error ? `  Runtime error: ${report.error}\n` : ''}Exit: ${report.exitCode}\n`,
   );
 }

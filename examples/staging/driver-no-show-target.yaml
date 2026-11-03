@@ -3,6 +3,7 @@ version: 1
 name: staging-dispatch
 environment: staging
 allowMutations: true
+allowedHosts: [staging.example.invalid]
 baseUrl: ${STAGING_API_URL}
 headersEnv:
   Authorization: { env: STAGING_API_TOKEN, prefix: 'Bearer ' } # Reuse the state-source token.
@@ -22,15 +23,22 @@ state:
     baseUrl: ${STAGING_API_URL}
     path: /replace-with-orders
     auth: { type: bearer, tokenEnv: STAGING_API_TOKEN }
-    pagination: { type: page, size: 100, totalPath: $.pagination.total }
+    pagination: { type: page, sizeParam: limit, size: 100, totalPath: $.pagination.total }
     fields: { id: $.id, status: $.status }
   assignments:
     type: rest
     baseUrl: ${STAGING_API_URL}
     path: /replace-with-assignments
     auth: { type: bearer, tokenEnv: STAGING_API_TOKEN }
-    pagination: { type: page, size: 100, totalPath: $.pagination.total }
+    pagination: { type: page, sizeParam: limit, size: 100, totalPath: $.pagination.total }
     fields: { id: $.id, order_id: $.order_id, driver_id: $.driver_id }
+  drivers:
+    type: rest
+    baseUrl: ${STAGING_API_URL}
+    path: /replace-with-drivers
+    auth: { type: bearer, tokenEnv: STAGING_API_TOKEN }
+    pagination: { type: page, sizeParam: limit, size: 100, totalPath: $.pagination.total }
+    fields: { id: $.id, vehicle_id: $.vehicle_id }
   planning:
     type: rest
     baseUrl: ${STAGING_API_URL}

@@ -3,6 +3,7 @@ version: 1
 name: demo
 environment: test
 allowMutations: true
+allowedHosts: [127.0.0.1, localhost]
 baseUrl: ${DEMO_API_URL}
 headers: { x-logiparity-environment: test }
 setup: { method: POST, path: /api/test/reset, body: '{{fixture}}' }
@@ -21,7 +22,7 @@ state:
     type: rest
     baseUrl: ${DEMO_API_URL}
     path: /api/orders
-    pagination: { type: page, totalPath: $.pagination.total, size: 500 }
+    pagination: { type: page, sizeParam: limit, totalPath: $.pagination.total, size: 500 }
     fields:
       {
         'id': '$.id',
@@ -35,31 +36,31 @@ state:
     type: rest
     baseUrl: ${DEMO_API_URL}
     path: /api/drivers
-    pagination: { type: page, totalPath: $.pagination.total, size: 500 }
+    pagination: { type: page, sizeParam: limit, totalPath: $.pagination.total, size: 500 }
     fields: { 'id': '$.id', 'vehicle_id': '$.vehicle_id', 'available': '$.available' }
   vehicles:
     type: rest
     baseUrl: ${DEMO_API_URL}
     path: /api/vehicles
-    pagination: { type: page, totalPath: $.pagination.total, size: 500 }
+    pagination: { type: page, sizeParam: limit, totalPath: $.pagination.total, size: 500 }
     fields: { 'id': '$.id', 'capacity': '$.capacity', 'operational': '$.operational' }
   assignments:
     type: rest
     baseUrl: ${DEMO_API_URL}
     path: /api/assignments
-    pagination: { type: page, totalPath: $.pagination.total, size: 500 }
+    pagination: { type: page, sizeParam: limit, totalPath: $.pagination.total, size: 500 }
     fields: { 'id': '$.id', 'order_id': '$.order_id', 'driver_id': '$.driver_id' }
   notifications:
     type: rest
     baseUrl: ${DEMO_API_URL}
     path: /api/notifications
-    pagination: { type: page, totalPath: $.pagination.total, size: 500 }
+    pagination: { type: page, sizeParam: limit, totalPath: $.pagination.total, size: 500 }
     fields: { 'id': '$.id', 'order_id': '$.order_id', 'type': '$.type', 'created_at': '$.created_at' }
   meta:
     type: rest
     baseUrl: ${DEMO_API_URL}
     path: /api/state
-    pagination: { type: page, totalPath: $.pagination.total, size: 500 }
+    pagination: { type: page, sizeParam: limit, totalPath: $.pagination.total, size: 500 }
     fields: { 'id': '$.id', 'replan_status': '$.replan_status', 'clock': '$.clock' }
 artifacts:
   - { path: /exports/shipments.csv, file: shipments.csv }

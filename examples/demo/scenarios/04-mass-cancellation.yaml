@@ -2,7 +2,7 @@ version: 1
 name: Mass order cancellation
 target: demo
 setup:
-  fixture: ../fixtures/day-55-drivers.json
+  fixture: ./fixtures/day-55-drivers.json
 events:
   - step: 1
     type: order_cancel

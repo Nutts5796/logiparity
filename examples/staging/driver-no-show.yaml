@@ -11,4 +11,4 @@ wait:
   until: { status: completed }
   timeoutSeconds: 60
   pollSeconds: 2
-invariants: [no_order_lost, single_assignment]
+invariants: [no_order_lost, single_assignment, affected_reassigned]

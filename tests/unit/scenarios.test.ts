@@ -160,10 +160,11 @@ it('validates explicit mutation consent, step uniqueness, artifact paths and req
     state: { meta: { type: 'rest', baseUrl: 'http://127.0.0.1:3010', path: '/state', fields: { id: '$.id' } } },
   };
   expect(targetSchema.safeParse(raw).success).toBe(false);
-  const target = targetSchema.parse({ ...raw, environment: 'test', allowMutations: true });
-  expect(() =>
-    requestPlan(target, { method: 'POST', path: '{{params.path}}' }, { params: { path: 'https://elsewhere.test/' } }),
-  ).toThrow('origin');
+  const target = targetSchema.parse({ ...raw, environment: 'test', allowMutations: true, allowedHosts: ['127.0.0.1'] });
+  expect(
+    requestPlan(target, { method: 'POST', path: '{{params.path}}' }, { params: { path: 'https://elsewhere.test/' } })
+      .url.origin,
+  ).toBe('http://127.0.0.1:3010');
   expect(() => requestPlan(target, { method: 'GET', path: '/', body: {} }, {})).toThrow('GET');
   expect(renderTemplate('/driver/{{params.id}}', { params: { id: 'a/b' } }, true)).toBe('/driver/a%2Fb');
   expect(renderTemplate({ capacity: '{{params.capacity}}' }, { params: { capacity: 25 } })).toEqual({ capacity: 25 });
@@ -182,7 +183,8 @@ it('escapes scenario reports and retains affected keys in JUnit', () => {
     invariants: [{ name: 'lost', passed: false, affectedKeys: ['S1'], explanation: '<missing>' }],
     exitCode: 1,
   };
-  expect(scenarioHtml(report)).not.toContain('<script>');
+  expect(scenarioHtml(report).match(/<script>/g)).toHaveLength(1);
+  expect(scenarioHtml(report)).not.toContain('<script></');
   expect(scenarioHtml(report)).toContain('&lt;missing&gt;');
   expect(scenarioJunit(report)).toContain('Affected keys: S1');
 });

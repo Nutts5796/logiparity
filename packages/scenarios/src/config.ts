@@ -25,6 +25,7 @@ export const eventTypes = [
 export const builtinNames = [
   'no_order_lost',
   'single_assignment',
+  'affected_reassigned',
   'capacity_respected',
   'eta_updated_for_affected',
   'customer_notified_for_affected',
@@ -86,6 +87,8 @@ export const targetSchema = z
     name: text,
     environment: z.enum(['test', 'staging']),
     allowMutations: z.literal(true),
+    allowedHosts: z.array(text).min(1),
+    publicEnv: z.array(text).default([]),
     baseUrl: z
       .url()
       .refine(

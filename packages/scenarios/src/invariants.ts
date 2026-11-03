@@ -21,6 +21,7 @@ export interface InvariantResult {
   passed: boolean;
   affectedKeys: string[];
   explanation: string;
+  assignments?: { key: string; before: string[]; after: string[] }[];
 }
 const id = z.string().min(1);
 const active = (status: string) => status !== 'delivered' && status !== 'cancelled';
@@ -51,7 +52,7 @@ export function affectedBy(
       for (const key of (p.affectedKeys ?? []) as string[]) keys.add(key);
     } else {
       const drivers =
-        event.type === 'capacity_change' && p.vehicle
+        (event.type === 'capacity_change' || event.type === 'vehicle_breakdown') && p.vehicle
           ? before.drivers.filter((d) => d.vehicle_id === p.vehicle).map((d) => d.id)
           : [p.driver];
       if (
@@ -88,6 +89,18 @@ export function checkBuiltin(definition: Invariant, state: InvariantState): Inva
           failed.add(o.id);
       for (const a of after.assignments) if (!byId.has(a.order_id)) failed.add(a.order_id);
       for (const key of state.cancelledKeys) if (byId.get(key)?.status !== 'cancelled') failed.add(key);
+      break;
+    }
+    case 'affected_reassigned': {
+      const affected = affectedBy(
+        before,
+        state.events.filter((event) => event.type === 'driver_no_show' || event.type === 'vehicle_breakdown'),
+      ).affectedKeys;
+      for (const key of affected) {
+        const prior = before.assignments.filter((item) => item.order_id === key).map((item) => item.driver_id);
+        const current = after.assignments.filter((item) => item.order_id === key).map((item) => item.driver_id);
+        if (!byId.has(key) || current.length !== 1 || current.some((driver) => prior.includes(driver))) failed.add(key);
+      }
       break;
     }
     case 'capacity_respected': {
@@ -138,10 +151,46 @@ export function checkBuiltin(definition: Invariant, state: InvariantState): Inva
     name,
     passed: failed.size <= max,
     affectedKeys: [...failed].sort(),
-    explanation: failed.size
-      ? `${failed.size} ${failed.size === 1 ? 'order violates' : 'orders violate'} ${name}; the allowed count is ${max}.`
-      : `${name}: all applicable orders satisfy the invariant.`,
+    explanation: invariantExplanation(name, failed.size, max),
+    ...(['single_assignment', 'affected_reassigned'].includes(name)
+      ? {
+          assignments: [...failed].sort().map((key) => ({
+            key,
+            before: before.assignments
+              .filter((item) => item.order_id === key)
+              .map((item) => item.driver_id)
+              .sort(),
+            after: after.assignments
+              .filter((item) => item.order_id === key)
+              .map((item) => item.driver_id)
+              .sort(),
+          })),
+        }
+      : {}),
   };
+}
+
+export const invariantLabels: Record<string, string> = {
+  no_order_lost: 'Orders lost after the disruption',
+  single_assignment: 'Orders with incorrect assignments',
+  affected_reassigned: 'Affected orders not reassigned',
+  capacity_respected: 'Orders exceeding available capacity',
+  eta_updated_for_affected: 'Affected orders with unchanged ETAs',
+  customer_notified_for_affected: 'Affected customers not notified',
+  sla_window_violations: 'Orders outside the delivery window',
+};
+function invariantExplanation(name: string, count: number, max: number): string {
+  const explanations: Record<string, string> = {
+    no_order_lost: 'Every baseline order must still exist after the disruption.',
+    single_assignment: 'Each active order needs exactly one assignee; cancelled orders need none.',
+    affected_reassigned:
+      'Each active order on the absent driver or broken vehicle needs a different assignee after replanning.',
+    capacity_respected: 'Assigned drivers and vehicles must be available and within capacity.',
+    eta_updated_for_affected: 'Replanning must update the ETA of every affected active order.',
+    customer_notified_for_affected: 'Every affected customer needs a new notification after the baseline snapshot.',
+    sla_window_violations: `At most ${max.toLocaleString('en-US')} orders may exceed their delivery window.`,
+  };
+  return explanations[name] ?? `${count.toLocaleString('en-US')} checks require review.`;
 }
 export type Check = (state: InvariantState) => InvariantResult | Promise<InvariantResult>;
 const resultSchema = z.object({ name: id, passed: z.boolean(), affectedKeys: z.array(id), explanation: id }).strict();

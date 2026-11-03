@@ -1,4 +1,4 @@
-import { readFile, mkdir } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -10,13 +10,22 @@ import {
   reportExitCode,
   writeReports,
   errorText,
-  safeConsole,
+  humanize,
+  shortSecretWarnings,
   redactSecrets,
   secretValues,
 } from '@logiparity/core';
+import { scenarioFixture } from './preflight.js';
 import { loadScenario, loadTarget } from './config.js';
 import { affectedBy, prepareInvariant, type Snapshot } from './invariants.js';
-import { canonicalFor, cancelledBy, needsAffected, requiredStateSources, validateState } from './state.js';
+import {
+  canonicalFor,
+  cancelledBy,
+  needsAffected,
+  requiredStateSources,
+  validateStateMappings,
+  validateState,
+} from './state.js';
 import { requestPlan, sendRequest, targetHeaders } from './http.js';
 import { writeScenarioReport, type ScenarioReport } from './report.js';
 
@@ -33,6 +42,7 @@ export async function runScenario(
   const secrets = secretValues({ scenario, target }, env);
   try {
     const wait = scenario.wait && 'source' in scenario.wait ? scenario.wait : undefined;
+    validateStateMappings(target.state, scenario.invariants, scenario.events);
     const required = requiredStateSources(scenario.invariants, scenario.events);
     for (const source of required)
       if (!target.state[source])
@@ -43,21 +53,18 @@ export async function runScenario(
     const stateNames = [
       ...new Set([...(custom ? Object.keys(target.state) : required), ...(wait ? [wait.source] : [])]),
     ];
-    const warnings = new Set<string>();
+    const warnings = new Set<string>(shortSecretWarnings([scenario, target], env));
     if (scenario.invariants.every((invariant) => invariant === 'no_order_lost' || invariant === 'single_assignment'))
       warnings.add(
-        'These invariants cannot detect a replan that never ran. Add a completion or reassignment check. See https://github.com/Nutts5796/logiparity/blob/main/docs/scenarios.md#select-only-the-state-you-need',
+        'These invariants cannot detect a replan that never ran. Add affected_reassigned to verify reassignment. See https://github.com/Nutts5796/logiparity/blob/main/docs/scenarios.md#affected_reassigned',
       );
     const warn = (message: string) => {
       if (!warnings.has(message)) {
         warnings.add(message);
-        console.warn(safeConsole(redactSecrets(message, secrets)));
       }
     };
     if (wait && !target.state[wait.source]) throw new Error(`Missing wait state source ${wait.source}`);
-    const fixture: unknown = scenario.setup
-      ? JSON.parse(await readFile(resolve(baseDir, scenario.setup.fixture), 'utf8'))
-      : undefined;
+    const fixture: unknown = scenario.setup ? await scenarioFixture(baseDir, scenario.setup.fixture) : undefined;
     if (scenario.setup && !target.setup) throw new Error('Scenario fixture requires target.setup');
     const checks = await Promise.all(
       scenario.invariants.map((i) => prepareInvariant(i, baseDir, options.allowModules)),
@@ -89,6 +96,8 @@ export async function runScenario(
       name: scenario.name,
       target: target.name,
       environment: target.environment,
+      synthetic: target.name === 'demo',
+      sourceLabels: Object.fromEntries(stateNames.map((name) => [name, target.state[name]?.label ?? humanize(name)])),
       events: events.map(({ event }) => ({ step: event.step, type: event.type, completed: false })),
       invariants: [],
       warnings: [],
@@ -100,7 +109,13 @@ export async function runScenario(
         const source = target.state[name];
         if (!source) throw new Error(`Missing state source ${name}`);
         state[name] = [];
-        for await (const row of adapters.read(source, { baseDir: targetDir, env, reportDir, warn }))
+        for await (const row of adapters.read(source, {
+          baseDir: targetDir,
+          env,
+          reportDir,
+          warn,
+          allowedHosts: target.allowedHosts,
+        }))
           state[name].push(row);
       }
       return state;
@@ -168,6 +183,7 @@ export async function runScenario(
             adapters.read(source, {
               baseDir: parity.baseDir,
               env: parityEnv,
+              ...(parity.config.allowedHosts ? { allowedHosts: parity.config.allowedHosts } : {}),
               reportDir: directory,
               warn: (message) => {
                 context.warn(message);
@@ -175,9 +191,11 @@ export async function runScenario(
               },
             }),
           parityEnv,
+          { patterns: parity.config.patterns, maxInvalidRows: parity.config.maxInvalidRows },
         );
         await writeReports(report.parity, directory, ['html', 'json', 'markdown', 'junit'], {
           entities: parity.config.entities,
+          displayTimezone: parity.config.report.displayTimezone,
           environment: parity.config.environment,
           configFile: basename(scenario.afterwards!.parity),
           generatedAt: new Date().toISOString(),

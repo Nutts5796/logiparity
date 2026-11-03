@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Invariant, ScenarioEvent } from './config.js';
+import type { SourceConfig } from '@logiparity/core';
 import type { Snapshot } from './invariants.js';
 
 const id = z.string().min(1);
@@ -27,6 +28,11 @@ type Requirements = Partial<Record<keyof typeof stateSchemas, string[]>>;
 const requirements: Record<string, Requirements> = {
   no_order_lost: { orders: ['id'] },
   single_assignment: { orders: ['id', 'status'], assignments: ['id', 'order_id', 'driver_id'] },
+  affected_reassigned: {
+    orders: ['id', 'status'],
+    assignments: ['id', 'order_id', 'driver_id'],
+    drivers: ['id', 'vehicle_id'],
+  },
   capacity_respected: {
     orders: ['id', 'status', 'units'],
     assignments: ['id', 'order_id', 'driver_id'],
@@ -43,7 +49,9 @@ const requirements: Record<string, Requirements> = {
   sla_window_violations: { orders: ['id', 'status', 'eta', 'delivery_end'] },
 };
 export const needsAffected = (definitions: readonly Invariant[]) =>
-  definitions.some((i) => i === 'eta_updated_for_affected' || i === 'customer_notified_for_affected');
+  definitions.some(
+    (i) => i === 'eta_updated_for_affected' || i === 'customer_notified_for_affected' || i === 'affected_reassigned',
+  );
 function selectedFields(definitions: readonly Invariant[], events: readonly ScenarioEvent[]): Requirements {
   const fields: Requirements = {};
   const add = (source: keyof typeof stateSchemas, names: string[]) => {
@@ -62,7 +70,8 @@ function selectedFields(definitions: readonly Invariant[], events: readonly Scen
   }
   if (needsAffected(definitions)) {
     if (events.some((e) => e.type === 'traffic_delay')) add('orders', ['zone']);
-    if (events.some((e) => e.type === 'capacity_change' && e.params.vehicle)) add('drivers', ['id', 'vehicle_id']);
+    if (events.some((e) => (e.type === 'capacity_change' || e.type === 'vehicle_breakdown') && e.params.vehicle))
+      add('drivers', ['id', 'vehicle_id']);
   }
   return fields;
 }
@@ -119,4 +128,17 @@ export function cancelledBy(orders: readonly { id: string }[], events: readonly 
     for (const key of values as string[]) keys.add(key);
   }
   return [...keys].sort();
+}
+
+export function validateStateMappings(
+  sources: Record<string, SourceConfig>,
+  definitions: readonly Invariant[],
+  events: readonly ScenarioEvent[],
+): void {
+  for (const [source, fields] of Object.entries(selectedFields(definitions, events))) {
+    if (!sources[source]) throw new Error(`Selected invariants require state.${source}`);
+    for (const field of fields ?? [])
+      if (!Object.hasOwn(sources[source]?.fields ?? {}, field))
+        throw new Error(`state.${source}.fields.${field} is required by the selected invariants`);
+  }
 }
