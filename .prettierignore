@@ -14,3 +14,7 @@ examples/freight/logiparity-report/
 # Verified upstream bytes are intentionally unchanged.
 tests/fixtures/junit/JUnit.xsd
 tests/fixtures/junit/LICENSE
+
+# Owner-provided references and upstream font licenses are kept byte-for-byte.
+docs/design/
+packages/core/assets/fonts/*OFL.txt

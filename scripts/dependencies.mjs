@@ -36,6 +36,10 @@ First-party workspace packages use this repository's MIT license. ExcelJS is a d
 
 The full transitive runtime inventory follows. Development-only jszip and pako retain their upstream notices in the fixture writer but are not distributed with the CLI. The SQL parser transitively includes railroad-diagrams under CC0-1.0; its declared license is recorded below and the package retains its notice. No runtime dependency has unknown license metadata.
 
+## Embedded font notices
+
+The offline HTML report and demo embed Latin subsets of Manrope (500–800) and JetBrains Mono (400–600), both under the SIL Open Font License 1.1. The complete license texts are distributed with the core package in packages/core/assets/fonts/manrope-OFL.txt and packages/core/assets/fonts/jetbrainsmono-OFL.txt. See [third-party notices](third-party-notices.md) for the full texts. Font source URLs and SHA-256 hashes are recorded in the package's upstream.json and checked by check:third-party. The design previews in docs/design use Google Fonts for preview only; generated reports contain no remote font URLs.
+
 ## Locked transitive runtime inventory
 
 | Package | Locked version | Declared license |

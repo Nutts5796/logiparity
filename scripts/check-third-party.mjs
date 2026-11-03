@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
@@ -36,4 +37,16 @@ try {
   }
 } finally {
   await rm(directory, { recursive: true, force: true });
+}
+
+// Font subsets are immutable Google Fonts artifacts. License texts are pinned to a git revision.
+const fontRoot = new URL('../packages/core/assets/fonts/', import.meta.url);
+const fonts = JSON.parse(await readFile(new URL('upstream.json', fontRoot), 'utf8'));
+for (const entry of fonts.files) {
+  const local = await readFile(new URL(entry.file, fontRoot));
+  assert.equal(createHash('sha256').update(local).digest('hex'), entry.sha256, `Font asset hash: ${entry.file}`);
+  const response = await fetch(entry.url, { redirect: 'error', signal: AbortSignal.timeout(30000) });
+  assert(response.ok, `Font upstream HTTP ${response.status}: ${entry.file}`);
+  assert(local.equals(Buffer.from(await response.arrayBuffer())), `Font asset differs from upstream: ${entry.file}`);
+  console.log(`${entry.file}: ${entry.sha256} matches upstream`);
 }
