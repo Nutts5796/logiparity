@@ -23,7 +23,13 @@ const npm = (args, cwd = root) =>
   });
 try {
   await assert.rejects(npm(['pack', '--dry-run']), /pack:artifact/);
-  const dry = await packArtifact(temporary);
+  const suppliedArchive = process.env.LOGIPARITY_TARBALL ? resolve(process.env.LOGIPARITY_TARBALL) : undefined;
+  const dry = suppliedArchive
+    ? JSON.parse(
+        (await npm(['pack', suppliedArchive, '--dry-run', '--ignore-scripts', '--offline', '--json'])).stdout,
+      )[0]
+    : await packArtifact(temporary);
+  if (suppliedArchive) await cp(suppliedArchive, join(temporary, dry.filename));
   assert.equal(dry.name, 'logiparity');
   assert.equal(dry.version, version);
   const files = new Set(dry.files.map((file) => file.path));
@@ -76,8 +82,13 @@ try {
   }
   const packed = dry;
   const archive = join(temporary, packed.filename);
-  const kit = await buildOfflineKit(archive, temporary);
+  const kit = process.env.LOGIPARITY_OFFLINE_KIT
+    ? { archive: resolve(process.env.LOGIPARITY_OFFLINE_KIT) }
+    : await buildOfflineKit(archive, temporary);
   await run('tar', ['-xzf', kit.archive, '-C', temporary]);
+  assert(
+    (await readFile(archive)).equals(await readFile(join(temporary, `logiparity-offline-${version}`, packed.filename))),
+  );
   await writeFile(
     join(temporary, `logiparity-offline-${version}`, 'tarballs', '._not-an-archive.tgz'),
     'macOS metadata sidecar',
