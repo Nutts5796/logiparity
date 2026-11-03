@@ -1,3 +1,4 @@
+import { limitSourceRows } from './source-limits.js';
 import { createReadStream } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -35,7 +36,7 @@ function excelValue(value: unknown): unknown {
   return value;
 }
 
-export async function* readFileSource(config: FileConfig, context: AdapterContext): AsyncIterable<DataRow> {
+async function* fileRows(config: FileConfig, context: AdapterContext): AsyncIterable<DataRow> {
   const file = resolve(context.baseDir, config.file);
   let location = `header row ${config.headerRow}`;
   try {
@@ -112,4 +113,8 @@ export async function* readFileSource(config: FileConfig, context: AdapterContex
       throw new Error(`${file} (sheet ${config.sheet}): ${message}`);
     throw new Error(`${file} (${location}): ${message}`);
   }
+}
+
+export function readFileSource(config: FileConfig, context: AdapterContext): AsyncIterable<DataRow> {
+  return limitSourceRows(fileRows(config, context), config, context);
 }

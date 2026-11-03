@@ -1,4 +1,4 @@
-import { redactCredentialTokens as redactCredentials } from './credential-tokens.js';
+import { redactCredentialTokens as redactCredentials, credentialText } from './credential-tokens.js';
 import { isSecretName, normalizedSecretName } from '@logiparity/core';
 export const redacted = '[REDACTED]';
 export const defaultRedactFields = [
@@ -49,10 +49,13 @@ export function redactInput(
   const names = new Set([...defaultRedactFields, ...fields.filter((f) => !f.startsWith('$'))].map(normalized));
   const sensitive = (name: string) => isSecretName(name) || names.has(normalized(name));
   const paths = fields.filter((f) => f.startsWith('$')).map(pathTokens);
-  const values = new Set(secrets.filter((value) => value.length >= 8));
+  const values = new Set(secrets.map(credentialText).filter((value) => value.length >= 8));
   let count = 0;
   const literal = (...items: string[]) => {
-    for (const item of items) if (item.length >= 8 && item !== redacted) values.add(item);
+    for (const raw of items) {
+      const item = credentialText(raw);
+      if (item.length >= 8 && item !== redacted) values.add(item);
+    }
   };
   const collect = (value: unknown): void => {
     if (typeof value === 'string') {
@@ -101,7 +104,10 @@ export function redactInput(
     );
   const literals = [...values].sort((a, b) => b.length - a.length).map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const pattern = literals.length ? new RegExp(literals.join('|'), 'g') : undefined;
-  const scrub = (text: string): string => redactCredentials(pattern ? text.replace(pattern, redacted) : text, () => {});
+  const scrub = (text: string): string => {
+    const canonical = credentialText(text);
+    return redactCredentials(pattern ? canonical.replace(pattern, redacted) : canonical, () => {});
+  };
   const scrubTree = (value: unknown): unknown => {
     if (typeof value === 'string') return value === redacted ? value : scrub(value);
     if (Array.isArray(value)) return value.map(scrubTree);

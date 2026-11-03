@@ -100,6 +100,46 @@ describe('Playwright table adapter', () => {
       ).status,
     ).toBe(403);
   });
+  it('gives date/status errors a recovery link and an explicit empty Cancelled state (M10.2)', async () => {
+    const browser = await chromium.launch();
+    try {
+      const session = await browser.newContext({ storageState: join(dir, 'state.json') });
+      const page = await session.newPage();
+      await page.goto(url + '/dispatcher?date=2026-12-01');
+      expect(await page.locator('main').innerText()).toContain('November 2, 2026');
+      expect(await page.getByRole('link', { name: 'Return to today’s deliveries' }).getAttribute('href')).toBe(
+        '/dispatcher',
+      );
+      await page.goto(url + '/dispatcher?status=bad');
+      expect(await page.locator('main').innerText()).toContain('Cancelled');
+      await page.goto(url + '/dispatcher?status=cancelled');
+      expect(await page.locator('main').innerText()).toContain('No orders match this filter');
+      expect(await page.locator('nav.pager').isVisible()).toBe(false);
+    } finally {
+      await browser.close();
+    }
+  });
+  it('limits mobile dispatcher pages to 50 cards and retains that size after navigation (M10.2)', async () => {
+    const browser = await chromium.launch();
+    try {
+      const session = await browser.newContext({
+        storageState: join(dir, 'state.json'),
+        viewport: { width: 390, height: 844 },
+      });
+      const page = await session.newPage();
+      await page.goto(url + '/dispatcher');
+      await page.waitForURL('**pageSize=50**');
+      expect(await page.locator('#shipments tbody tr').count()).toBe(50);
+      await Promise.all([
+        page.waitForURL('**page=2**'),
+        page.getByRole('button', { name: 'Next page', exact: true }).click(),
+      ]);
+      expect(await page.locator('#shipments tbody tr').count()).toBe(50);
+      expect(new URL(page.url()).searchParams.get('pageSize')).toBe('50');
+    } finally {
+      await browser.close();
+    }
+  });
   it('uses storageState, reads typed text cells and follows server-rendered pagination', async () => {
     const rows = await collect(readUi(config(), context()));
     expect(rows).toHaveLength(201);
@@ -125,7 +165,7 @@ describe('Playwright table adapter', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(SourceError);
         const failure = error as SourceError;
-        expect(failure.screenshot).toMatch(/^screenshots\/ui-/);
+        expect(failure.screenshot, failure.message).toMatch(/^screenshots\/ui-/);
         expect((await readFile(join(dir, 'report', failure.screenshot ?? ''))).subarray(1, 4).toString()).toBe('PNG');
       }
     }

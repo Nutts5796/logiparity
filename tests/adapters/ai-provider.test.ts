@@ -1,3 +1,4 @@
+import { parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import { once } from 'node:events';
 import { afterEach, expect, it } from 'vitest';
@@ -36,7 +37,7 @@ it('sends only the minimal compatible body to the configured endpoint with auth 
     expect(req.headers.authorization).toBe('Bearer fixture-key');
     let body = '';
     for await (const part of req) body += String(part);
-    expect(JSON.parse(body)).toEqual({ model: 'fixture-model', messages, stream: false });
+    expect(parseCheckedJson(body)).toEqual({ model: 'fixture-model', messages, stream: false });
     expect(body).not.toContain('fixture-key');
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify(response('Draft answer')));

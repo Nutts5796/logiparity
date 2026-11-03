@@ -1,3 +1,4 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import { mkdtemp, mkdir, writeFile, readFile, symlink, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -73,7 +74,9 @@ it.each(['symlink', 'oversize'] as const)(
           artifacts: [{ path: '/file', file: 'input.csv', ...(mode === 'oversize' ? { maxBytes: 1024 } : {}) }],
         }),
       );
-      const report = await runScenario(join(dir, 'scenario.yaml'), join(dir, 'target.yaml'), reportDir, {});
+      const report = await checkedReport(
+        runScenario(join(dir, 'scenario.yaml'), join(dir, 'target.yaml'), reportDir, {}),
+      );
       expect(report.exitCode).toBe(2);
       expect(report.error).toMatch(mode === 'symlink' ? /symlink/ : /maxBytes/);
       expect(await readFile(victim, 'utf8')).toBe('keep this');

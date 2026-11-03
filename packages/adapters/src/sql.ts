@@ -1,3 +1,4 @@
+import { limitSourceRows } from './source-limits.js';
 import { finished } from 'node:stream/promises';
 
 import type QueryStreamType from 'pg-query-stream';
@@ -12,7 +13,7 @@ import {
 } from '@logiparity/core';
 import { validateReadOnlySql, sqlConnectionUrl } from './sql-guard.js';
 
-export async function* readSql(config: SqlConfig, context: AdapterContext): AsyncIterable<DataRow> {
+async function* sqlRows(config: SqlConfig, context: AdapterContext): AsyncIterable<DataRow> {
   validateReadOnlySql(config.query); // Must happen before credentials are read or any connection is made.
   const [{ default: pg }, { default: QueryStream }] = await Promise.all([import('pg'), import('pg-query-stream')]);
   const connection = Object.hasOwn(context.env, config.connectionEnv) ? context.env[config.connectionEnv] : undefined;
@@ -81,4 +82,8 @@ export async function* readSql(config: SqlConfig, context: AdapterContext): Asyn
     if (transaction) await client.query('ROLLBACK').catch(() => {});
     await client.end().catch(() => {});
   }
+}
+
+export function readSql(config: SqlConfig, context: AdapterContext): AsyncIterable<DataRow> {
+  return limitSourceRows(sqlRows(config, context), config, context);
 }

@@ -1,5 +1,10 @@
 import { isSecretName, normalizedSecretName, cleanText } from '@logiparity/core';
 const masked = '[REDACTED]';
+export const credentialText = (text: string) =>
+  cleanText(text)
+    .replace(/\u00a0/g, ' ')
+    .replace(/\uff1a/g, ':')
+    .replace(/\uff1d/g, '=');
 const decoded = (text: string) => {
   try {
     return decodeURIComponent(text.replaceAll('+', ' '));
@@ -25,10 +30,8 @@ function valueEnd(text: string, start: number, header = false): number {
 // Scan names and their values as tokens. Preserve delimiters and quotes so
 // scrubbing JSON twice remains valid JSON and cannot turn a mask into a key.
 export function redactCredentialTokens(input: string, collect: (...values: string[]) => void): string {
-  const text = cleanText(input)
-    .replace(/\u00a0/g, ' ')
-    .replace(/\uff1a/g, ':')
-    .replace(/\uff1d/g, '=');
+  const text = credentialText(input);
+  const lowercase = text.toLowerCase();
   let output = '',
     index = 0;
   const mask = (value: string) => {
@@ -50,7 +53,7 @@ export function redactCredentialTokens(input: string, collect: (...values: strin
     if (xml && isSecretName(xml[1] ?? '')) {
       const closing = `</${xml[1]}>`,
         start = index + xml[0].length;
-      const end = text.toLowerCase().indexOf(closing.toLowerCase(), start);
+      const end = lowercase.indexOf(closing.toLowerCase(), start);
       const stop = end < 0 ? text.length : end;
       output += xml[0] + mask(text.slice(start, stop)) + (end < 0 ? '' : text.slice(end, end + closing.length));
       index = end < 0 ? text.length : end + closing.length;

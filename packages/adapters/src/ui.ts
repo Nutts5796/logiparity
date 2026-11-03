@@ -1,9 +1,11 @@
+import { limitSourceRows } from './source-limits.js';
 import { createHash } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { requireOptionalAdapter } from './optional.js';
 import {
+  atomicReportFile,
   assertAllowedHost,
   fieldPaths,
   withSourceRow,
@@ -13,7 +15,7 @@ import {
   type UiConfig,
 } from '@logiparity/core';
 
-export async function* readUi(config: UiConfig, context: AdapterContext): AsyncIterable<DataRow> {
+async function* uiRows(config: UiConfig, context: AdapterContext): AsyncIterable<DataRow> {
   assertAllowedHost(config.url, context.allowedHosts, 'UI');
   requireOptionalAdapter('ui');
   const { chromium } = await import('playwright');
@@ -164,11 +166,18 @@ export async function* readUi(config: UiConfig, context: AdapterContext): AsyncI
       const directory = context.reportDir ?? resolve(context.baseDir, 'logiparity-report');
       try {
         await mkdir(join(directory, 'screenshots'), { recursive: true });
-        await page.screenshot({
-          path: join(directory, relative),
-          fullPage: true,
-          timeout: Math.max(5000, config.timeoutMs),
+        // Viewport evidence stays bounded even when a table contains thousands of rows.
+        const png = await page.screenshot({
+          fullPage: false,
+          animations: 'disabled',
+          timeout: Math.max(10000, config.timeoutMs),
         });
+        await atomicReportFile(
+          join(directory, relative),
+          (async function* () {
+            yield png;
+          })(),
+        );
         screenshot = relative;
       } catch {
         stage += '; screenshot could not be saved—check report.dir permissions';
@@ -183,4 +192,8 @@ export async function* readUi(config: UiConfig, context: AdapterContext): AsyncI
     await session?.close().catch(() => {});
     await browser?.close().catch(() => {});
   }
+}
+
+export function readUi(config: UiConfig, context: AdapterContext): AsyncIterable<DataRow> {
+  return limitSourceRows(uiRows(config, context), config, context);
 }

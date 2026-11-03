@@ -1,3 +1,4 @@
+import { checkedReport } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import JSZip from 'jszip';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
@@ -44,7 +45,9 @@ it('honors explicit offsets in XLSX date cells and applies the source zone only 
       },
       compare: { at: { type: 'datetime', sourceTimezones: { b: 'America/Chicago' } } },
     });
-    const report = await compareEntities([entity], (_name, config) => adapters.read(config, { baseDir: dir, env: {} }));
+    const report = await checkedReport(
+      compareEntities([entity], (_name, config) => adapters.read(config, { baseDir: dir, env: {} })),
+    );
     expect(report.findings).toEqual([]);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -72,7 +75,11 @@ it('compares an untyped column across CSV, XLSX and REST without false differenc
       },
     });
     expect(
-      (await compareEntities([entity], (_name, config) => adapters.read(config, { baseDir: dir, env: {} }))).findings,
+      (
+        await checkedReport(
+          compareEntities([entity], (_name, config) => adapters.read(config, { baseDir: dir, env: {} })),
+        )
+      ).findings,
     ).toEqual([]);
   } finally {
     await server.close();

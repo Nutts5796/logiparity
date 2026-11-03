@@ -1,3 +1,4 @@
+import { parseCheckedJson } from '../../scripts/validate-report.mjs';
 import { expect, it } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -106,5 +107,5 @@ it.each(['UTC', 'Asia/Tokyo'])('keeps XLSX wall-clock results independent of run
   const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', script], {
     env: { ...process.env, TZ },
   });
-  expect(JSON.parse(stdout)).toEqual([Date.parse('2026-11-03T15:00:00Z'), Date.parse('2026-11-03T15:00:00Z')]);
+  expect(parseCheckedJson(stdout)).toEqual([Date.parse('2026-11-03T15:00:00Z'), Date.parse('2026-11-03T15:00:00Z')]);
 });
