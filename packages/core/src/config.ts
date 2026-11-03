@@ -9,9 +9,37 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { parseDocument } from 'yaml';
 import { z } from 'zod';
+import { normalize, sourceRule } from './normalize.js';
+import { validAllowedHost } from './hosts.js';
 import { findingCategories } from './policy.js';
 
 const name = z.string().min(1);
+const locale = name.refine((value) => {
+  try {
+    return Intl.NumberFormat.supportedLocalesOf([value]).length === 1;
+  } catch {
+    return false;
+  }
+}, 'Use a valid supported locale, e.g. en-US or de-DE');
+const timezone = name.refine((value) => {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}, 'Use a valid IANA timezone');
+const numberFormat = z
+  .object({ decimal: z.string().length(1), group: z.string().length(1).optional() })
+  .strict()
+  .refine((value) => value.decimal !== value.group, 'Decimal and grouping separators must differ');
+const sourceFormatting = {
+  currencyField: name.optional(),
+  locale: locale.optional(),
+  numberFormat: numberFormat.optional(),
+  datetimeFormat: name.optional(),
+};
+
 const envName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
 export const fieldSchema = z.union([name, z.object({ path: name, label: name.optional() }).strict()]);
 const fields = z.record(name, fieldSchema).refine((v) => Object.keys(v).length > 0, 'Map at least one field');
@@ -109,6 +137,8 @@ export const sourceSchema = z.discriminatedUnion('type', [
       label: name.optional(),
       rollup: rollup.optional(),
       where: rowFilterSchema.default({}),
+      caseSensitive: z.boolean().default(false),
+      ...sourceFormatting,
       unique: z.array(name).default([]),
       baseUrl: httpUrl,
       path: name,
@@ -128,6 +158,12 @@ export const sourceSchema = z.discriminatedUnion('type', [
       retries: z.number().int().min(0).max(10).default(3),
       backoffMs: z.number().int().min(1).max(10000).default(100),
       maxPages: z.number().int().min(1).max(1000000).default(10000),
+      maxResponseBytes: z
+        .number()
+        .int()
+        .min(1)
+        .max(1024 * 1024 * 1024)
+        .default(64 * 1024 * 1024),
     })
     .strict(),
   z
@@ -136,6 +172,8 @@ export const sourceSchema = z.discriminatedUnion('type', [
       label: name.optional(),
       rollup: rollup.optional(),
       where: rowFilterSchema.default({}),
+      caseSensitive: z.boolean().default(false),
+      ...sourceFormatting,
       unique: z.array(name).default([]),
       file: name,
       fields,
@@ -151,6 +189,8 @@ export const sourceSchema = z.discriminatedUnion('type', [
       label: name.optional(),
       rollup: rollup.optional(),
       where: rowFilterSchema.default({}),
+      caseSensitive: z.boolean().default(false),
+      ...sourceFormatting,
       unique: z.array(name).default([]),
       file: name,
       fields,
@@ -164,6 +204,8 @@ export const sourceSchema = z.discriminatedUnion('type', [
       label: name.optional(),
       rollup: rollup.optional(),
       where: rowFilterSchema.default({}),
+      caseSensitive: z.boolean().default(false),
+      ...sourceFormatting,
       unique: z.array(name).default([]),
       url: httpUrl,
       storageState: name.optional(),
@@ -185,6 +227,8 @@ export const sourceSchema = z.discriminatedUnion('type', [
       label: name.optional(),
       rollup: rollup.optional(),
       where: rowFilterSchema.default({}),
+      caseSensitive: z.boolean().default(false),
+      ...sourceFormatting,
       unique: z.array(name).default([]),
       connectionEnv: envName,
       query: name,
@@ -204,14 +248,17 @@ export const ruleSchema = z
     allowNumber: z.boolean().default(false),
     caseFold: z.boolean().default(false),
     emptyAsNull: z.boolean().default(true),
-    locale: name.default('en-US'),
+    locale: locale.optional(),
+    numberFormat: numberFormat.optional(),
+    currencyField: name.optional(),
+    round: z.enum(['half-up', 'half-even']).optional(),
     currency: z
       .string()
       .regex(/^[A-Z]{3}$/)
       .optional(),
     tolerance: z.number().finite().nonnegative().default(0),
     toleranceSeconds: z.number().finite().nonnegative().default(0),
-    sourceTimezones: z.record(name, name).default({}),
+    sourceTimezones: z.record(name, timezone).default({}),
     map: z.record(z.string(), z.string()).default({}),
   })
   .strict()
@@ -225,7 +272,7 @@ export const ruleSchema = z
         message: 'Money tolerance must be an integer in minor units',
       });
   });
-const where = z.record(name, scalarFilter).default({});
+const where = rowFilterSchema.default({});
 export const aggregateSchema = z.discriminatedUnion('type', [
   z
     .object({
@@ -279,7 +326,13 @@ export const entitySchema = z
         });
     }
     for (const [source, config] of Object.entries(v.sources)) {
-      for (const field of [...Object.keys(config.where), ...Object.keys(config.rollup?.where ?? {}), ...config.unique])
+      for (const field of [
+        ...Object.keys(config.where),
+        ...Object.keys(config.rollup?.where ?? {}),
+        ...config.unique,
+        ...(config.currencyField ? [config.currencyField] : []),
+        ...Object.values(v.compare).flatMap((rule) => (rule.currencyField ? [rule.currencyField] : [])),
+      ])
         if (!Object.hasOwn(config.fields, field))
           ctx.addIssue({
             code: 'custom',
@@ -297,6 +350,8 @@ export const entitySchema = z
           ...(r.duplicates?.by ?? []),
           ...Object.keys(config.where),
           ...Object.keys(r.where),
+          ...(config.currencyField ? [config.currencyField] : []),
+          ...Object.values(v.compare).flatMap((rule) => (rule.currencyField ? [rule.currencyField] : [])),
         ]);
         if (r.duplicates && keyFields(r.by).some((field) => !r.duplicates?.by.includes(field)))
           ctx.addIssue({
@@ -304,21 +359,26 @@ export const entitySchema = z
             path: ['sources', source, 'rollup', 'duplicates', 'by'],
             message: 'Duplicate identity must include the rollup key',
           });
-        if (JSON.stringify(r.by) !== JSON.stringify(v.key))
+        if (JSON.stringify(keyFields(r.by)) !== JSON.stringify(keyFields(v.key)))
           ctx.addIssue({
             code: 'custom',
             path: ['sources', source, 'rollup', 'by'],
             message: 'Rollup by must match the entity key',
           });
-        if (
-          [...fields].some((f) => !Object.hasOwn(config.fields, f)) ||
-          Object.keys(config.fields).some((f) => !fields.has(f))
-        )
-          ctx.addIssue({
-            code: 'custom',
-            path: ['sources', source, 'rollup'],
-            message: 'Every mapped field must appear in rollup by, sum, first, duplicates.by or where',
-          });
+        for (const field of new Set([...fields, ...Object.keys(config.fields)]))
+          if (!fields.has(field) || !Object.hasOwn(config.fields, field))
+            ctx.addIssue({
+              code: 'custom',
+              path: ['sources', source, 'rollup'],
+              message: `Mapped field ${field} must appear in rollup by, sum, first, duplicates.by or where`,
+            });
+        for (const field of config.unique)
+          if (![...keyFields(r.by), ...r.first].includes(field))
+            ctx.addIssue({
+              code: 'custom',
+              path: ['sources', source, 'unique'],
+              message: `Unique field ${field} must be retained in rollup by or first`,
+            });
         for (const field of r.sum)
           if (!['money', 'number'].includes(v.compare[field]?.type ?? ''))
             ctx.addIssue({
@@ -327,6 +387,27 @@ export const entitySchema = z
               message: `Rollup sum field ${field} requires a number or money rule`,
             });
       }
+    for (const [source, config] of Object.entries(v.sources)) {
+      const filters = [config.where, config.rollup?.where ?? {}, ...v.aggregates.map((item) => item.where)];
+      for (const filter of filters)
+        for (const [field, condition] of Object.entries(filter)) {
+          const choice =
+            condition !== null && typeof condition === 'object' && !Array.isArray(condition)
+              ? condition.not
+              : condition;
+          for (const value of Array.isArray(choice) ? choice : [choice]) {
+            try {
+              normalize(value, sourceRule(v.compare[field], config), source);
+            } catch {
+              ctx.addIssue({
+                code: 'custom',
+                path: ['sources', source, 'where', field],
+                message: `Filter value must match the ${v.compare[field]?.type ?? 'string'} field type`,
+              });
+            }
+          }
+        }
+    }
     const reference = Object.values(v.sources)[0];
     const names = new Set<string>();
     for (const [index, aggregate] of v.aggregates.entries()) {
@@ -364,7 +445,11 @@ export const configSchema = z
     version: z.literal(1),
     maxInvalidRows: z.number().int().min(0).max(1000000).default(50),
     publicEnv: z.array(envName).default([]),
-    allowedHosts: z.array(name).min(1).optional(),
+    secretEnv: z.array(envName).default([]),
+    allowedHosts: z
+      .array(name.refine(validAllowedHost, 'Use host or host:port without a URL scheme or path'))
+      .min(1)
+      .optional(),
     patterns: z
       .object({ minCount: z.number().int().min(3).default(3) })
       .strict()

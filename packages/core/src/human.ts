@@ -37,14 +37,19 @@ function findingDetails(finding: Finding, presentation: ReportPresentation): str
   const field = labels.field(finding.entity, finding.field, finding.type === 'aggregate_mismatch');
   const reference = Object.keys(entity?.sources ?? {})[0] ?? 'reference';
   if (finding.accounting) return `Follows from: ${finding.accounting.causes.join(', ')}.`;
-  if (finding.type === 'missing_in_source') return `Missing from ${labels.source(finding.entity, finding.source)}.`;
+  if (finding.type === 'missing_in_source')
+    return `Missing from ${labels.source(finding.entity, finding.source)}${finding.amounts?.length ? ': ' + finding.amounts.map((item) => (item.currency ? formatMoneyMajor(BigInt(item.amount), item.currency) : presentationValue(item.amount, finding.entity, item.field, false, presentation))).join(', ') : ''}.`;
   if (finding.type === 'extra_in_source') {
     const key =
       finding.keyParts?.length === 2 && Array.isArray(entity?.key) && entity.key[1] === 'charge'
         ? `${humanize(finding.keyParts[1] ?? '')} on ${finding.keyParts[0]}`
         : findingKey(finding);
     const money = finding.amounts
-      ?.map((item) => presentationValue(item.amount, finding.entity, item.field, false, presentation))
+      ?.map((item) =>
+        item.currency
+          ? formatMoneyMajor(BigInt(item.amount), item.currency)
+          : presentationValue(item.amount, finding.entity, item.field, false, presentation),
+      )
       .join(', ');
     return `${key}: not on ${labels.source(finding.entity, reference)}${money ? ', ' + money : ''}.`;
   }
@@ -52,47 +57,58 @@ function findingDetails(finding: Finding, presentation: ReportPresentation): str
     return `${field} differs from ${labels.source(finding.entity, reference)}.`;
   if (finding.type === 'duplicate_value') {
     const amounts = finding.amounts
-      ?.map((item) => presentationValue(item.amount, finding.entity, item.field, false, presentation))
+      ?.map((item) =>
+        item.currency
+          ? formatMoneyMajor(BigInt(item.amount), item.currency)
+          : presentationValue(item.amount, finding.entity, item.field, false, presentation),
+      )
       .join(', ');
-    return `${field} ${String(finding.actual)} appears on ${(finding.relatedKeys ?? []).join(' and ')}${amounts ? '; paid more than once: ' + amounts : ''}.`;
+    return `${field} ${String(finding.actual)} appears on ${(finding.relatedKeys ?? []).join(' and ')}${amounts ? '; amounts on additional records: ' + amounts : ''}.`;
   }
   return finding.type !== 'field_mismatch' || finding.reason ? finding.message : '';
 }
 export function humanFinding(finding: Finding, presentation: ReportPresentation = {}) {
   const labels = reportLabels(presentation),
     aggregate = finding.type === 'aggregate_mismatch';
+  const shown = (value: Finding['actual']) =>
+    finding.currency && (typeof value === 'bigint' || (typeof value === 'string' && /^-?\d+$/.test(value)))
+      ? formatMoneyMajor(BigInt(value), finding.currency)
+      : presentationValue(value, finding.entity, finding.field, aggregate, presentation);
   const reference =
     finding.type === 'missing_in_source'
       ? 'Present'
       : finding.type === 'extra_in_source'
         ? 'Absent'
-        : presentationValue(finding.expected, finding.entity, finding.field, aggregate, presentation);
+        : shown(finding.expected);
   const sourceValue =
     finding.type === 'missing_in_source'
       ? 'Missing'
       : finding.type === 'extra_in_source'
         ? 'Present'
-        : presentationValue(finding.actual, finding.entity, finding.field, aggregate, presentation);
+        : shown(finding.actual);
   return {
     key: finding.key ? findingKey(finding) : aggregate ? labels.all(finding.entity) : 'Source',
     source: labels.source(finding.entity, finding.source),
     field: finding.type === 'source_error' ? 'Source' : labels.field(finding.entity, finding.field, aggregate),
     reference,
     sourceValue,
-    difference: presentationDifference(
-      finding.expected,
-      finding.actual,
-      finding.entity,
-      finding.field,
-      aggregate,
-      presentation,
-    ),
+    difference:
+      finding.currency && typeof finding.actual === 'bigint' && typeof finding.expected === 'bigint'
+        ? formatMoneyMajor(finding.actual - finding.expected, finding.currency)
+        : presentationDifference(
+            finding.expected,
+            finding.actual,
+            finding.entity,
+            finding.field,
+            aggregate,
+            presentation,
+          ),
     type: typeLabels[finding.type],
     details:
       finding.values
         ?.map(
           (item) =>
-            `Row ${numberText(item.line)}: ${presentationValue(item.value, finding.entity, finding.field, false, presentation)}`,
+            `Row ${numberText(item.row)}: ${presentationValue(item.value, finding.entity, finding.field, false, presentation)}`,
         )
         .join('; ') ?? findingDetails(finding, presentation),
   };
@@ -103,19 +119,33 @@ export function patternWords(group: FindingGroup, presentation: ReportPresentati
     field = labels.field(group.entity, group.field),
     delta = BigInt(group.delta ?? 0);
   if (group.kind.endsWith('_stride'))
-    return {
-      label: 'Page boundary',
-      sentence: `${quantity(group.count, group.kind === 'missing_stride' ? 'missing row' : 'extra row')} in ${source} follow page boundaries.`,
-      nextStep: `Check pagination in ${source}, including the last partial page.`,
-      hint: 'Likely a pagination bug. Check page boundaries and the last page.',
-    };
+    return group.cause !== 'pagination'
+      ? {
+          label: 'Repeated missing rows',
+          sentence: group.summary,
+          nextStep: `Compare the export selection and missing keys in ${source}.`,
+          hint: 'A regular sequence of rows is absent; check the source export.',
+        }
+      : {
+          label: 'Page boundary',
+          sentence: `${quantity(group.count, group.kind === 'missing_stride' ? 'missing row' : 'extra row')} in ${source} follow page boundaries.`,
+          nextStep: `Check pagination in ${source}, including the last partial page.`,
+          hint: 'Likely a pagination bug. Check page boundaries and the last page.',
+        };
   if (group.kind === 'datetime_offset')
-    return {
-      label: 'Timezone',
-      sentence: `${numberText(group.count)} ${field.toLowerCase()} values in ${source} differ by ${durationValue(delta)}.`,
-      nextStep: `Set sourceTimezones.${group.source} to the zone the export writes in.`,
-      hint: 'Likely local time written without an offset.',
-    };
+    return group.cause !== 'timezone'
+      ? {
+          label: 'Datetime offset',
+          sentence: group.summary,
+          nextStep: `Compare the original timestamps and clock settings in ${source}.`,
+          hint: 'Repeated datetime offset; check the original timestamps.',
+        }
+      : {
+          label: 'Timezone',
+          sentence: `${numberText(group.count)} ${field.toLowerCase()} values in ${source} differ by ${durationValue(delta)}.`,
+          nextStep: `Set sourceTimezones.${group.source} to the zone the export writes in.`,
+          hint: 'Likely local time written without an offset.',
+        };
   if (group.kind === 'money_delta') {
     const rule = labels.entity(group.entity)?.compare[group.field];
     const difference = rule?.currency ? formatMoneyMajor(delta, rule.currency) : `${delta} minor units`;
@@ -139,5 +169,8 @@ export function patternWords(group: FindingGroup, presentation: ReportPresentati
   };
 }
 export function markdownCell(text: string): string {
-  return text.replace(/[\\`*_{}[\]<>|]/g, '\\$&').replace(/\r\n|\r|\n/g, ' ');
+  return text
+    .replaceAll('@', '&#64;')
+    .replace(/[\\`*_{}[\]<>|]/g, '\\$&')
+    .replace(/\r\n|\r|\n/g, ' ');
 }

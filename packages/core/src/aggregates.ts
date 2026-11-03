@@ -1,4 +1,4 @@
-import { equalValues, normalize } from './normalize.js';
+import { matchesFilter } from './filters.js';
 import type { AggregateConfig, EntityConfig, SourceConfig } from './config.js';
 import type { NormalizedValue } from './types.js';
 
@@ -48,14 +48,11 @@ export function measureAggregate(
 ): number | bigint | undefined {
   const required = [...Object.keys(aggregate.where), ...(aggregate.type === 'sum' ? [aggregate.field] : [])];
   if (required.some((field) => !Object.hasOwn(config.fields, field))) return undefined;
-  const conditions = Object.entries(aggregate.where).map(
-    ([field, value]) => [field, normalize(value, entity.compare[field], source)] as const,
-  );
   let count = 0;
   let money = 0n;
   const decimal = new DecimalSum();
   for (const [key, row] of rows) {
-    if (!conditions.every(([field, expected]) => equalValues(row[field] ?? null, expected))) continue;
+    if (!matchesFilter(row, aggregate.where, entity, source)) continue;
     if (aggregate.type === 'count') {
       count++;
       continue;

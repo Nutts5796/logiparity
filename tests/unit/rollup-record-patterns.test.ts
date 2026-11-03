@@ -28,7 +28,7 @@ it('rolls up normalized money and exact numeric sums while keeping the first map
     else {
       yield { load_id: 'L1', carrier_pay: '1000.00', units: 0.1, status: 'delivered' };
       yield { load_id: 'L1', carrier_pay: '100.00', units: 0.2, status: 'delivered' };
-      yield { load_id: 'L1', carrier_pay: '50.25', units: null, status: 'delivered' };
+      yield { load_id: 'L1', carrier_pay: '50.25', units: 0, status: 'delivered' };
     }
   });
   expect(report.findings).toEqual([]);
@@ -87,8 +87,11 @@ it.each(['missing_in_source', 'extra_in_source'] as const)(
     expect(groups[0]?.summary).toContain('stride of 200');
     expect(groupFindings([...findings].reverse(), [entity])).toEqual(groups);
     const report = { schemaVersion: 1 as const, entities: [], findings, groups };
-    for (const text of [markdownReport(report), consoleReport(report)]) expect(text).toContain('page boundaries');
-    expect(htmlReport(report).includes('Likely a pagination bug')).toBe(true);
+    for (const text of [markdownReport(report), consoleReport(report)]) {
+      expect(text).toContain('every 200th row');
+      expect(text).not.toContain('page boundaries');
+    }
+    expect(htmlReport(report).includes('Likely a pagination bug')).toBe(false);
     expect(report.findings).toHaveLength(4);
   },
 );

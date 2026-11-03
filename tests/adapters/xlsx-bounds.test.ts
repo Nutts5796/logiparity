@@ -64,15 +64,15 @@ it('caps shared-string disk use including the offset index', async () => {
   }
 });
 
-it.each(['SIGINT', 'SIGTERM'] as const)('removes owned temporary strings on %s', async (signal) => {
+it.each(['SIGINT', 'SIGTERM', 'SIGHUP'] as const)('removes owned temporary strings on %s', async (signal) => {
   const directory = await mkdtemp(join(tmpdir(), 'logiparity-signal-'));
-  const module = pathToFileURL(resolve('packages/adapters/dist/xlsx-strings.js')).href;
+  const module = pathToFileURL(resolve('packages/adapters/src/xlsx-strings.ts')).href;
   const child = spawn(
     process.execPath,
     [
       '--input-type=module',
       '-e',
-      `import {SharedStrings} from ${JSON.stringify(module)}; const strings=await SharedStrings.create(); await strings.add('private synthetic fixture'); console.log('READY'); setInterval(()=>{},1000);`,
+      `import {createJiti} from "jiti"; const {SharedStrings}=await createJiti(import.meta.url).import(${JSON.stringify(module)}); const strings=await SharedStrings.create(); await strings.add('private synthetic fixture'); console.log('READY'); setInterval(()=>{},1000);`,
     ],
     { env: { ...process.env, TMPDIR: directory }, stdio: ['ignore', 'pipe', 'pipe'] },
   );
@@ -84,6 +84,14 @@ it.each(['SIGINT', 'SIGTERM'] as const)('removes owned temporary strings on %s',
           clearTimeout(timer);
           accept();
         }
+      });
+      let stderr = '';
+      child.stderr.on('data', (data) => {
+        stderr += String(data);
+      });
+      child.once('exit', (code) => {
+        clearTimeout(timer);
+        reject(new Error(`XLSX child exited ${code}: ${stderr}`));
       });
       child.once('error', reject);
     });

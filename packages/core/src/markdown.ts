@@ -1,14 +1,19 @@
+import { redactTree, secretValues } from './diagnostics.js';
+import { aggregateDisplay, rawAggregateDisplay } from './money-display.js';
 import { reportGroups, groupMembership, accountedFindingIndexes } from './groups.js';
 import { verdict } from './report-utils.js';
 import { reportLabels } from './labels.js';
 import { humanFinding, reportCounts, quantity, typeLabels, patternWords, markdownCell as cell } from './human.js';
-import { presentationValue, type ReportPresentation } from './money-display.js';
+import { type ReportPresentation } from './money-display.js';
 import type { Report, Finding } from './types.js';
 const row = (finding: Finding, presentation: ReportPresentation) => {
   const item = humanFinding(finding, presentation);
   return `| ${[item.key, item.source, item.field, item.reference, item.sourceValue, item.difference, finding.accounting ? `Follows from: ${finding.accounting.causes.join(', ')}` : item.details || item.type].map(cell).join(' | ')} |`;
 };
 export function markdownReport(report: Report, presentation: ReportPresentation = {}): string {
+  const secrets = secretValues(presentation.entities);
+  report = redactTree(report, secrets);
+  presentation = redactTree(presentation, secrets);
   const counts = reportCounts(report),
     labels = reportLabels(presentation);
   const lines = [
@@ -56,10 +61,14 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
             ? 'Not mapped'
             : value === undefined
               ? 'Not read'
-              : presentationValue(value, entity.entity, aggregate.name, true, presentation);
+              : aggregateDisplay(aggregate, source, entity.entity, presentation);
         const uncertain = aggregate.uncertainKeys?.[source];
+        const raw = rawAggregateDisplay(aggregate, source, entity.entity, presentation);
+        const retained = raw
+          ? ` Raw source: ${raw}; retained/certain lines above. Excluded rows: ${(aggregate.excludedRows?.[source] ?? []).join(', ') || 'none'}.`
+          : '';
         lines.push(
-          `| ${cell(labels.field(entity.entity, aggregate.name, true))} | ${cell(labels.source(entity.entity, source))} | ${cell(shown)} | ${uncertain?.length ? cell('Uncertain lines: ' + uncertain.join(', ')) : source === entity.reference ? 'Reference' : ''} |`,
+          `| ${cell(labels.field(entity.entity, aggregate.name, true))} | ${cell(labels.source(entity.entity, source))} | ${cell(shown + retained)} | ${uncertain?.length ? cell('Uncertain lines: ' + uncertain.join(', ')) : source === entity.reference ? 'Reference' : ''} |`,
         );
       }
     }

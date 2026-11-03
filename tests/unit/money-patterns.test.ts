@@ -71,11 +71,11 @@ it('groups constant UTC offsets, exact large money deltas and one status mapping
   const groups = groupFindings(findings, [entity]);
   expect(groups.map((g) => g.kind)).toEqual(['datetime_offset', 'money_delta', 'value_mapping']);
   expect(groups[0]).toMatchObject({ count: 3, delta: '-21600000' });
-  expect(groups[0]?.summary).toContain('−6h (likely timezone)');
+  expect(groups[0]?.summary).toContain('−6 h (repeated datetime offset)');
   expect(groups[1]?.delta).toBe('-1');
   const report: Report = { schemaVersion: 1, entities: [], findings, groups };
   for (const text of [markdownReport(report), consoleReport(report)]) {
-    expect(text).toContain('Likely local time');
+    expect(text).toContain('Repeated datetime offset');
     expect(text.replaceAll('\\_', '_')).toContain('In transit');
   }
   expect(htmlReport(report).includes('9 findings')).toBe(true);
@@ -111,14 +111,14 @@ it('escapes summaries, adds HTML counts, and shows ISO UTC alongside console epo
   expect(html.includes('data-mode="review"')).toBe(true);
   expect(html).not.toContain('<script> ->');
   expect(html.includes('<script> ->')).toBe(false);
-  expect(html).toContain('+123ms');
-  expect(consoleReport({ ...report, findings: [finding('at', 'A', 0, 1000)] }, presentation)).toContain('+1s');
+  expect(html).toContain('+123 ms');
+  expect(consoleReport({ ...report, findings: [finding('at', 'A', 0, 1000)] }, presentation)).toContain('+1 s');
   expect(
     groupFindings(
       ['A', 'B', 'C'].map((key) => finding('at', key, 0, 120000)),
       [entity],
     )[0]?.summary,
-  ).toContain('+2m');
+  ).toContain('+2 m');
 });
 it('emits groups through the comparison engine and never reports false extras after a source fails', async () => {
   const report = await compareEntities([entity], async function* (name) {

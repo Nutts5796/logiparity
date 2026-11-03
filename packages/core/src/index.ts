@@ -14,3 +14,4 @@ export * from './keys.js';
 export * from './filters.js';
 export * from './hosts.js';
 export * from './human.js';
+export { atomicReportFile } from './atomic-file.js';

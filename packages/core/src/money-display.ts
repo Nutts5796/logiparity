@@ -1,5 +1,5 @@
 import type { EntityConfig } from './config.js';
-import type { NormalizedValue } from './types.js';
+import type { NormalizedValue, AggregateResult } from './types.js';
 import { humanize, presentationRule } from './labels.js';
 import { displayValue } from './report-utils.js';
 
@@ -90,14 +90,56 @@ export function readableDatetime(epoch: number, timeZone = 'UTC'): string | unde
 }
 
 export function durationValue(delta: bigint): string {
+  const absolute = delta < 0n ? -delta : delta;
+  const sign = delta < 0n ? '−' : delta > 0n ? '+' : '';
   for (const [unit, factor] of [
+    ['d', 86400000n],
     ['h', 3600000n],
     ['m', 60000n],
     ['s', 1000n],
     ['ms', 1n],
-  ] as const)
-    if (delta % factor === 0n) return `${delta > 0n ? '+' : ''}${delta / factor}${unit}`.replace(/^-/, '−');
-  return String(delta).replace(/^-/, '−');
+  ] as const) {
+    if (absolute >= factor || unit === 'ms') {
+      const value = Number((absolute * 100n) / factor) / 100;
+      return `${sign}${value.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${unit}`;
+    }
+  }
+  return '0 ms';
+}
+export function aggregateDisplay(
+  aggregate: AggregateResult,
+  source: string,
+  entity: string,
+  presentation: ReportPresentation,
+): string {
+  const currencies = aggregate.valuesByCurrency?.[source];
+  if (currencies && Object.keys(currencies).length)
+    return Object.entries(currencies)
+      .map(([currency, value]) => formatMoneyMajor(BigInt(value), currency))
+      .join('; ');
+  return presentationValue(aggregate.values[source], entity, aggregate.name, true, presentation);
+}
+export function rawAggregateDisplay(
+  aggregate: AggregateResult,
+  source: string,
+  entity: string,
+  presentation: ReportPresentation,
+): string {
+  const values = aggregate.rawValuesByCurrency?.[source],
+    certain = aggregate.valuesByCurrency?.[source];
+  const changed =
+    values &&
+    Object.keys({ ...values, ...certain }).some(
+      (currency) => BigInt(values[currency] ?? 0) !== BigInt(certain?.[currency] ?? 0),
+    );
+  if (changed)
+    return Object.entries(values)
+      .map(([currency, value]) => formatMoneyMajor(BigInt(value), currency))
+      .join('; ');
+  const raw = aggregate.rawValues?.[source];
+  return raw !== undefined && raw !== aggregate.values[source]
+    ? presentationValue(raw, entity, aggregate.name, true, presentation)
+    : '';
 }
 
 export function presentationDifference(

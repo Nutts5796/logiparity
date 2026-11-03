@@ -4,6 +4,7 @@ export const xlsxLimits = {
   textChars: 256 * 1024,
   tagChars: 32 * 1024,
   cellChars: 1024 * 1024,
+  materializedBytes: 64 * 1024 * 1024,
   sharedBytes: 64 * 1024 * 1024,
   compressionRatio: 200,
 };

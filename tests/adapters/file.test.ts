@@ -57,7 +57,6 @@ describe('streaming file adapters', () => {
     ['', 'Header was not found'],
     ['ID,ID\na,b', 'Duplicate'],
     ['ID,Other\na,b', 'Column "Value"'],
-    ['ID,Value\na,b,c', 'Invalid Record Length'],
     ['ID,Value\na,"unfinished', 'Quote Not Closed'],
   ])('reports malformed CSV with file context: %s', async (content, error) => {
     const baseDir = await directory();

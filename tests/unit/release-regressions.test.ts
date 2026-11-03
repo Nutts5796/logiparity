@@ -40,8 +40,8 @@ it.each(['reference', 'lines'])(
       reason: 'rollup_conflict',
       field: 'status',
       values: [
-        { line: 1, value: 'delivered' },
-        { line: 2, value: 'cancelled' },
+        { row: 1, value: 'delivered' },
+        { row: 2, value: 'cancelled' },
       ],
     });
     expect(report.groups).toEqual([]);
@@ -57,7 +57,7 @@ it('flags blank money in a rollup and skips comparisons and aggregates that depe
     reason: 'rollup_missing_value',
     actual: null,
   });
-  expect(report.entities[0]?.aggregates?.[0]?.uncertainKeys?.lines).toEqual(['L1']);
+  expect(report.entities[0]?.aggregates?.[0]?.uncertainKeys?.lines).toEqual([['L1']]);
   expect(report.groups).toEqual([]);
 });
 it('identifies repeated charge lines before summing without labelling them as rounding', async () => {
@@ -89,7 +89,7 @@ it('identifies repeated charge lines before summing without labelling them as ro
     key: 'L1',
   });
   expect(report.groups).toEqual([]);
-  expect(report.entities[0]?.aggregates?.[0]?.uncertainKeys?.lines).toEqual(['L1']);
+  expect(report.entities[0]?.aggregates?.[0]?.uncertainKeys?.lines).toEqual([['L1']]);
   for (const by of [['charge'], ['load_id', 'missing'], ['load_id', 'load_id']])
     expect(
       entitySchema.safeParse({

@@ -19,6 +19,7 @@ export function registerXlsxTemp(directory: string): void {
   for (const [signal, status] of [
     ['SIGINT', 130],
     ['SIGTERM', 143],
+    ['SIGHUP', 129],
   ] as const) {
     const existing = process.listenerCount(signal);
     process.once(signal, () => {

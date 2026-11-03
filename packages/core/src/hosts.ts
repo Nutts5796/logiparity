@@ -1,3 +1,12 @@
+export function validAllowedHost(host: string): boolean {
+  if (/[\s/?#@]/.test(host) || host.includes('://')) return false;
+  try {
+    const url = new URL(`http://${host}`);
+    return !!url.hostname && url.pathname === '/' && !url.username && !url.password && !host.endsWith(':');
+  } catch {
+    return false;
+  }
+}
 export function assertAllowedHost(
   input: string | URL,
   allowed: readonly string[] | undefined,

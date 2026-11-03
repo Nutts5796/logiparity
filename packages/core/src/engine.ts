@@ -1,4 +1,4 @@
-import { secretValues, redactSecrets } from './diagnostics.js';
+import { secretValues, redactSecrets, redactTree } from './diagnostics.js';
 import { keyFields, type EntityConfig, type Config } from './config.js';
 import type { Report, Finding, SourceReader, EntitySummary } from './types.js';
 import { readSource, type SourceState } from './source-state.js';
@@ -9,7 +9,7 @@ import { groupFindings, attachGroupMembership } from './groups.js';
 import { collectReconciliation, reconcileAggregates } from './reconciliation.js';
 import { keyText } from './keys.js';
 import { formatMoneyMajor } from './money-display.js';
-const order = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
+const order = (left: string, right: string) => left.localeCompare(right, 'en', { numeric: true });
 export function sortFindings(findings: Finding[]): Finding[] {
   return findings.sort(
     (a, b) =>
@@ -33,10 +33,11 @@ function rowDetails(
   const money = Object.entries(entity.compare).find(
     ([field, rule]) => rule.type === 'money' && typeof row?.[field] === 'bigint',
   );
-  const amount = money && row ? `, ${formatMoneyMajor(row[money[0]] as bigint, money[1].currency ?? 'USD')}` : '';
+  const currency = money ? (state.currencies.get(key)?.get(money[0]) ?? money[1].currency ?? 'USD') : undefined;
+  const amount = money && row ? `, ${formatMoneyMajor(row[money[0]] as bigint, currency ?? 'USD')}` : '';
   const message =
     type === 'missing_in_source'
-      ? `${keyText(key, parts)}: missing from ${source}.`
+      ? `${keyText(key, parts)}: missing from ${source}${amount}.`
       : `${keyText(key, parts)}: not on ${reference}${amount}.`;
   return {
     type,
@@ -45,8 +46,21 @@ function rowDetails(
     key,
     field: '',
     message,
-    ...(money && row ? { amounts: [{ field: money[0], amount: row[money[0]] as bigint }] } : {}),
+    ...(money && row
+      ? { amounts: [{ field: money[0], currency: currency ?? 'USD', amount: row[money[0]] as bigint }] }
+      : {}),
     ...(parts ? { keyParts: parts } : {}),
+    evidence: {
+      paginated:
+        entity.sources[source]?.type === 'rest'
+          ? !!entity.sources[source].pagination
+          : entity.sources[source]?.type === 'ui'
+            ? !!entity.sources[source].nextPage
+            : false,
+      pageSizes: [entity.sources[source], entity.sources[reference]].flatMap((config) =>
+        config?.type === 'rest' && config.pagination && 'size' in config.pagination ? [config.pagination.size] : [],
+      ),
+    },
     ...(type === 'missing_in_source' ? { referencePosition: state.positions.get(key) ?? 1 } : {}),
   };
 }
@@ -68,6 +82,8 @@ function compareSource(
       report.findings.push(rowDetails(entity, source, reference, key, baseline, 'missing_in_source'));
       continue;
     }
+    for (const issue of current.issues)
+      if (issue.key === key && issue.type === 'invalid_value') issue.expected = expected[issue.field] ?? null;
     for (const [field, value] of Object.entries(expected)) {
       if (
         keys.has(field) ||
@@ -78,6 +94,21 @@ function compareSource(
       )
         continue;
       const actualValue = actual[field] ?? null;
+      const expectedCurrency = baseline.currencies.get(key)?.get(field),
+        actualCurrency = current.currencies.get(key)?.get(field);
+      if (expectedCurrency && actualCurrency && expectedCurrency !== actualCurrency) {
+        report.findings.push({
+          type: 'field_mismatch',
+          entity: entity.name,
+          source,
+          key,
+          field: entity.compare[field]?.currencyField ?? config.currencyField ?? field,
+          expected: expectedCurrency,
+          actual: actualCurrency,
+          message: `Currency differs: ${expectedCurrency} on ${reference}, ${actualCurrency} on ${source}.`,
+        });
+        continue;
+      }
       if (!equalValues(value, actualValue, entity.compare[field]))
         report.findings.push({
           type: 'field_mismatch',
@@ -88,6 +119,8 @@ function compareSource(
           field,
           expected: value,
           actual: actualValue,
+          ...(actualCurrency ? { currency: actualCurrency } : {}),
+          evidence: { offsetFree: current.offsetFree.get(key)?.has(field) ?? false },
           message: `${keyText(key, baseline.parts.get(key))}: ${field} differs from ${reference}.`,
         });
     }
@@ -117,8 +150,45 @@ function publishAggregates(
     }
     const excluded = state.excluded.get(definition.name) ?? new Set<string>();
     aggregate.sourceStatus[source] = excluded.size ? 'uncertain' : 'certain';
-    aggregate.uncertainKeys[source] = [...excluded].map((key) => keyText(key, state.parts.get(key)));
+    aggregate.uncertainKeys[source] = [...excluded].map((key) => state.parts.get(key) ?? [key]);
     aggregate.values[source] = actual;
+    aggregate.rawValues ??= {};
+    aggregate.rawValues[source] = state.rawMeasurements.get(definition.name) ?? actual;
+    aggregate.excludedRows ??= {};
+    aggregate.excludedRows[source] = [
+      ...new Set([
+        ...state.excludedRows,
+        ...state.invalidRows,
+        ...[...excluded].flatMap((key) => state.rowNumbers.get(key) ?? []),
+      ]),
+    ].sort((a, b) => a - b);
+    const currencies = state.currencyMeasurements.get(definition.name);
+    if (currencies) {
+      aggregate.valuesByCurrency ??= {};
+      aggregate.valuesByCurrency[source] = currencies;
+      aggregate.rawValuesByCurrency ??= {};
+      aggregate.rawValuesByCurrency[source] = state.rawCurrencies.get(definition.name) ?? {};
+      const referenceCurrencies = aggregate.valuesByCurrency[reference];
+      if (source !== reference && referenceCurrencies) {
+        for (const currency of new Set([...Object.keys(currencies), ...Object.keys(referenceCurrencies)])) {
+          const expectedAmount = BigInt(referenceCurrencies[currency] ?? 0),
+            actualAmount = BigInt(currencies[currency] ?? 0);
+          if (!aggregateEqual(expectedAmount, actualAmount, definition))
+            report.findings.push({
+              type: 'aggregate_mismatch',
+              entity: entity.name,
+              source,
+              key: '',
+              field: definition.name,
+              currency,
+              expected: expectedAmount,
+              actual: actualAmount,
+              message: `${definition.name} (${currency}) differs from ${reference}.`,
+            });
+        }
+      }
+      continue;
+    }
     const expected = aggregate.values[reference];
     if (source !== reference && expected !== undefined && !aggregateEqual(expected, actual, definition))
       report.findings.push({
@@ -178,7 +248,10 @@ export async function compareEntities(
       filters: Object.fromEntries(
         sources
           .filter(([, source]) => Object.keys(source.where).length || Object.keys(source.rollup?.where ?? {}).length)
-          .map(([name, source]) => [name, { source: source.where, rollup: source.rollup?.where ?? {} }]),
+          .map(([name, source]) => [
+            name,
+            { source: source.where, rollup: source.rollup?.where ?? {}, caseSensitive: source.caseSensitive },
+          ]),
       ),
       rollupSources: sources.filter(([, source]) => !!source.rollup).map(([name]) => name),
       pluralLabel: entity.pluralLabel ?? 'records',
@@ -220,5 +293,5 @@ export async function compareEntities(
   reconcileAggregates(report, entities);
   attachGroupMembership(report);
   redactReportValues(report, secrets);
-  return report;
+  return redactTree(report, secrets);
 }

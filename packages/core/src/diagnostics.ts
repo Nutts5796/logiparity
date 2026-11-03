@@ -1,6 +1,10 @@
-export const normalizedSecretName = (name: string) => name.toLowerCase().replace(/[-_.]/g, '');
+export const normalizedSecretName = (name: string) =>
+  name
+    .replace(/\p{Cf}/gu, '')
+    .toLowerCase()
+    .replace(/[-_.]/g, '');
 export const isSecretName = (name: string): boolean =>
-  /token|secret|password|passwd|pwd|apikey|auth|cookie|session|credential|privatekey|jwt|signature|subscriptionkey/.test(
+  /token|secret|password|passwd|pwd|apikey|auth|cookie|session|credential|privatekey|jwt|signature|subscriptionkey|^pass$/.test(
     normalizedSecretName(name),
   ) || /[-_.](?:pass|key|sig)$/i.test(name);
 export interface EnvironmentContext {
@@ -74,6 +78,8 @@ export function secretValues(config: unknown, env: NodeJS.ProcessEnv = process.e
     }
   };
   add(env.LOGIPARITY_AI_API_KEY);
+  if (config && typeof config === 'object' && Array.isArray(Reflect.get(config, 'secretEnv')))
+    for (const name of Reflect.get(config, 'secretEnv') as string[]) add(env[name]);
   const seen = new WeakSet<object>();
   const walk = (value: unknown, sensitive = false): void => {
     if (!value || typeof value !== 'object' || seen.has(value)) return;
@@ -87,8 +93,7 @@ export function secretValues(config: unknown, env: NodeJS.ProcessEnv = process.e
         add(Buffer.from(`${username}:${password}`).toString('base64'));
     }
     for (const [key, child] of Object.entries(value)) {
-      if (/^(?:tokenEnv|passwordEnv|usernameEnv|connectionEnv)$/.test(key) && typeof child === 'string')
-        addEnvironment(child);
+      if (/^(?:tokenEnv|passwordEnv|connectionEnv)$/.test(key) && typeof child === 'string') addEnvironment(child);
       else if (key === 'headersEnv' && child && typeof child === 'object') {
         for (const name of Object.values(child)) {
           const reference =
@@ -96,12 +101,7 @@ export function secretValues(config: unknown, env: NodeJS.ProcessEnv = process.e
           if (typeof reference === 'string') addEnvironment(reference);
         }
       } else if (typeof child === 'string') {
-        for (const [, name] of child.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g))
-          if (
-            name &&
-            (sensitive || /^(?:url|baseUrl|path|connection|connectionString|headers)$/i.test(key) || isSecretName(name))
-          )
-            addEnvironment(name);
+        for (const [, name] of child.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) if (name) addEnvironment(name);
       } else
         walk(
           child,
@@ -146,7 +146,10 @@ export function redactSecrets(
   secrets: readonly string[],
   mode: 'diagnostic' | 'data' = 'diagnostic',
 ): string {
-  const values = [...new Set(secrets.filter(Boolean))].sort((a, b) => b.length - a.length);
+  text = text.replace(/\p{Cf}/gu, '');
+  const values = [...new Set(secrets.map((secret) => secret.replace(/\p{Cf}/gu, '')).filter(Boolean))].sort(
+    (a, b) => b.length - a.length,
+  );
   for (const secret of values)
     for (const encoding of credentialEncodings(secret).sort((a, b) => b.length - a.length))
       text = replaceCredential(text, encoding, secret.length < 8, mode);
@@ -177,7 +180,7 @@ export function shortSecretWarnings(config: unknown, env: NodeJS.ProcessEnv = pr
     );
 }
 export function safeConsole(text: string): string {
-  return [...text]
+  return [...text.replace(/\p{Cf}/gu, '')]
     .filter((char) => {
       const code = char.codePointAt(0)!;
       return (
@@ -196,4 +199,17 @@ export function safeConsole(text: string): string {
       );
     })
     .join('');
+}
+
+export function redactTree<T>(input: T, secrets: readonly string[]): T {
+  const visit = (value: unknown): unknown => {
+    if (typeof value === 'string') return redactSecrets(value, secrets, 'data');
+    if (Array.isArray(value)) return value.map(visit);
+    if (value && typeof value === 'object')
+      return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [redactSecrets(key, secrets, 'data'), visit(item)]),
+      );
+    return value;
+  };
+  return visit(input) as T;
 }

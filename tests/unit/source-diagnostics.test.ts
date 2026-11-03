@@ -138,8 +138,8 @@ it('represents source-local conflicts as observed values with lines and reports 
   expect(conflict.expected).toBeUndefined();
   expect(conflict.actual).toBeUndefined();
   expect(conflict.values).toEqual([
-    { line: 1, value: 'delivered' },
-    { line: 2, value: 'cancelled' },
+    { row: 1, value: 'delivered' },
+    { row: 2, value: 'cancelled' },
   ]);
   expect(report.findings.find((finding) => finding.reason === 'rollup_duplicate')?.message).toContain(
     'excluded $200.00 from L103',

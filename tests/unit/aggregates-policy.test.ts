@@ -80,7 +80,7 @@ describe('aggregates', () => {
       [row('a', '1.01', 'delivered', null)],
     );
     expect(duplicate.findings.filter((f) => f.type === 'duplicate_key')).toHaveLength(1);
-    expect(duplicate.entities[0]?.aggregates?.[1]?.uncertainKeys?.api).toEqual(['a']);
+    expect(duplicate.entities[0]?.aggregates?.[1]?.uncertainKeys?.api).toEqual([]);
     expect(duplicate.entities[0]?.aggregates?.[2]?.values).toEqual({ api: 0, export: 0 });
   });
   it('uses aggregate-specific tolerances, including inclusive money boundaries', async () => {

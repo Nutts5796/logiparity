@@ -68,7 +68,7 @@ it('uses readable fixed en-US values with differences in all human reports, pres
     const result = render(report, presentation);
     expect(result).toContain('$18.19');
     expect(result).toContain('Nov 2, 2026, 1:01 PM UTC');
-    expect(result).toContain('−6h');
+    expect(result).toContain('−6 h');
     expect(result).not.toContain('1793624460000 (');
     expect(result).not.toContain('1819 ($');
   }
@@ -113,7 +113,7 @@ it('computes exact pattern coverage, merges cards, and reconciles missing rows a
   expect(html.includes('CSV export and Excel export')).toBe(true);
 });
 
-it('retains a remainder when extra rows or aggregate filters change a sum', async () => {
+it('attributes extra rows and respects aggregate filters', async () => {
   const filtered = entitySchema.parse({
     ...entity,
     aggregates: [{ name: 'payout_total', type: 'sum', field: 'payout', where: { id: 'S1' } }],
@@ -128,8 +128,9 @@ it('retains a remainder when extra rows or aggregate filters change a sum', asyn
     yield { id: 'S1', payout: '18.19' };
     if (source !== 'api') yield { id: 'extra', payout: '12.00' };
   });
-  expect(extra.entities[0]!.aggregates![0]!.reconciliation?.export?.remainder).toBe(1200n);
-  expect(htmlReport(extra, presentation)).not.toContain('$0.00 · accounted for');
+  expect(extra.entities[0]!.aggregates![0]!.reconciliation?.export?.remainder).toBe(0n);
+  expect(extra.entities[0]!.aggregates![0]!.reconciliation?.export?.extraRows?.amount).toBe(1200n);
+  expect(htmlReport(extra, presentation)).toContain('$0.00 · accounted for');
 });
 
 it('matches group membership by exact delta and excludes source-local issues', () => {

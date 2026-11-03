@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { parse } from 'csv-parse';
 import {
   withSourceRow,
+  sourceIssue,
   fieldPath,
   type FieldMapping,
   type AdapterContext,
@@ -46,25 +47,35 @@ export async function* readFileSource(config: FileConfig, context: AdapterContex
         quote: config.quote,
         bom: true,
         skip_empty_lines: true,
-        relax_column_count: false,
+        relax_column_count: true,
+        raw: true,
         info: true,
       });
       input.on('error', (error) => parser.destroy(error));
       input.pipe(parser);
-      let recordNumber = 0;
       try {
-        for await (const raw of parser as AsyncIterable<{ record: unknown[]; info: { lines: number } }>) {
-          recordNumber++;
-          location = `line ${raw.info.lines}`;
-          if (recordNumber < config.headerRow) continue;
+        for await (const raw of parser as AsyncIterable<{
+          record: unknown[];
+          raw: string;
+          info: { lines: number; error?: Error };
+        }>) {
+          const content = raw.raw.replace(/^(?:\r?\n)+/, '');
+          const rowNumber = raw.info.lines - (content.match(/\n/g)?.length ?? 0) + (content.endsWith('\n') ? 1 : 0);
+          location = `row ${rowNumber}`;
+          if (rowNumber < config.headerRow) continue;
           if (!indexes) {
             indexes = headerIndexes(raw.record, config.fields);
             continue;
           }
-          yield withSourceRow(
+          const row = withSourceRow(
             Object.fromEntries(indexes.map(([field, index]) => [field, raw.record[index]])),
-            recordNumber,
+            rowNumber,
           );
+          if (raw.info.error)
+            Object.defineProperty(row, sourceIssue, {
+              value: new Error('CSV row has a different number of columns than its header; correct the row.'),
+            });
+          yield row;
         }
       } finally {
         input.destroy();
@@ -81,6 +92,7 @@ export async function* readFileSource(config: FileConfig, context: AdapterContex
           );
           continue;
         }
+        if (row.values.every((value) => value === null || value === undefined || value === '')) continue;
         yield withSourceRow(
           Object.fromEntries(indexes.map(([field, index]) => [field, row.values[index] ?? null])),
           row.number,
@@ -92,6 +104,11 @@ export async function* readFileSource(config: FileConfig, context: AdapterContex
         `Header was not found${config.type === 'xlsx' ? ` in sheet "${config.sheet}"` : ''}; check sheet, headerRow and file contents.`,
       );
   } catch (error) {
-    throw new Error(`${file} (${location}): ${error instanceof Error ? error.message : String(error)}`);
+    if (error && typeof error === 'object' && Reflect.get(error, 'code') === 'ENOENT')
+      throw new Error(`File not found: ${file}. Download the export first or fix path.`);
+    const message = error instanceof Error ? error.message : String(error);
+    if (config.type === 'xlsx' && /limit|quota|ratio/.test(message))
+      throw new Error(`${file} (sheet ${config.sheet}): ${message}`);
+    throw new Error(`${file} (${location}): ${message}`);
   }
 }

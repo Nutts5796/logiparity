@@ -43,7 +43,7 @@ export class SharedStrings {
     const bytes = Buffer.from(value);
     if (this.offset + bytes.length + (this.count + 1) * 16 > xlsxLimits.sharedBytes)
       throw new Error('XLSX shared-string temporary disk quota exceeds 64 MiB.');
-    if (bytes.length > 8 * 1024 * 1024) throw new Error('An XLSX shared string exceeds the 8 MiB cell limit.');
+    if (bytes.length > 1024 * 1024) throw new Error('An XLSX shared string exceeds the 1 MiB cell limit.');
     const index = Buffer.alloc(16);
     index.writeBigUInt64LE(BigInt(this.offset));
     index.writeUInt32LE(bytes.length, 8);

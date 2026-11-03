@@ -1,3 +1,4 @@
+import { redactTree, secretValues } from './diagnostics.js';
 import { isBlocking } from './policy.js';
 import { entityNames, escapeMarkup, findingTypes } from './report-utils.js';
 import { humanFinding, quantity, typeLabels } from './human.js';
@@ -23,13 +24,24 @@ function xml(input: string): string {
 }
 
 export function junitReport(report: Report, timestamp = new Date(), presentation: ReportPresentation = {}): string {
+  const secrets = secretValues(presentation.entities);
+  report = redactTree(report, secrets);
+  presentation = redactTree(presentation, secrets);
   const suites = entityNames(report).map((entity, index) => {
     let failures = 0;
     let errors = 0;
     let skipped = 0;
     const cases = findingTypes.map((type) => {
       const findings = report.findings.filter((f) => f.entity === entity && f.type === type);
+      const reference = report.entities.find((item) => item.entity === entity)?.reference;
+      const referenceFailed = report.findings.some(
+        (item) => item.entity === entity && item.source === reference && item.type === 'source_error',
+      );
       let result = '';
+      if (!findings.length && referenceFailed && type !== 'source_error') {
+        result = '<skipped message="Reference source failed; comparison was not performed"/>';
+        skipped++;
+      }
       if (findings.length) {
         const blocking = findings.some(isBlocking);
         const tag = type === 'source_error' ? 'error' : blocking ? 'failure' : 'skipped';

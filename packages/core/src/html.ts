@@ -1,8 +1,9 @@
+import { redactTree, secretValues } from './diagnostics.js';
+import { aggregateDisplay, rawAggregateDisplay } from './money-display.js';
 import { createHash } from 'node:crypto';
 import { groupMembership, reportGroups, accountedFindingIndexes } from './groups.js';
 import { reportLabels, humanize } from './labels.js';
 import {
-  presentationValue,
   presentationDifference,
   formatMoneyMajor,
   readableDatetime,
@@ -105,7 +106,7 @@ function aggregateValue(
   const status = aggregate.sourceStatus?.[source];
   if (status === 'not_mapped' || aggregate.skippedSources.includes(source)) return 'Not mapped';
   if (status === 'not_read' || aggregate.values[source] === undefined) return 'Not read';
-  return presentationValue(aggregate.values[source], entity.entity, aggregate.name, true, presentation);
+  return aggregateDisplay(aggregate, source, entity.entity, presentation);
 }
 function totals(report: Report, presentation: ReportPresentation): string {
   const labels = reportLabels(presentation);
@@ -131,11 +132,13 @@ function totals(report: Report, presentation: ReportPresentation): string {
                   : '';
               const parts = aggregate.reconciliation?.[source];
               const follows =
-                parts && BigInt(parts.remainder) === 0n && !parts.uncertain?.keys.length
+                parts && BigInt(parts.remainder) === 0n
                   ? `Follows from: ${parts.causes?.join(', ') || 'matching values'}`
                   : '';
               const uncertain = aggregate.uncertainKeys?.[source];
-              return `<td class="num" data-l="${escape(labels.source(entity.entity, source))}">${span(aggregateValue(aggregate, entity, source, presentation))}${difference ? `<span class="sub-l neg">${escape(difference)}</span>` : ''}${follows && difference ? `<span class="sub-l">${escape(follows)}</span>` : ''}${uncertain?.length ? `<span class="sub-l">Uncertain lines: ${escape(uncertain.join(', '))}</span>` : ''}</td>`;
+              const raw = rawAggregateDisplay(aggregate, source, entity.entity, presentation);
+              const excluded = aggregate.excludedRows?.[source] ?? [];
+              return `<td class="num" data-l="${escape(labels.source(entity.entity, source))}">${span(aggregateValue(aggregate, entity, source, presentation))}${raw ? `<span class="sub-l">Raw source: ${escape(raw)}; retained/certain lines above.${excluded.length ? ` Excluded rows: ${excluded.join(', ')}` : ''}</span>` : ''}${difference ? `<span class="sub-l neg">${escape(difference)}</span>` : ''}${follows && difference ? `<span class="sub-l">${escape(follows)}</span>` : ''}${uncertain?.length ? `<span class="sub-l">Uncertain lines: ${escape(uncertain.join(', '))}</span>` : ''}</td>`;
             })
             .join('');
           return `<tr><td>${span(labels.field(entity.entity, aggregate.name, true), aggregate.name)}</td>${values}</tr>`;
@@ -166,6 +169,15 @@ function reconciliationCards(report: Report, presentation: ReportPresentation): 
               color: 'page',
               show: BigInt(parts.missingRows.amount) !== 0n,
             },
+            ...[
+              { label: 'Extra rows', part: parts.extraRows },
+              { label: 'Value differences', part: parts.valueDifferences },
+            ].map(({ label, part }) => ({
+              label: `${label} (${numberText(part?.count ?? 0)})`,
+              value: BigInt(part?.amount ?? 0),
+              color: 'round',
+              show: !!part?.count,
+            })),
             ...parts.patterns.map((part) => ({
               label: `${BigInt(report.groups?.[part.group]?.delta ?? 0) >= -3n && BigInt(report.groups?.[part.group]?.delta ?? 0) <= 3n ? 'Rounding' : 'Fixed differences'} (${numberText(part.count)})`,
               value: BigInt(part.amount),
@@ -181,7 +193,7 @@ function reconciliationCards(report: Report, presentation: ReportPresentation): 
             { label: 'Unexplained remainder', value: BigInt(parts.remainder), color: 'review', show: true },
           ].filter((part) => part.show);
           const total = buckets.reduce((sum, part) => sum + (part.value < 0n ? -part.value : part.value), 0n);
-          const accounted = BigInt(parts.remainder) === 0n && !parts.uncertain?.keys.length;
+          const accounted = BigInt(parts.remainder) === 0n;
           const bars = buckets
             .filter((part) => part.value)
             .map(
@@ -212,9 +224,11 @@ function sourceChips(report: Report, presentation: ReportPresentation): string {
           const inverse = condition !== null && typeof condition === 'object' && !Array.isArray(condition);
           const values = inverse ? condition.not : condition;
           const choices = (Array.isArray(values) ? values : [values])
-            .map((value) => (value === null ? '(blank)' : humanize(String(value))))
+            .map((value) =>
+              value === null ? '(blank)' : parts.caseSensitive ? JSON.stringify(value) : humanize(String(value)),
+            )
             .join(', ');
-          return `${labels.field(entity, field)} ${inverse ? 'is not' : 'is'} ${choices}`;
+          return `${labels.field(entity, field)} ${inverse ? 'is not' : 'is'} ${choices} (${parts.caseSensitive ? 'case-sensitive' : 'case-insensitive'})`;
         }),
       )
       .join('; ');
@@ -238,6 +252,9 @@ function sourceChips(report: Report, presentation: ReportPresentation): string {
     .join('');
 }
 export function htmlReport(report: Report, presentation: ReportPresentation = {}): string {
+  const secrets = secretValues(presentation.entities);
+  report = redactTree(report, secrets);
+  presentation = redactTree(presentation, secrets);
   const labels = reportLabels(presentation),
     groups = reportGroups(report, presentation),
     cards = patternCards(report, presentation),

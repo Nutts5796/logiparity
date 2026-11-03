@@ -1,7 +1,21 @@
 import { DateTime } from 'luxon';
 import type { ExplainedFormat } from 'luxon';
-import type { ComparisonRule } from './config.js';
-import type { NormalizedValue } from './types.js';
+import type { ComparisonRule, SourceConfig } from './config.js';
+import { wallClock, type NormalizedValue } from './types.js';
+
+export function sourceRule(
+  rule: ComparisonRule | undefined,
+  config: SourceConfig | undefined,
+): ComparisonRule | undefined {
+  return (
+    rule && {
+      ...rule,
+      locale: rule.locale ?? config?.locale ?? 'en-US',
+      numberFormat: rule.numberFormat ?? config?.numberFormat,
+      format: rule.format ?? config?.datetimeFormat,
+    }
+  );
+}
 
 const localeFormats = new Map<
   string,
@@ -10,7 +24,7 @@ const localeFormats = new Map<
 const currencyDigits = new Map<string, number>();
 const currencySymbols = new Map<string, string[]>();
 
-function decimalText(input: string, locale: string): string {
+function decimalText(input: string, locale: string, explicit?: ComparisonRule['numberFormat']): string {
   let format = localeFormats.get(locale);
   if (!format) {
     const parts = new Intl.NumberFormat(locale).formatToParts(123456789.5);
@@ -23,7 +37,7 @@ function decimalText(input: string, locale: string): string {
     };
     localeFormats.set(locale, format);
   }
-  const { group, decimal, primary, secondary } = format;
+  const { group, decimal, primary, secondary } = explicit ? { ...format, ...explicit, group: explicit.group } : format;
   // Validate grouping instead of silently accepting a misplaced separator.
   let text = input.replace(/[\u00a0\u202f]/g, ' ');
   const separator = group?.replace(/[\u00a0\u202f]/g, ' ');
@@ -47,6 +61,8 @@ function decimalText(input: string, locale: string): string {
 export interface MoneyInputOptions {
   allowCurrencySymbol?: boolean;
   negativeParentheses?: boolean;
+  round?: 'half-up' | 'half-even' | undefined;
+  numberFormat?: ComparisonRule['numberFormat'];
 }
 function moneyText(input: string, currency: string, locale: string, options: MoneyInputOptions): string {
   let text = input.trim();
@@ -112,14 +128,23 @@ export function moneyMinor(input: string, currency: string, locale = 'en-US', op
     if (digits !== undefined) currencyDigits.set(currency, digits);
   }
   if (digits === undefined) throw new Error(`Cannot determine minor units for ${currency}.`);
-  const text = decimalText(moneyText(input, currency, locale, options), locale);
+  const text = decimalText(moneyText(input, currency, locale, options), locale, options.numberFormat);
   const negative = text.startsWith('-');
   const [whole = '', fraction = ''] = text.replace(/^[+-]/, '').split('.');
-  if (fraction.length > digits && /[1-9]/.test(fraction.slice(digits)))
+  if (!options.round && fraction.length > digits && /[1-9]/.test(fraction.slice(digits)))
     throw new Error(
-      `Money has more than ${digits} decimal places for ${currency}; provide rounded major-unit decimals as strings.`,
+      `Money has more than ${digits} decimal places for ${currency}; round the amount first or set round: half-up or half-even.`,
     );
-  const minor = BigInt(whole) * 10n ** BigInt(digits) + BigInt(fraction.slice(0, digits).padEnd(digits, '0') || '0');
+  let minor = BigInt(whole) * 10n ** BigInt(digits) + BigInt(fraction.slice(0, digits).padEnd(digits, '0') || '0');
+  const discarded = fraction.slice(digits);
+  if (options.round && discarded) {
+    const first = Number(discarded[0]);
+    if (
+      first > 5 ||
+      (first === 5 && (/[1-9]/.test(discarded.slice(1)) || options.round === 'half-up' || minor % 2n !== 0n))
+    )
+      minor++;
+  }
   return negative ? -minor : minor;
 }
 
@@ -149,11 +174,13 @@ function normalizeDatetime(text: string, rule: ComparisonRule, source: string): 
   if (format && (!explanation?.rawMatches || explanation.invalidReason))
     throw new Error(`Datetime value does not match configured format "${format}" for source ${source}.`);
   const hasTime = format
-    ? explanation!.tokens.some((token) => !token.literal && /^[HhmsSatTfF]/.test(token.val))
+    ? explanation?.tokens.some((token) => !token.literal && /^[HhmsSatTfF]/.test(token.val))
     : /[T:]/.test(iso);
   if (!hasTime && (format || DateTime.fromISO(iso, { zone: 'UTC' }).isValid))
     throw new Error('Datetime date has no time; supply a date and time, or a format that includes time.');
-  const explicitZone = format ? typeof explanation!.matches?.Z === 'number' : /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+  const explicitZone = format
+    ? typeof explanation?.matches?.Z === 'number'
+    : /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(text);
   const date = format
     ? DateTime.fromFormat(text, format, { zone: zone ?? 'UTC', setZone: true, locale: rule.locale })
     : DateTime.fromISO(iso, { zone: zone ?? 'UTC', setZone: true });
@@ -181,13 +208,20 @@ function validateLocalTime(
     ? (['year', 'month', 'day', 'hour', 'minute', 'second', 'millisecond'] as const).some(
         (part) => typeof parsed[part] === 'number' && parsed[part] !== date[part],
       )
-    : date.toFormat("yyyy-MM-dd'T'HH:mm") !== iso.slice(0, 16);
+    : date.toFormat("yyyy-MM-dd'T'HH:mm:ss.SSS").slice(0, iso.length) !== iso;
   if (changed) throw new Error('Datetime falls in a daylight-saving gap; include a valid UTC offset.');
 }
 
 export function normalize(value: unknown, rule: ComparisonRule | undefined, source: string): NormalizedValue {
   if (value === undefined || value === null) return null;
-  if (value instanceof Date) value = value.toISOString();
+  if (value instanceof Date) {
+    const local: unknown = Reflect.get(value, wallClock);
+    if (typeof local === 'string' && rule?.type === 'datetime') {
+      const isoRule = { ...rule, format: undefined };
+      return normalizeDatetime(local, isoRule, source);
+    }
+    value = value.toISOString();
+  }
   if (!['string', 'number', 'boolean', 'bigint'].includes(typeof value))
     throw new Error('Expected a scalar field; map a scalar JSONPath or file column.');
   const text = String(value).trim();
@@ -210,12 +244,16 @@ export function normalize(value: unknown, rule: ComparisonRule | undefined, sour
             'Money must be a decimal string; return strings from the API or set allowNumber: true after reviewing numeric precision.',
           );
         if (!Number.isFinite(value)) throw new Error('Money number must be finite.');
-        return moneyMinor(expandNumber(String(value)), rule.currency ?? 'USD', 'en-US');
+        return moneyMinor(expandNumber(String(value)), rule.currency ?? 'USD', 'en-US', {
+          ...rule,
+          numberFormat: undefined,
+        });
       }
       return moneyMinor(text, rule.currency ?? 'USD', rule.locale, rule);
     }
     case 'number': {
-      const number = Number(decimalText(text, rule.locale));
+      const number =
+        typeof value === 'number' ? value : Number(decimalText(text, rule.locale ?? 'en-US', rule.numberFormat));
       if (!Number.isFinite(number)) throw new Error('Expected a finite decimal number.');
       return number;
     }

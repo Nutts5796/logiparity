@@ -1,3 +1,4 @@
+import { patternWords } from './human.js';
 import { groupMembership, reportGroups } from './groups.js';
 import { reportLabels, presentationRule } from './labels.js';
 import { durationValue, formatMoneyMajor, presentationValue, type ReportPresentation } from './money-display.js';
@@ -25,6 +26,9 @@ export const kindInfo = {
 } as const;
 export function patternKind(group: FindingGroup) {
   const info = kindInfo[group.kind];
+  if (group.kind === 'datetime_offset' && group.cause !== 'timezone') return { ...info, label: 'Datetime offset' };
+  if (group.kind.endsWith('_stride') && group.cause !== 'pagination')
+    return { ...info, label: 'Repeated missing rows' };
   return group.kind === 'money_delta' && group.delta && (BigInt(group.delta) < -3n || BigInt(group.delta) > 3n)
     ? { ...info, label: 'Fixed difference' }
     : info;
@@ -86,15 +90,7 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
             : group.kind === 'money_delta' && rule?.currency
               ? `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, rule.currency)}`.replace('-', '−')
               : 'Consistent mapping',
-        hint: group.kind.endsWith('_stride')
-          ? 'Likely a pagination bug. Check page boundaries and the last page.'
-          : group.kind === 'datetime_offset'
-            ? 'Likely local time written without an offset. Check the source time zone.'
-            : group.kind === 'money_delta'
-              ? delta >= -3n && delta <= 3n
-                ? 'Likely a different rounding rule than the reference.'
-                : 'Likely a fixed adjustment. The values have a consistent fixed difference.'
-              : 'Likely a different vocabulary for the same field. Check the configured mapping.',
+        hint: patternWords(group, presentation).hint,
       };
       cards.set(key, card);
     }

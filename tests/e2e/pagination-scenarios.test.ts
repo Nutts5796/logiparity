@@ -252,7 +252,7 @@ it('renders real HTTP groups in every report without losing findings or normaliz
   const result = await run(['check', '--config', 'parity.yaml'], directory);
   expect(result.code).toBe(1);
   expect(result.stdout).toContain('Nov 2, 2026, 1:01 PM UTC');
-  expect(result.stdout).toContain('−6h');
+  expect(result.stdout).toContain('−6 h');
   const report = JSON.parse(await readFile(join(directory, 'report/report.json'), 'utf8')) as {
     schemaVersion: number;
     groups: { kind: string }[];
@@ -264,7 +264,7 @@ it('renders real HTTP groups in every report without losing findings or normaliz
   expect(report.findings.find((f) => f.field === 'payout')?.expected).toBe('1234');
   for (const file of ['report.md']) {
     const text = await readFile(join(directory, 'report', file), 'utf8');
-    expect(text).toContain('Likely local time');
+    expect(text).toContain('Repeated datetime offset');
     expect(text).toContain('Likely a different rounding rule');
   }
   const html = await readFile(join(directory, 'report/report.html'), 'utf8');

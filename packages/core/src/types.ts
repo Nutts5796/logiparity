@@ -1,8 +1,10 @@
 import type { RowFilter } from './config.js';
 import type { SourceConfig } from './config.js';
 
+export const wallClock = Symbol.for('logiparity.wallClock');
+export const sourceIssue = Symbol.for('logiparity.sourceIssue');
 export const sourceRow = Symbol.for('logiparity.sourceRow');
-export type DataRow = Record<string, unknown> & { [sourceRow]?: number };
+export type DataRow = Record<string, unknown> & { [sourceRow]?: number; [sourceIssue]?: Error };
 export function withSourceRow(row: DataRow, position: number): DataRow {
   Object.defineProperty(row, sourceRow, { value: position });
   return row;
@@ -35,32 +37,40 @@ export interface Finding {
   keyParts?: string[];
   row?: number;
   relatedKeys?: string[];
-  amounts?: { field: string; amount: bigint | string }[];
+  amounts?: { field: string; currency?: string; amount: bigint | string }[];
+  currency?: string;
   field: string;
   message: string;
   expected?: NormalizedValue;
   actual?: NormalizedValue;
-  values?: { line: number; value: NormalizedValue }[];
+  values?: { row: number; value: NormalizedValue }[];
   reason?: 'rollup_conflict' | 'rollup_missing_value' | 'rollup_duplicate';
   blocking?: boolean;
   screenshot?: string;
   referencePosition?: number;
+  evidence?: { offsetFree?: boolean; paginated?: boolean; pageSizes?: number[] };
   accounting?: { causes: string[]; remainder: string };
 }
 export interface AggregateResult {
   name: string;
   type: 'count' | 'sum';
   values: Record<string, number | bigint>;
+  rawValues?: Record<string, number | bigint>;
+  valuesByCurrency?: Record<string, Record<string, bigint | string>>;
+  rawValuesByCurrency?: Record<string, Record<string, bigint | string>>;
+  excludedRows?: Record<string, number[]>;
   skippedSources: string[];
   sourceStatus?: Record<string, 'certain' | 'uncertain' | 'not_mapped' | 'not_read'>;
-  uncertainKeys?: Record<string, string[]>;
+  uncertainKeys?: Record<string, string[][]>;
   reconciliation?: Record<
     string,
     {
       missingRows: { count: number; amount: bigint | string };
+      extraRows?: { count: number; amount: bigint | string };
+      valueDifferences?: { count: number; amount: bigint | string };
       patterns: { group: number; count: number; amount: bigint | string }[];
       remainder: bigint | string;
-      uncertain?: { keys: string[]; amount: bigint | string };
+      uncertain?: { keys: string[][]; amount: bigint | string };
       causes?: string[];
     }
   >;
@@ -70,7 +80,7 @@ export interface EntitySummary {
   reference: string;
   counts: Record<string, number>;
   uniqueCounts?: Record<string, number>;
-  filters?: Record<string, { source: RowFilter; rollup: RowFilter }>;
+  filters?: Record<string, { source: RowFilter; rollup: RowFilter; caseSensitive?: boolean }>;
   rollupSources?: string[];
   pluralLabel?: string;
   aggregates?: AggregateResult[];
@@ -80,6 +90,8 @@ export interface FindingGroup {
   source: string;
   field: string;
   count: number;
+  currency?: string;
+  cause?: 'timezone' | 'pagination';
   kind: 'datetime_offset' | 'money_delta' | 'value_mapping' | 'missing_stride' | 'extra_stride';
   delta?: string;
   stride?: string;

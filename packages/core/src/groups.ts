@@ -6,7 +6,12 @@ export interface PatternOptions {
   minCount?: number;
 }
 const compare = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
-const identity = (finding: Finding) => ({ entity: finding.entity, source: finding.source, field: finding.field });
+const identity = (finding: Finding) => ({
+  entity: finding.entity,
+  source: finding.source,
+  field: finding.field,
+  ...(finding.currency ? { currency: finding.currency } : {}),
+});
 const quoted = (value: unknown) => (typeof value === 'string' ? JSON.stringify(value) : String(value));
 
 function strideSummary(
@@ -26,7 +31,7 @@ export function strideGroups(bucket: readonly Finding[], minCount: number, final
   const prefixes = new Map<string, { key: string; number: bigint }[]>();
   for (const finding of bucket) {
     const match = finding.key.match(/^(.*?)(\d+)$/);
-    if (!match?.[1] && !match?.[2]) continue;
+    if (!match?.[2]) continue;
     const prefix = match[1] ?? '';
     const number = match[2];
     if (!number) continue;
@@ -85,7 +90,13 @@ export function strideGroups(bucket: readonly Finding[], minCount: number, final
         keys,
         kind: first.type === 'missing_in_source' ? 'missing_stride' : 'extra_stride',
         stride: String(stride),
-        summary: first.type === 'extra_in_source' ? summary.replace('missing rows', 'extra rows') : summary,
+        ...(bucket.every((item) => item.evidence?.paginated || item.evidence?.pageSizes?.includes(Number(stride)))
+          ? { cause: 'pagination' as const }
+          : {}),
+        summary: (bucket.every((item) => item.evidence?.paginated || item.evidence?.pageSizes?.includes(Number(stride)))
+          ? summary
+          : `${keys.length} rows in ${first.source}: every ${stride}th row is missing (stride of ${stride}), from ${begin.key} to ${last.key}${includeFinal ? `; final reference key ${finalKey} is also missing` : ''}.`
+        ).replace('missing', first.type === 'extra_in_source' ? 'extra' : 'missing'),
       });
       start = end;
     }
@@ -94,13 +105,17 @@ export function strideGroups(bucket: readonly Finding[], minCount: number, final
 }
 function deltaSummary(first: Finding, count: number, delta: bigint, rule: EntityConfig['compare'][string]): string {
   const difference =
-    rule.type === 'money' && rule.currency ? formatMoneyMajor(delta, rule.currency) : durationValue(delta);
+    rule.type === 'money' && (first.currency ?? rule.currency)
+      ? formatMoneyMajor(delta, first.currency ?? rule.currency ?? 'USD')
+      : durationValue(delta);
   const hint =
     rule.type === 'money'
       ? delta >= -3n && delta <= 3n
         ? 'likely rounding'
         : 'consistent fixed difference'
-      : 'likely timezone';
+      : first.evidence?.offsetFree && delta % 900000n === 0n
+        ? 'possible timezone difference'
+        : 'repeated datetime offset';
   return `${count.toLocaleString('en-US')} ${first.field} values in ${first.source} differ by exactly ${difference} (${hint}).`;
 }
 export function deltaGroups(
@@ -130,7 +145,17 @@ export function deltaGroups(
             count: values.length,
             kind: rule.type === 'money' ? ('money_delta' as const) : ('datetime_offset' as const),
             delta,
-            summary: deltaSummary(first, values.length, BigInt(delta), rule),
+            ...(rule.type === 'datetime' &&
+            BigInt(delta) % 900000n === 0n &&
+            values.every((value) => value.evidence?.offsetFree)
+              ? { cause: 'timezone' as const }
+              : {}),
+            summary: deltaSummary(
+              { ...first, evidence: { offsetFree: values.every((value) => value.evidence?.offsetFree) } },
+              values.length,
+              BigInt(delta),
+              rule,
+            ),
           },
         ]
       : [],
@@ -139,7 +164,8 @@ export function deltaGroups(
 export function mappingGroups(bucket: readonly Finding[], minCount: number): FindingGroup[] {
   const pairs = new Map<string, Finding[]>();
   for (const finding of bucket) {
-    if (finding.expected === undefined || finding.actual === undefined) continue;
+    if (finding.expected == null || finding.actual == null || finding.expected === '' || finding.actual === '')
+      continue;
     const key = JSON.stringify([finding.expected, finding.actual], (_, value: unknown) =>
       typeof value === 'bigint' ? String(value) : value,
     );
@@ -173,7 +199,7 @@ export function groupFindings(
   const buckets = new Map<string, Finding[]>();
   for (const finding of findings) {
     if (finding.reason || !['field_mismatch', 'missing_in_source', 'extra_in_source'].includes(finding.type)) continue;
-    const key = JSON.stringify([finding.entity, finding.source, finding.field, finding.type]);
+    const key = JSON.stringify([finding.entity, finding.source, finding.field, finding.type, finding.currency]);
     const entries = buckets.get(key) ?? [];
     entries.push(finding);
     buckets.set(key, entries);
@@ -214,7 +240,13 @@ export function groupMembership(report: Report, presentation: ReportPresentation
   return reportGroups(report, presentation).map((group) => {
     const keys = new Set(group.keys ?? []);
     return report.findings.flatMap((finding, index) => {
-      if (finding.reason || finding.entity !== group.entity || finding.source !== group.source) return [];
+      if (
+        finding.reason ||
+        finding.entity !== group.entity ||
+        finding.source !== group.source ||
+        finding.currency !== group.currency
+      )
+        return [];
       if (group.kind.endsWith('_stride'))
         return keys.has(finding.key) &&
           finding.type === (group.kind === 'missing_stride' ? 'missing_in_source' : 'extra_in_source')

@@ -1,5 +1,7 @@
-import { safeConsole } from './diagnostics.js';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { aggregateDisplay, rawAggregateDisplay } from './money-display.js';
+import { safeConsole, redactTree, secretValues } from './diagnostics.js';
+import { atomicReportFile } from './atomic-file.js';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { errorText, type Config } from './config.js';
 import type { Report } from './types.js';
@@ -16,6 +18,7 @@ export function reportExitCode(report: Report): 0 | 1 | 2 {
 }
 
 export function jsonReport(report: Report): string {
+  report = redactTree(report, secretValues(report));
   return (
     JSON.stringify(
       { ...report, groups: report.groups ?? [] },
@@ -26,6 +29,9 @@ export function jsonReport(report: Report): string {
 }
 
 export function consoleReport(report: Report, presentation: ReportPresentation = {}): string {
+  const secrets = secretValues(presentation.entities);
+  report = redactTree(report, secrets);
+  presentation = redactTree(presentation, secrets);
   const counts = reportCounts(report);
   const lines = [
     `LogiParity: ${quantity(counts.findings, 'finding')} (${quantity(counts.blocking, 'blocking finding')}), ${quantity(counts.errors, 'source error')}, ${quantity(counts.warnings, 'warning')}`,
@@ -39,13 +45,22 @@ export function consoleReport(report: Report, presentation: ReportPresentation =
     const words = patternWords(group, presentation);
     lines.push(`  ${words.sentence} ${words.hint}`, `  Next step: ${words.nextStep}`);
   }
+  for (const entity of report.entities)
+    for (const aggregate of entity.aggregates ?? [])
+      for (const source of Object.keys(aggregate.values)) {
+        const raw = rawAggregateDisplay(aggregate, source, entity.entity, presentation);
+        if (raw)
+          lines.push(
+            `  ${aggregate.name} · ${source}: raw source ${raw}; retained/certain lines ${aggregateDisplay(aggregate, source, entity.entity, presentation)}; excluded rows ${(aggregate.excludedRows?.[source] ?? []).join(', ') || 'none'}.`,
+          );
+      }
   for (const finding of presentationFindings(report, presentation).slice(0, 10)) {
     const item = humanFinding(finding, presentation);
     const detail =
       finding.type === 'source_error'
         ? item.details
         : `Reference: ${item.reference}; Source value: ${item.sourceValue}; Difference: ${item.difference}${item.details ? `; ${item.details}` : ''}`;
-    lines.push(`  ${item.key} · ${item.source} · ${item.field}: ${detail}`);
+    lines.push(`  ${item.key} · ${item.source} · ${item.field}: ${detail}`.replace(/\r/g, '\\r').replace(/\n/g, '\\n'));
   }
   if (report.findings.length > 10)
     lines.push(`  ${quantity(report.findings.length - 10, 'additional result')} in the complete report.`);
@@ -74,7 +89,7 @@ export async function writeReports(
     const destination = join(directory, file);
     try {
       await mkdir(directory, { recursive: true });
-      await writeFile(destination, render(report), 'utf8');
+      await atomicReportFile(destination, render(report));
     } catch (error) {
       throw new Error(
         `Cannot write ${output} report to ${destination}: ${errorText(error)} Check report.dir and write permissions.`,

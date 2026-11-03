@@ -1,22 +1,31 @@
+import { rowCurrency, recordRawTotals, measureCurrencies } from './source-totals.js';
 import { keyFields, errorText, type EntityConfig, type SourceConfig } from './config.js';
-import { normalize } from './normalize.js';
+import { sourceRule, normalize } from './normalize.js';
 import { matchesFilter } from './filters.js';
 import { keyText } from './keys.js';
 import { formatMoneyMajor } from './money-display.js';
 import { DecimalSum, measureAggregate } from './aggregates.js';
-import { sourceRow, type Finding, type NormalizedValue, type SourceReader, type Report } from './types.js';
+import { sourceRow, sourceIssue, type Finding, type NormalizedValue, type SourceReader, type Report } from './types.js';
 import { redactSecrets } from './diagnostics.js';
 import { SourceError } from './source-error.js';
 export type Row = Record<string, NormalizedValue>;
 export interface SourceState {
   rows: Map<string, Row>;
+  currencies: Map<string, Map<string, string>>;
+  rawMeasurements: Map<string, number | bigint>;
+  rawCurrencies: Map<string, Record<string, bigint>>;
+  currencyMeasurements: Map<string, Record<string, bigint>>;
+  rawSums: Map<string, DecimalSum>;
+  excludedRows: Set<number>;
+  offsetFree: Map<string, Set<string>>;
   parts: Map<string, string[]>;
   positions: Map<string, number>;
   uncertain: Map<string, Set<string>>;
   issues: Finding[];
   firstRows: Map<string, number>;
+  rowNumbers: Map<string, number[]>;
   conflicts: Map<string, Finding>;
-  identities: Set<string>;
+  identities: Map<string, number>;
   sums: Map<string, Map<string, DecimalSum>>;
   measurements: Map<string, number | bigint | undefined>;
   excluded: Map<string, Set<string>>;
@@ -29,7 +38,11 @@ function uncertain(state: SourceState, key: string, fields: readonly string[]): 
   fields.forEach((field) => names.add(field));
   state.uncertain.set(key, names);
 }
-function readKey(entity: EntityConfig, raw: Record<string, unknown>): { key: string; parts?: string[] } {
+function readKey(
+  entity: EntityConfig,
+  raw: Record<string, unknown>,
+  source: string,
+): { key: string; parts?: string[] } {
   const parts = keyFields(entity.key).map((field) => {
     const value = raw[field];
     if (
@@ -38,7 +51,7 @@ function readKey(entity: EntityConfig, raw: Record<string, unknown>): { key: str
       (typeof value === 'number' && !Number.isSafeInteger(value))
     )
       throw new Error(`Key field ${field} must be a nonempty string or safe integer.`);
-    return String(value).trim();
+    return String(normalize(value, sourceRule(entity.compare[field], entity.sources[source]), source) ?? '').trim();
   });
   return typeof entity.key === 'string' ? { key: parts[0] ?? '' } : { key: JSON.stringify(parts), parts };
 }
@@ -69,7 +82,7 @@ function invalid(
     field,
     row: state.position,
     ...(actual === undefined ? {} : { actual }),
-    message: `Row ${state.position}: ${errorText(error)}`,
+    message: `${entity.sources[source]?.type === 'rest' ? 'Record' : 'Row'} ${state.position}: ${errorText(error)}`,
   });
 }
 function normalizeRow(
@@ -84,7 +97,11 @@ function normalizeRow(
   for (const [field, value] of Object.entries(raw)) {
     try {
       if (value instanceof Error) throw value;
-      row[field] = keys.has(field) ? String(value).trim() : normalize(value, entity.compare[field], source);
+      let rule = sourceRule(entity.compare[field], entity.sources[source]);
+      const config = entity.sources[source];
+      if (rule?.type === 'money' && config) rule = { ...rule, currency: rowCurrency(rule, config, raw) };
+      row[field] = normalize(value, rule, source);
+      if (keys.has(field)) row[field] = String(row[field] ?? '');
     } catch (error) {
       row[field] = null;
       invalid(state, entity, source, key, field, value, error);
@@ -125,7 +142,7 @@ function duplicateLine(
   }
   const id = JSON.stringify(fields.map((field) => [typeof row[field], String(row[field])]));
   if (!state.identities.has(id)) {
-    state.identities.add(id);
+    state.identities.set(id, state.position);
     return false;
   }
   const amounts = (config.rollup?.sum ?? []).flatMap((field) => {
@@ -142,7 +159,7 @@ function duplicateLine(
     source,
     field: keyFields(entity.key).join(', '),
     row: state.position,
-    message: `Duplicate identity ${fields.map((field) => formattedIdentity(field, row[field], entity)).join(', ')} at row ${state.position}; ${amounts.join('; ') || 'the repeated row is excluded'}.`,
+    message: `Duplicate key ${fields.map((field) => formattedIdentity(field, row[field], entity)).join(', ')} at rows ${state.identities.get(id)} and ${state.position}; ${amounts.join('; ') || 'the repeated row is excluded'}.`,
   });
   uncertain(state, key, config.rollup?.sum ?? []);
   return true;
@@ -171,18 +188,18 @@ function rollUpRow(
           source,
           field,
           row: state.position,
-          values: [{ line: state.firstRows.get(key) ?? state.position, value: previous[field] ?? null }],
+          values: [{ row: state.firstRows.get(key) ?? state.position, value: previous[field] ?? null }],
           message: `${field} has conflicting values within ${keyText(key, state.parts.get(key))}. Check the source rows.`,
         };
         state.conflicts.set(id, finding);
         state.issues.push(finding);
       }
-      finding.values?.push({ line: state.position, value: row[field] ?? null });
+      finding.values?.push({ row: state.position, value: row[field] ?? null });
       uncertain(state, key, [field]);
     }
   for (const field of rollup.sum) {
     const value = row[field];
-    if (value === null && entity.compare[field]?.type === 'money') {
+    if (value === null) {
       if (!state.uncertain.get(key)?.has(field))
         state.issues.push({
           type: 'invalid_value',
@@ -278,7 +295,7 @@ function checkUniqueness(entity: EntityConfig, source: string, config: SourceCon
           actual: value,
           relatedKeys: keys,
           amounts,
-          message: `${field} ${String(value)} appears on ${keys.map((key) => keyText(key, state.parts.get(key))).join(' and ')}${paid ? `; paid more than once: ${paid}` : ''}.`,
+          message: `${field} ${String(value)} appears on ${keys.map((key) => keyText(key, state.parts.get(key))).join(' and ')}${paid ? `; amounts on additional records: ${paid}` : ''}.`,
         });
       }
   }
@@ -294,13 +311,21 @@ export async function readSource(
 ): Promise<SourceState | undefined> {
   const state: SourceState = {
     rows: new Map(),
+    offsetFree: new Map(),
+    currencies: new Map(),
+    rawMeasurements: new Map(),
+    rawCurrencies: new Map(),
+    currencyMeasurements: new Map(),
+    rawSums: new Map(),
+    excludedRows: new Set(),
     parts: new Map(),
     positions: new Map(),
     uncertain: new Map(),
     issues: [],
     firstRows: new Map(),
+    rowNumbers: new Map(),
     conflicts: new Map(),
-    identities: new Set(),
+    identities: new Map(),
     sums: new Map(),
     measurements: new Map(),
     excluded: new Map(),
@@ -330,7 +355,7 @@ export async function readSource(
       let filterInvalid = false;
       for (const field of Object.keys(filters)) {
         try {
-          filterRow[field] = normalize(raw[field], entity.compare[field], source);
+          filterRow[field] = normalize(raw[field], sourceRule(entity.compare[field], config), source);
         } catch {
           filterInvalid = true;
           break;
@@ -344,7 +369,7 @@ export async function readSource(
         continue;
       let key: string;
       try {
-        const identity = readKey(entity, raw);
+        const identity = readKey(entity, raw, source);
         key = identity.key;
         if (identity.parts) state.parts.set(key, identity.parts);
       } catch (error) {
@@ -353,7 +378,24 @@ export async function readSource(
           throw new Error(`More than maxInvalidRows (${maxInvalidRows}) rows are invalid.`);
         continue;
       }
+      const offsetFree = new Set(
+        Object.entries(raw)
+          .filter(
+            ([field, value]) =>
+              entity.compare[field]?.type === 'datetime' &&
+              (typeof value === 'string'
+                ? !/(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(value)
+                : value instanceof Date && Reflect.has(value, Symbol.for('logiparity.wallClock'))),
+          )
+          .map(([field]) => field),
+      );
+      state.offsetFree.set(key, offsetFree);
+      const retainedUncertainty = state.rows.has(key) && !config.rollup ? new Set(state.uncertain.get(key)) : undefined;
       const row = normalizeRow(entity, source, raw, state, key);
+      if (raw[sourceIssue]) {
+        invalid(state, entity, source, key, '', undefined, raw[sourceIssue]);
+        uncertain(state, key, Object.keys(row));
+      }
       if (state.invalidRows.size > maxInvalidRows)
         throw new Error(`More than maxInvalidRows (${maxInvalidRows}) rows are invalid.`);
       if (
@@ -362,16 +404,42 @@ export async function readSource(
       )
         continue;
       state.count++;
+      const rowNumbers = state.rowNumbers.get(key) ?? [];
+      rowNumbers.push(state.position);
+      state.rowNumbers.set(key, rowNumbers);
+      recordRawTotals(entity, source, row, raw, state);
+      const currencies = state.currencies.get(key) ?? new Map<string, string>();
+      for (const [field, rule] of Object.entries(entity.compare))
+        if (rule.type === 'money' && typeof row[field] === 'bigint') {
+          const currency = rowCurrency(rule, config, raw),
+            previous = currencies.get(field);
+          if (previous && previous !== currency && config.rollup) {
+            invalid(
+              state,
+              entity,
+              source,
+              key,
+              field,
+              row[field],
+              new Error(
+                `Currency ${currency} conflicts with ${previous} within this rollup key. Split the key by currency.`,
+              ),
+            );
+            row[field] = null;
+          } else if (!previous) currencies.set(field, currency);
+        }
+      state.currencies.set(key, currencies);
       if (state.rows.has(key) && !config.rollup) {
+        state.uncertain.set(key, retainedUncertainty ?? new Set());
         state.issues.push({
           type: 'duplicate_key',
           ...identityFields(entity, key, state.parts.get(key)),
           source,
           field: keyFields(entity.key).join(', '),
           row: state.position,
-          message: `Duplicate key ${keyText(key, state.parts.get(key))} at row ${state.position}; the first record is retained.`,
+          message: `Duplicate key ${keyText(key, state.parts.get(key))} at rows ${state.firstRows.get(key)} and ${state.position}; the first row counts once.`,
         });
-        uncertain(state, key, Object.keys(row));
+        state.excludedRows.add(state.position);
         continue;
       }
       const included = rollUpRow(entity, source, config, key, row, state);
@@ -379,13 +447,23 @@ export async function readSource(
         state.firstRows.set(key, state.position);
         state.positions.set(key, records);
       }
+      if (!included) state.excludedRows.add(state.position);
       if (included) state.rows.set(key, row);
       else if (!state.rows.has(key)) state.rows.set(key, row);
       if (state.invalidRows.size > maxInvalidRows)
         throw new Error(`More than maxInvalidRows (${maxInvalidRows}) rows are invalid.`);
     }
+    if (records > 0 && state.count === 0 && !state.invalidRows.size) {
+      report.warnings ??= [];
+      report.warnings.push({
+        entity: entity.name,
+        source,
+        message: 'All rows were filtered out. Check the where values and source export.',
+      });
+    }
     checkUniqueness(entity, source, config, state);
     measureSource(entity, source, config, state);
+    measureCurrencies(entity, source, config, state);
     return state;
   } catch (error) {
     report.findings.push(...state.issues, {

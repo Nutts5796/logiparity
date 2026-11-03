@@ -1,3 +1,4 @@
+import { wallClock } from '@logiparity/core';
 import { xlsxLimits } from './xlsx-limits.js';
 import { posix } from 'node:path';
 import unzipper from 'unzipper';
@@ -121,16 +122,22 @@ async function cellValue(
     case 'e':
       return new Error('Unsupported or error XLSX cell; export a scalar value.');
     case 'd': {
-      const date = new Date(cell.value);
-      return Number.isNaN(date.getTime()) ? new Error('Invalid XLSX date.') : date;
+      const text = cell.value.replace(/(?:Z|[+-]\d{2}:?\d{2})$/i, '');
+      const date = new Date(text + 'Z');
+      if (Number.isNaN(date.getTime())) return new Error('Invalid XLSX date.');
+      Object.defineProperty(date, wallClock, { value: text });
+      return date;
     }
     case '':
     case 'n': {
       if (!cell.cached) return null;
       const number = Number(cell.value);
       if (!Number.isFinite(number) || !cell.value.trim()) return new Error('Invalid XLSX number.');
-      if (dateStyles.has(cell.style))
-        return new Date(Math.round((number - (date1904 ? 24107 : number < 60 ? 25568 : 25569)) * 86400000));
+      if (dateStyles.has(cell.style)) {
+        const date = new Date(Math.round((number - (date1904 ? 24107 : number < 60 ? 25568 : 25569)) * 86400000));
+        Object.defineProperty(date, wallClock, { value: date.toISOString().replace(/Z$/, '') });
+        return date;
+      }
       return number;
     }
     default:
@@ -145,6 +152,7 @@ export async function* xlsxRows(file: string, sheetName: string): AsyncIterable<
   const worksheet = archive.files.find((entry) => entry.path === path);
   if (!worksheet) throw new Error(`XLSX worksheet part ${path} is missing.`);
   const strings = await SharedStrings.create();
+  let currentRow = 0;
   try {
     const shared = archive.files.find((entry) => entry.path === 'xl/sharedStrings.xml');
     if (shared) await readSharedStrings(shared, strings);
@@ -152,9 +160,13 @@ export async function* xlsxRows(file: string, sheetName: string): AsyncIterable<
     let cell: Cell | undefined;
     let inValue = false;
     let inText = false;
+    let materializedBytes = 0;
     for await (const event of xmlEvents(worksheet)) {
       if (event.type === 'open') {
-        if (event.name === 'row') row = { number: Number(event.attributes.r ?? row.number + 1), values: [] };
+        if (event.name === 'row') {
+          row = { number: Number(event.attributes.r ?? row.number + 1), values: [] };
+          currentRow = row.number;
+        }
         if (event.name === 'c') {
           const letters = event.attributes.r?.match(/^[A-Z]+/i)?.[0];
           const column = letters
@@ -179,19 +191,32 @@ export async function* xlsxRows(file: string, sheetName: string): AsyncIterable<
         if (cell && event.name === 't') inText = true;
       } else if (event.type === 'text' && cell) {
         if (cell.value.length + cell.text.length + event.text.length > xlsxLimits.cellChars)
-          throw new Error('XLSX cell exceeds the 1 MiB limit.');
+          throw new Error(`XLSX cell exceeds the 1 MiB limit (sheet ${sheetName}, row ${row.number}).`);
         if (inValue) cell.value += event.text;
         if (inText) cell.text += event.text;
       } else if (event.type === 'close') {
         if (event.name === 'v') inValue = false;
         if (event.name === 't') inText = false;
         if (event.name === 'c' && cell) {
-          row.values[cell.column] = await cellValue(cell, strings, dateStyles, date1904);
+          const value = await cellValue(cell, strings, dateStyles, date1904);
+          materializedBytes += typeof value === 'string' ? Buffer.byteLength(value) : 16;
+          if (materializedBytes > xlsxLimits.materializedBytes)
+            throw new Error(
+              `XLSX materialized text exceeds the 64 MiB sheet/source quota (sheet ${sheetName}, row ${row.number}).`,
+            );
+          row.values[cell.column] = value;
           cell = undefined;
         }
         if (event.name === 'row') yield row;
       }
     }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      message.includes('(sheet ')
+        ? message
+        : `${message} (sheet ${sheetName}${currentRow ? `, row ${currentRow}` : ''}).`,
+    );
   } finally {
     await strings.close();
   }
