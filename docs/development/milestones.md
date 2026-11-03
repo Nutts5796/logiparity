@@ -25,12 +25,17 @@ M6 verification: 205 unit and adapter tests, 62 end-to-end tests, and 100% core 
 
 - Enforced UI redirect origins, rejected rendered dot-segments, required explicit opt-in for scenario-local module entries, and rejected executable AI drafts. Expanded secret masking and sanitized diagnostic paths and terminal output. Main implementation: `bbafc39`.
 - Added strict short-first-page handling with an explicit opt-out, exact per-key rollups and a freight settlement example, optional/fixed scenario waits, record-stride summaries, version output and source-free configuration validation.
-- Prepared checksum-verified release assets, a CI-gated tag workflow, full/slim Docker targets and consumer caching/timeouts. Documented design rationales and author background, and refreshed the parity/scenario screenshots. Build preparation: `91acdbb`.
+- Prepared checksum-verified release assets, a CI-gated tag workflow, full/slim Docker targets and consumer caching/timeouts. Documented design rationales and refreshed the parity/scenario screenshots. Build preparation: `91acdbb`.
 - Node 20.20.2 and 22.23.4 passed lint, typecheck, 284 unit/adapter tests and 82 end-to-end tests each, with two local test workers. Core line coverage: 99.78% (468/469). Empty-cache offline package installation, public APIs/types and installed CLI checks passed, including missing/extra groups in AI explanations (`13de83a`).
 - README and freight commands passed from a clean checkout. The clean-source helper also passed: 2,750 records per demo source and three freight loads rolled up from nine settlement lines, all with zero findings. Both Docker targets passed on linux/arm64 as UID 1000; the full image ran Chromium and the slim image contained no browsers. API/file checks, SQL validation, report generation, offline AI, documentation links/YAML and workflow lint passed.
 
 ## M9 — 1.0.1 public-test fixes
 
-- Fixed consumer npm ci, secret interpolation/AI masking, shared validation/env checks, rollup conflicts/blanks/duplicates, money/date parsing and report presentation. Vendored the unchanged ExcelJS runtime with explicit patched dependencies and upstream attribution.
-- Prepared 1.0.1 npm OIDC/provenance, checksums, CycloneDX SBOM and container CI templates. LOGIPARITY_IMAGE intentionally contains a marked digest placeholder, replaced in a follow-up after publication.
-- Node 20.20.2 and 22.23.4 passed lint/types, 301 unit/adapter tests and 87 e2e tests; core line coverage 99.64% (558/560). Consumer install/npm ci/offline checks, public APIs/types, README quickstart/staging (YAML identical to init), freight, docs/workflow lint and desktop/mobile report search passed. Full/slim images passed on arm64 as UID 1000, including full-image Chromium. The slim index built and passed CLI/freight smoke checks on both amd64 and arm64.
+- Fixed consumer npm ci with explicit dependencies for the then-vendored ExcelJS reader.
+- Preserved secret interpolation values for redaction and expanded AI credential masks.
+- Shared semantic validation between check and validate and added environment linting.
+- Added findings for rollup conflicts, blank money and duplicate line identities.
+- Added currency-symbol options and custom datetime formats.
+- Improved monetary display, report grammar and pattern placement.
+- Prepared npm trusted publishing, checksums and a CycloneDX SBOM.
+- Node 20.20.2 and 22.23.4 passed 301 unit and adapter tests and 87 end-to-end tests. Core line coverage was 99.64%. Package checks, documented examples and browser report checks passed. Both container targets passed on arm64, and the slim image also passed on amd64.

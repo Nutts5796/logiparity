@@ -11,7 +11,7 @@ npm install --no-save --ignore-scripts logiparity@1.0.1
 ./node_modules/.bin/logiparity validate --allow-missing-env --config parity.yaml
 ```
 
-The [GitHub container-job variant](../templates/github-actions-container.yml) and [GitLab template](../templates/gitlab-ci.yml) use the bundled CLI in a pinned slim image selected by CI variable `LOGIPARITY_IMAGE`. Both require a verified 1.0.1-slim digest; the marked placeholder is completed in a follow-up commit after release. See [release preparation](release.md). They use Node's built-in fetch to download the export without installing curl or a different CLI version. GitLab clears the image entrypoint so the runner can execute its shell.
+The [GitHub container-job variant](../templates/github-actions-container.yml) and [GitLab template](../templates/gitlab-ci.yml) use the bundled CLI in a pinned slim image selected by CI variable `LOGIPARITY_IMAGE`. Both default to the versioned slim image tag. Optionally append the verified image index digest from release notes for immutable pinning. See [release preparation](release.md). They use Node's built-in fetch to download the export without installing curl or a different CLI version. GitLab clears the image entrypoint so the runner can execute its shell.
 
 Keep `parity.yaml` in your repository and set test URLs and credentials through protected CI variables. Download a current export before comparing it with the API. The npm template shows an authenticated curl download; change the endpoint and filename to match the source mapping.
 
@@ -37,7 +37,7 @@ For UI checks, install the matching bundled browser during setup:
 node node_modules/logiparity/node_modules/playwright/cli.js install --with-deps chromium
 ```
 
-Supply a private staging storageState file and configure readiness and allowed origins. The Docker image already includes matching Chromium. A source checkout uses `npx playwright install --with-deps chromium`.
+Supply a private staging storageState file and configure readiness and allowed origins. The full Docker image already includes matching Chromium; the slim image does not. A source checkout uses `npx playwright install --with-deps chromium`.
 
 SQL checks use a dedicated SELECT-only staging role named through connectionEnv. The installed read adapter does not provision database fixtures. Contributor tests use only a disposable loopback database named logiparity_test.
 

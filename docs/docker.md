@@ -1,40 +1,28 @@
 # Docker
 
-Build the local image from the repository root:
+Prepare the checksummed npm artifact from the repository root before building:
 
 ```sh
+npm ci --ignore-scripts
+npm run release:prepare
 docker build --tag logiparity:1.0.1 .
-docker run --rm --network=none logiparity:1.0.1 --help
+docker build --target slim --tag logiparity:1.0.1-slim .
 ```
 
-The multi-stage Dockerfile builds and packs the same single npm artifact, installs it offline in the runtime stage, installs matching Chromium/system dependencies explicitly at image build, and runs as the existing non-root node user. No credentials are baked into the image. The Docker context allowlist excludes auth state, exports, reports, node_modules and environment files. The Node 22.23.4/Debian base is pinned by an immutable manifest digest. Review/update that digest and scan the final image before publication.
-
-Run a configured test/staging check with a writable report directory:
+Both images install the tarball under output/release after verifying its SHA-256 checksum inside the build. They do not compile another copy of the source. The Docker context includes only the prepared release files. The Node 22 base is pinned by an immutable manifest digest. Both variants support amd64 and arm64; the full image installs matching Chromium and system libraries, while slim installs no browsers.
 
 ```sh
+docker run --rm --network=none logiparity:1.0.1 --version
 docker run --rm --init --shm-size=1g \
   --mount type=bind,src="$PWD",dst=/work \
   --env STAGING_API_URL --env STAGING_API_TOKEN \
   logiparity:1.0.1 check --config parity.yaml
 ```
 
-Config and source file paths resolve inside /work. The host workspace must permit writes by container UID 1000, or select an appropriate --user UID:GID; do not solve access errors with a privileged container. Keep authentication state read-only/private except the report destination. Pass only required test variables; the image has no automatic AI invocation.
+Images run as UID 1000. Config paths resolve inside /work; the report directory must be writable by that UID, or select an appropriate user and group. Credentials are supplied through explicit environment variables and are not baked into images. The entrypoint is logiparity, so pass normal CLI commands and flags after the image name.
 
-localhost inside a container refers to that container. Use an explicit reachable staging hostname, a user-created Docker network/service name, or host.docker.internal where provided by your engine. On Linux an explicitly reviewed host-gateway mapping may be needed. The demo binds loopback and is not exposed as a hosted service by this Dockerfile. Do not assume Docker port mapping changes its loopback bind.
+localhost inside a container refers to that container. Use a reachable staging hostname, a Docker network service name or host.docker.internal when your engine provides it. The demo binds loopback; port mapping alone does not change that bind.
 
-The image entrypoint is logiparity, so all check/init/scenario/AI commands accept the same flags. An AI preview requires no network; --send requires explicit provider variables and sends only to that configured provider. Configure absolute/container-relative output paths and inspect the draft before separate execution.
+`npm run test:docker` prepares the artifact, builds both variants and verifies non-root operation, Chromium in the full image, API and file checks, SQL validation, reports and offline AI. No images are pushed. Use LOGIPARITY_DOCKER_IMAGE to choose a local review tag.
 
-`npm run test:docker` builds and checks the image locally: default help, non-root UID, headless Chromium, mismatch exit 1, all report files, money/UTC presentation and offline AI. Smoke containers use --network=none and no host mounts; the build itself downloads its base/npm/browser/system dependencies. It does not push images or alter Docker contexts. Use LOGIPARITY_DOCKER_IMAGE to select a different local test tag. See the [build history](development/milestones.md) for verified platforms.
-
-## Slim image
-
-For API, file and SQL checks without Chromium:
-
-```sh
-docker build --target slim --tag logiparity:1.0.1-slim .
-docker run --rm --network=none logiparity:1.0.1-slim --version
-```
-
-The default runtime target includes Chromium. Both targets run as node. BuildKit bind mounts keep the package tarball and temporary Playwright installer out of image layers; the full runtime copies only the installed package from the package stage. The slim target retains the JavaScript adapter dependencies but installs no browsers or browser system libraries. A UI check needs the full image.
-
-The release workflow builds the slim image for `linux/amd64,linux/arm64`. The full image currently targets linux/amd64. Use the verified image/index digest in release notes when selecting a published image. The [GitHub container](../templates/github-actions-container.yml) and [GitLab](../templates/gitlab-ci.yml) templates read `LOGIPARITY_IMAGE`; the GitLab template clears the CLI entrypoint for runner shell commands. GitHub container jobs select UID 0 for checkout/workspace access; ordinary image runs still default to UID 1000. See the [release guide](release.md) for the intentional 1.0.1 digest placeholder and follow-up commit.
+Published images include Buildx provenance and SBOM attestations. Use the image index digest in release notes for an immutable reference. The [GitHub container template](../templates/github-actions-container.yml) and [GitLab template](../templates/gitlab-ci.yml) use LOGIPARITY_IMAGE with a version-tag default. GitLab clears the CLI entrypoint for runner shell commands. The GitHub job overrides UID 1000 for checkout and artifact access, with the reason documented in the template. See the [release guide](release.md).

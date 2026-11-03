@@ -219,7 +219,7 @@ describe.sequential('CLI against the actual demo executable', () => {
       }, compare: { payout: { type: 'money', currency: 'USD' } }, aggregates: [{ name: 'payout_total', type: 'sum', field: 'payout' }] }], report: { outputs: ['console', 'json', 'html'], dir: './report' } };
       await writeFile(join(dir, 'parity.yaml'), stringify(config));
       expect((await runCli(['check', '--config', 'parity.yaml'], dir, { CLI_TEST_DB: db.url })).code).toBe(0);
-      expect(await readFile(join(dir, 'report/report.html'), 'utf8')).toContain('$2.03');
+      expect(await readFile(join(dir, 'report/report.html'), 'utf8')).toContain('$36.39');
       config.entities[0]!.sources.database.query = `DELETE FROM ${db.schema}.shipments`;
       await writeFile(join(dir, 'parity.yaml'), stringify(config));
       expect((await runCli(['check', '--config', 'parity.yaml'], dir, { CLI_TEST_DB: '' })).code).toBe(2);

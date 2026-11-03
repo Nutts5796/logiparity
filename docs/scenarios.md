@@ -168,3 +168,5 @@ The existing comparison engine supplies normalization, aggregates and `failOn`. 
 Rendered request path segments equal to `.` or `..`, including percent-encoded forms, are rejected before URL normalization or sending. Configuration files and opted-in modules are trusted input; the module entry restriction does not sandbox its imports or Node permissions. AI-generated scenario drafts cannot contain module invariants.
 
 For target request headers, `headersEnv: {Authorization: {env: STAGING_API_TOKEN, prefix: "Bearer "}}` reuses the raw token also named by REST `auth.tokenEnv`. A string value remains supported for an environment variable already containing the complete header value. All referenced variables are checked in preflight; configured secret values are redacted from errors and reports.
+
+A scenario that selects only `no_order_lost` and `single_assignment` emits a warning in every scenario report: these invariants cannot detect a replan that never ran. The warning points to the state-selection section above and does not change the exit code. An `affected_reassigned` invariant remains on the roadmap.

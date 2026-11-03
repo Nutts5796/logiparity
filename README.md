@@ -1,6 +1,6 @@
 # LogiParity
 
-Keyed data comparisons and disruption tests for logistics software.
+Keyed parity means matching records by a shared identifier, such as a shipment ID. LogiParity compares logistics data and tests how a system responds to disruptions.
 
 The same shipment appears in an API, a dispatcher screen and an accounting export. A missing export row or a one-cent payout difference can survive ordinary endpoint tests. LogiParity compares these records by a shared key and identifies the affected records and fields.
 
@@ -25,18 +25,18 @@ An endpoint test can pass while another surface shows different records. A contr
 | [Great Expectations](https://docs.greatexpectations.io/docs/core/introduction/) | Data validation through expectations and validation workflows. |
 | [data-diff style tools](https://github.com/datafold/data-diff) | Record and value differences within or across database tables. |
 
-LogiParity combines keyed record parity across UI, API, exports and SQL with exact money and timezone handling, plus disruption scenarios with operational invariants. YAML defines the sources, mappings, tolerances and failure rules. Reports connect each difference to its source, key and field.
+One configuration compares records across browser tables, APIs, files and SQL. Scenario runs add invariant checks after disruptions, such as whether every order remains present and has one assignment.
 
 ## Install
 
 Install the CLI in your project with Node.js 20 or later:
 
 ```sh
-npm install --save-dev logiparity@1.0.1
+npm install --save-dev logiparity
 ./node_modules/.bin/logiparity --version
 ```
 
-Versioned tarballs with checksums are another option; see the [release guide](docs/release.md). For the synthetic demo and source development, use the checkout below. CI tests Node 20 and 22.
+Pin a published version in CI so dependency updates happen through review. For the synthetic demo and source development, use the checkout below. CI tests Node 20 and 22.
 
 ## Quickstart
 
@@ -128,7 +128,7 @@ curl --fail --silent --show-error "$STAGING_API_URL/exports/shipments.csv" --out
 
 Read the export and API at the same cutoff time, or compare a closed day to avoid in-flight updates. `totalPath` detects capped pages and confirms completion. Money uses decimal strings by default; opt into numeric input only after reviewing precision. The [configuration reference](docs/configuration.md) also covers SQL, browser sources and `validate --allow-missing-env` for CI lint steps without secrets.
 
-The [npm-based GitHub Actions template](templates/github-actions.yml) installs `logiparity@1.0.1`, downloads a staging export and retains reports for seven days. Tokens are scoped to the download and comparison steps. Shared staging checks run manually or nightly; enable pull requests only with an isolated target. [Container-job](templates/github-actions-container.yml) and [GitLab](templates/gitlab-ci.yml) variants use `LOGIPARITY_IMAGE`; their clearly marked 1.0.1 slim digest placeholder is completed after release as described in the [release guide](docs/release.md).
+The [GitHub Actions template](templates/github-actions.yml) installs a pinned CLI, downloads a staging export and retains reports for seven days. Tokens are scoped to the download and comparison steps. Shared staging checks run manually or nightly; enable pull requests only with an isolated target. A [container job](templates/github-actions-container.yml) and a [GitLab job](templates/gitlab-ci.yml) are also available.
 
 ## Disruption scenarios
 
@@ -140,11 +140,11 @@ Run a disruption against the demo after starting it and setting `DEMO_API_URL`:
 
 Five examples cover no-show, breakdown, traffic delay, cancellation and capacity reduction. Select the state needed by each check:
 
-- Lost-order checks use orders; single assignment adds assignments.
+- The lost-order check reads the order list. The single-assignment check also reads assignments.
 - Capacity checks add drivers and vehicles.
 - ETA and notification checks use affected-order state.
 
-Wait for a configured completion source, use a fixed delay, or omit wait. The [scenario reference](docs/scenarios.md) lists exact dependencies and a bring-your-own-API example. The [freight example](examples/freight/README.md) compares load totals with rolled-up settlement lines.
+For asynchronous replanning, configure a completion signal before reading the final state. A fixed delay is also supported. Without a wait setting, the runner reads final state immediately after the events. The [scenario reference](docs/scenarios.md) lists exact dependencies and a bring-your-own-API example. The [freight example](examples/freight/README.md) compares load totals with rolled-up settlement lines.
 
 ![Synthetic breakdown scenario](docs/images/scenario.png)
 

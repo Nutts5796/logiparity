@@ -22,4 +22,4 @@
 
 **Why is the npm tarball larger than the TypeScript sources?** It includes the private compiled workspaces and their exact locked runtime dependencies/licenses. Installing it does not fetch private @logiparity packages or download browsers. Chromium is installed separately for UI, or comes in the Docker image. First-party tests, auth state and generated reports/exports are excluded.
 
-**How do I install the CLI?** Run `npm install logiparity@1.0.1`, then use `./node_modules/.bin/logiparity`. Versioned GitHub tarballs with SHA-256 files are another option; see the [release guide](release.md).
+**How do I install the CLI?** Run `npm install --save-dev logiparity`, then use `./node_modules/.bin/logiparity`. Versioned GitHub tarballs with SHA-256 files are another option; see the [release guide](release.md).

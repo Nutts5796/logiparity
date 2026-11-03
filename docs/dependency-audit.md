@@ -1,16 +1,13 @@
 # Dependency audit
 
-Recorded on 2026-11-03 with npm 11.6.0 and the 1.0.1 lockfile.
+The 1.0.1 runtime no longer contains ExcelJS, archiver, glob, minimatch or their writing dependency chain. XLSX reading uses pinned unzipper and saxes packages. ExcelJS remains a development dependency for generating the synthetic demo and test files. No vendored runtime code remains.
 
-| Command | Moderate affected packages | High | Critical |
-| --- | --- | --- | --- |
-| `npm audit` | 16 | 0 | 0 |
-| `npm audit --omit=dev` | 6 | 0 | 0 |
+On 2026-11-03, the packed tarball passed plain npm install, a clean npm ci and npm audit with npm 10.9.9 and 11.6.0. Both consumer audits reported zero vulnerabilities. These checks run without flags that suppress auditing. The empty-cache offline installation is tested separately. Source `npm audit --omit=dev` also reported zero vulnerabilities.
 
-The six runtime entries are archiver, archiver-utils, glob, minimatch, readdir-glob and zip-stream. These are cascading affected-package entries for [minimatch globparts amplification](https://github.com/advisories/GHSA-g3hv-75wg-m249), affecting minimatch below 11.0.1. The private ExcelJS runtime still uses that archiver chain; its private package name is not separately counted by npm audit. Development lint dependencies account for the additional entries.
+The previous M9 tarball was checked as a baseline on the same two npm versions. Install and npm ci succeeded in this environment, so the reported null.trim crash was not reproduced here. Its consumer audit did fail and reported 12 moderate affected-package entries, including the ExcelJS writing chain and bundled private package names. Removing that runtime chain avoids depending on registry metavulnerability calculations for it; the fix is proven with a local tarball and does not rely on publication.
 
-Vitest and its coverage provider are pinned to 4.1.12. The private vendored ExcelJS 4.4.0 manifest explicitly requires unzipper 0.12.5 and uuid 11.1.1; its Node runtime is unchanged. Consumer lockfiles therefore agree with the bundled tree without root overrides. Upstream integrity, changes and retained MIT attribution are recorded in [vendor provenance](https://github.com/Nutts5796/logiparity/blob/main/vendor/exceljs/PROVENANCE.md).
+The complete development tree reported 19 moderate affected-package entries, no high entries and no critical entries. This includes the development-only ExcelJS writer and lint tooling. These packages are excluded from the distributed CLI. Audit results depend on the advisory feed; repeat both the consumer checks and the source audits for a release.
 
-Forcing minimatch 11 into legacy callers expecting the earlier callable interface requires compatibility work. The remaining moderate advisory is tracked as a dependency limitation. The XLSX reader uses explicit workbook entries and rows; this does not establish that arbitrary hostile files are safe. Container publication still requires reviewing the final image and its dependency inventory.
+The streaming reader writes shared strings and a fixed-width offset index to temporary files. Its text cache has a 2 MiB byte budget and its index cache is one 64 KiB block. Temporary disk use grows with the shared-string table; it is not held entirely in memory. A fresh-process regression reads a shared-string XML file over 1.1 MB under a 192 MiB RSS budget. Tests also cover 100,000 rows, multiple sheets, inline strings, rich text, numeric and boolean cells, dates, cached formulas, malformed XML and prohibited declarations.
 
-The [license inventory](dependencies.md) lists runtime package versions and notices, including the vendored ExcelJS license, jszip's MIT alternative and pako's Zlib notice. Release preparation generates a CycloneDX SBOM from the installed tarball's bundled tree. Counts can change as advisories are published; repeat both audit commands against the release lockfile. [Build history](development/milestones.md) records the verification performed.
+The [runtime license inventory](dependencies.md) is generated from the lockfile. The remaining third-party development schema and its license are checked byte for byte against an immutable upstream tarball by `npm run check:third-party`. Release preparation produces a CycloneDX inventory of the actual installed tarball, and image builds add their own SBOM and provenance attestations.

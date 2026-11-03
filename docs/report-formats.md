@@ -55,3 +55,5 @@ Console datetime fields show ISO 8601 UTC beside epoch milliseconds, including n
 Console output strips C0/C1 control characters except newline and tab. Regular missing/extra record strides are shown ahead of value patterns. Scenario HTML repeats post-scenario pattern groups above the Parity report link.
 
 Console summaries use singular entity/finding names and count configuration/source errors separately from ordinary findings. Empty key/field labels and empty location segments are omitted. With configuration context, money values and pattern deltas show currency amounts and minor units, such as `-$0.01 (1 cent)`; JSON amounts and deltas retain exact minor-unit strings. HTML patterns appear immediately below result cards, before the counts table.
+
+Warnings have their own count and display in console, HTML, Markdown, JSON and JUnit system-out. They do not count as findings. Source-local rollup conflicts show each observed value with its input line number. Console and Markdown place unexplained findings ahead of grouped findings before applying their display limits.

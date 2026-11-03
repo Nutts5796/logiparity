@@ -6,17 +6,24 @@
 
 ### Fixed
 
-- Consumer `npm ci` after tarball installation, using a private vendored ExcelJS runtime with consistent patched dependency requirements; empty-cache offline installation remains supported.
-- Secret interpolation redaction across diagnostics/reports, broader AI credential masks and URL/Bearer handling without globally scrubbing numbers or short strings.
-- Shared check/validate semantic checks and consistent environment preflight, with `validate --allow-missing-env` for CI linting.
-- Explicit rollup conflict/blank-money findings and optional duplicate line identities before summing; uncertain money comparisons/totals are skipped.
-- Currency-symbol diagnostics, opt-in currency symbols/accounting negatives, custom Luxon datetime formats and clear date-only errors.
-- Singular console grammar, currency/minor units, clean locations, separate configuration/source error counts and earlier HTML patterns.
+- Consumer projects can install the tarball, run npm ci and run npm audit without audit suppression. The runtime no longer includes ExcelJS or its archiver chain.
+- XLSX reading streams XML and stores shared strings on disk with a bounded memory cache.
+- Short secrets no longer corrupt unrelated words, and encoded credentials are redacted from diagnostics.
+- AI previews mask URL userinfo, authorization schemes and credentials in free text.
+- Configuration checks report all missing environment variables and identify invalid field paths.
+- Datetime formats can be selected per source while other sources keep ISO parsing.
+- Rollup conflicts report observed values with line numbers, and duplicate messages state the excluded amount.
+- Warnings appear in every report without being counted as findings.
+- Page-boundary patterns explain a matching missing final key, and truncated reports prioritize unexplained findings.
+- Demo payouts use realistic stop amounts and name all six synthetic defects.
 
 ### Added
 
-- npm trusted publishing with provenance, bundled-dependency CycloneDX SBOMs, amd64/arm64 slim images and CI variable based container templates.
-- npm-first onboarding, a demo-tested staging example identical to init, shared Bearer token headers and documented custom-event state/replan limitations.
+- Release retries verify existing GitHub assets and npm integrity before skipping completed publication steps.
+- Manual image-only retries use the same checksummed npm tarball and preserve provenance and SBOM attestations.
+- Both container variants support amd64 and arm64. Packaged templates select a version tag and explain optional digest pinning.
+- Minimal scenario invariants warn when they cannot prove that replanning ran.
+- Repository formatting and upstream third-party fixture verification run in CI.
 
 ## [1.0.0] - 2026-11-02
 

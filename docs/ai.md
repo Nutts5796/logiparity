@@ -105,3 +105,5 @@ Tests inject library mocks and use isolated loopback HTTP providers with synthet
 Exit codes: 0 for a local preview or a saved draft; 2 for input/config/provider/schema/output errors. Exit 1 retains its Parity/scenario finding meaning and is not an AI quality score.
 
 Default redaction normalizes key names by case and by removing hyphens, underscores and dots. Names containing token, secret, password, passwd, pwd, apikey, auth, cookie, session, privatekey, credential, jwt, signature or subscriptionkey are masked, including credential-looking query parameters inside URL strings. Copied masked values are scrubbed from summaries and provider output. AI scenario drafts containing module invariants are rejected before saving.
+
+Text redaction also masks complete URL userinfo, including an empty user with a password or a token-only userinfo value, Authorization credentials for any named scheme, and secret-shaped `name=value` or `name: value` text. Copied values are globally scrubbed only when at least eight characters long.

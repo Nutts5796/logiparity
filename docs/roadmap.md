@@ -18,3 +18,11 @@ Next areas to explore:
 | Add a custom adapter example using synthetic records | good first issue |
 | Improve console examples for missing and duplicate keys | good first issue |
 | Extend locale fixtures to additional numeral and grouping systems | help wanted |
+
+## Planned capabilities
+
+- Composite keys and a where filter on rollup lines, allowing settlement comparisons per charge line.
+- Uniqueness checks on fields other than the join key, such as one shipper PO appearing under two load IDs.
+- An affected_reassigned invariant that verifies reassignment after a disruption.
+- A scenario validate command for mutation-free preflight.
+- Optional Playwright and PostgreSQL adapters through optional or peer dependencies, keeping a CSV and REST installation small.

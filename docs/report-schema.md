@@ -19,11 +19,11 @@ The root contains `schemaVersion: 1`, `entities`, `findings` and additive `group
     }
   ],
   "entities": [{"entity": "shipment", "reference": "api", "counts": {"api": 2750, "export": 2750}}],
-  "groups": [{"entity": "shipment", "source": "export", "field": "payout", "count": 1, "kind": "money_delta", "delta": "-1", "summary": "1 payout value in export differs by exactly -$0.01 (1 cent) (likely rounding or a fixed adjustment)."}]
+  "groups": [{"entity": "shipment", "source": "export", "field": "payout", "count": 1, "kind": "money_delta", "delta": "-1", "summary": "1 payout value in export differs by exactly -$0.01 (1 cent) (likely rounding)."}]
 }
 ```
 
-Each finding has string fields type, entity, source, key, field and message. expected/actual are optional normalized scalars. Rollup findings may include optional `reason`: `rollup_conflict`, `rollup_missing_value` or `rollup_duplicate`. A missing money input has `actual: null` and no fabricated expected amount; conflict findings preserve both observed normalized values. Intrinsic rollup issues are excluded from pattern grouping. Engine findings include blocking after applying failure policies; older inputs default to blocking. Source errors always block. The UI adapter uses the existing optional screenshot property for relative failure evidence paths; launch/state failures without a page have none.
+Each finding has string fields type, entity, source, key, field and message. expected/actual are optional normalized scalars. Rollup findings may include optional `reason`: `rollup_conflict`, `rollup_missing_value` or `rollup_duplicate`. A missing money input has `actual: null` and no fabricated expected amount; conflict findings contain `values: [{line: 1, value: "delivered"}, {line: 2, value: "cancelled"}]` and omit expected and actual. Intrinsic rollup issues are excluded from pattern grouping. Engine findings include blocking after applying failure policies; older inputs default to blocking. Source errors always block. The UI adapter uses the existing optional screenshot property for relative failure evidence paths; launch/state failures without a page have none.
 
 Money serializes as decimal **integer minor-unit strings**, avoiding JSON number precision loss. Datetimes serialize as UTC epoch milliseconds. Consumers should read the config to interpret currency/types; a numeric-looking string alone does not identify currency.
 
@@ -51,3 +51,11 @@ New Parity JSON includes `groups: []` when no uniform patterns exist. Schema ver
 Grouping considers all field mismatches in one entity/source/field bucket. A delta group requires a single nonzero delta across every mismatch and a known datetime or money rule. A value mapping requires the same expected/actual pair across the bucket. Mixed patterns remain individual findings. Summaries describe observed patterns; likely-cause labels are investigation hints. AI explain accepts both old reports and the additive groups field.
 
 Missing/extra groups appear first. They require runs of at least three keys sharing a prefix and a uniform numeric suffix stride greater than one. Runs do not overlap; irregular or contiguous keys remain individual findings. Their page-boundary label is a heuristic.
+
+Warnings are an optional `warnings` array of objects with `message` and optional `entity` and `source`. They are observations about configuration or completeness, not ordinary findings, and do not change failure thresholds or the exit code. Every report format displays them.
+
+Stride groups include their explained `keys`. A missing final reference key can join a regular page-boundary run when it lies after the last periodic key and before the next expected boundary. Its summary names the final key explicitly. Console and Markdown show unexplained findings before explained findings when truncating the list. JSON retains deterministic finding order and every finding.
+
+The rounding hint is limited to absolute money deltas of at most three configured minor units. Larger uniform deltas are labelled "consistent fixed difference". A constant delta establishes an observed pattern, not its cause.
+
+Conflict line numbers are one-based extracted data-row numbers; file header rows are not counted.
