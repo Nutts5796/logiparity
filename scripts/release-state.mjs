@@ -32,11 +32,18 @@ export function verifyExistingAssets(local, remote) {
 }
 const absent = (error) => /release not found|HTTP 404|E404|404 Not Found/i.test(error.stderr ?? error.message ?? '');
 export async function githubRelease({ tag, version, directory, run, requireExisting = false }) {
-  const names = [`logiparity-${version}.tgz`, `logiparity-${version}.tgz.sha256`, `logiparity-${version}.cdx.json`];
+  const names = [
+    `logiparity-${version}.tgz`,
+    `logiparity-${version}.tgz.sha256`,
+    `logiparity-${version}.cdx.json`,
+    `logiparity-offline-${version}.tgz`,
+    `logiparity-offline-${version}.tgz.sha256`,
+  ];
   const local = Object.fromEntries(
     await Promise.all(names.map(async (name) => [name, await readFile(join(directory, name))])),
   );
   verifyChecksum(local[names[0]], local[names[1]].toString(), names[0]);
+  verifyChecksum(local[names[3]], local[names[4]].toString(), names[3]);
   let release;
   try {
     release = JSON.parse((await run('gh', ['release', 'view', tag, '--json', 'assets,body'])).stdout);

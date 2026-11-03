@@ -22,7 +22,7 @@
     "demo:export": "node scripts/export-demo.mjs",
     "demo:login": "node scripts/login-demo.mjs",
     "check:demo": "npm run build && node packages/cli/dist/main.js check --config examples/demo/parity.yaml",
-    "prepack": "npm run build",
+    "prepack": "node scripts/prepack.mjs",
     "test:package": "npm run build && node scripts/check-package.mjs",
     "test:quickstart": "node scripts/check-quickstart.mjs",
     "test:docker": "node scripts/check-docker.mjs",

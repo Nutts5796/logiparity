@@ -1,14 +1,15 @@
+import { runtimeGraph } from './dependency-graph.mjs';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-const lock = JSON.parse(await readFile(new URL('../package-lock.json', import.meta.url), 'utf8'));
+
 const sources = JSON.parse(await readFile(new URL('../licenses/upstream/sources.json', import.meta.url), 'utf8'));
 const root = new URL('../', import.meta.url);
 const notices = [
   'LogiParity third-party license texts\n\nIncludes the normal runtime graph and optional adapters. Standard license texts are identified explicitly when upstream omitted a license file.\n',
 ];
 const entries = [];
-for (const [path, entry] of Object.entries(lock.packages)) {
-  if (!path.includes('node_modules/') || entry.dev || entry.link) continue;
+for (const entry of await runtimeGraph()) {
+  const path = entry.location;
   const manifest = JSON.parse(await readFile(new URL(path + '/package.json', root), 'utf8'));
   const files = (await readdir(new URL(path + '/', root))).filter((file) =>
     /^(?:licen[sc]e|copying|unlicense)(?:\.|$)/i.test(file),

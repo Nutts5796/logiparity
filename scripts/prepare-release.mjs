@@ -1,3 +1,4 @@
+import { buildOfflineKit } from './offline-kit.mjs';
 import { packArtifact } from './pack.mjs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -27,13 +28,14 @@ try {
     .update(await readFile(archive))
     .digest('hex');
   await writeFile(`${archive}.sha256`, `${checksum}  ${packed.filename}\n`);
+  const kit = await buildOfflineKit(archive, output);
+  await run('tar', ['-xzf', kit.archive, '-C', temporary]);
   const consumer = join(temporary, 'consumer');
-  await mkdir(consumer);
-  await writeFile(
-    join(consumer, 'package.json'),
-    JSON.stringify({ name: 'logiparity-release-envelope', version: '0.0.0', private: true }),
+  await run(
+    process.execPath,
+    [join(temporary, `logiparity-offline-${packed.version}`, 'install.mjs'), 'full', consumer],
+    { timeout: 180000, maxBuffer: 16 * 1024 * 1024 },
   );
-  await npm(['install', archive, '--offline', '--ignore-scripts', '--no-fund'], consumer);
   const sbom = JSON.parse((await npm(['sbom', '--omit=dev', '--sbom-format=cyclonedx'], consumer)).stdout);
   // Generate from the consumer so npm treats the packed manifest as a dependency
   // and excludes its development requirements. Promote the real artifact to BOM root.
@@ -60,7 +62,7 @@ try {
   assert(!sbom.components.some((component) => ['vitest', 'eslint', 'typescript'].includes(component.name)));
   await writeFile(join(output, `logiparity-${packed.version}.cdx.json`), JSON.stringify(sbom, null, 2) + '\n');
   console.log(
-    `Prepared ${packed.filename}, verified SHA-256 ${checksum}, and CycloneDX SBOM (${sbom.components.length} bundled components). Nothing published.`,
+    `Prepared ${packed.filename}, verified SHA-256 ${checksum}, and CycloneDX SBOM (${sbom.components.length} runtime components, including optional adapters). Nothing published.`,
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

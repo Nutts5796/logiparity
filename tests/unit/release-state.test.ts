@@ -33,6 +33,11 @@ async function fixture() {
       }),
     ),
   };
+  assets['logiparity-offline-1.0.1.tgz'] = Buffer.from('offline kit');
+  assets['logiparity-offline-1.0.1.tgz.sha256'] = Buffer.from(
+    createHash('sha256').update(assets['logiparity-offline-1.0.1.tgz']!).digest('hex') +
+      '  logiparity-offline-1.0.1.tgz\n',
+  );
   for (const [name, bytes] of Object.entries(assets)) await writeFile(join(directory, name), bytes);
   await writeFile(join(directory, 'notes.md'), 'Original notes');
   return { directory, assets, tar, archive: join(directory, name) };

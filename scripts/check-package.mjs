@@ -1,3 +1,4 @@
+import { buildOfflineKit } from './offline-kit.mjs';
 import { checkInstalledDemo } from './check-installed-demo.mjs';
 import { packArtifact } from './pack.mjs';
 import { execFile } from 'node:child_process';
@@ -21,7 +22,7 @@ const npm = (args, cwd = root) =>
     timeout: 120000,
   });
 try {
-  const args = ['--ignore-scripts', '--json', '--offline', '--no-fund'];
+  await assert.rejects(npm(['pack', '--dry-run']), /pack:artifact/);
   const dry = await packArtifact(temporary);
   assert.equal(dry.name, 'logiparity');
   assert.equal(dry.version, version);
@@ -74,9 +75,27 @@ try {
     assert(!/(?:^|\/)\.env(?:\.|$)/.test(file), `Environment file ${file}`);
   }
   const packed = dry;
-  const offline = join(temporary, 'offline-consumer');
-  await mkdir(offline);
-  await npm(['install', join(temporary, packed.filename), ...args], offline);
+  const archive = join(temporary, packed.filename);
+  const kit = await buildOfflineKit(archive, temporary);
+  await run('tar', ['-xzf', kit.archive, '-C', temporary]);
+  await writeFile(
+    join(temporary, `logiparity-offline-${version}`, 'tarballs', '._not-an-archive.tgz'),
+    'macOS metadata sidecar',
+  );
+  const offlineResults = [];
+  for (const profile of ['default', 'full']) {
+    const destination = join(temporary, 'offline-' + profile);
+    await run(
+      process.execPath,
+      [join(temporary, `logiparity-offline-${version}`, 'install.mjs'), profile, destination],
+      {
+        env: { ...process.env, LOGIPARITY_NPM_CLI: npmCli },
+        timeout: 180000,
+        maxBuffer: 8 * 1024 * 1024,
+      },
+    );
+    offlineResults.push(profile);
+  }
   const install = join(temporary, 'consumer');
   await mkdir(install);
   await npm(['init', '-y'], install);
@@ -87,9 +106,111 @@ try {
   assert.equal(await readFile(join(install, 'package-lock.json'), 'utf8'), consumerLock);
   const audit = await npm(['audit'], install);
   assert.match(audit.stdout, /found 0 vulnerabilities/);
+  const full = join(temporary, 'consumer-full');
+  await mkdir(full);
+  await npm(['init', '-y'], full);
+  const optional = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).peerDependencies;
+  await npm(['install', archive, ...Object.entries(optional).map(([name, value]) => `${name}@${value}`)], full);
+  const fullLock = await readFile(join(full, 'package-lock.json'), 'utf8');
+  await npm(['ci'], full);
+  assert.equal(await readFile(join(full, 'package-lock.json'), 'utf8'), fullLock);
+  assert.match((await npm(['audit'], full)).stdout, /found 0 vulnerabilities/);
+  const manifest = JSON.parse((await run('tar', ['-xOf', archive, 'package/package.json'])).stdout);
+  for (const field of ['scripts', 'devDependencies', 'workspaces']) assert(!Object.hasOwn(manifest, field));
+  assert.deepEqual(
+    dry.bundled.toSorted(),
+    Object.keys(manifest.dependencies)
+      .filter((name) => name.startsWith('@logiparity/'))
+      .toSorted(),
+  );
+  assert(
+    [...files]
+      .filter((path) => path.startsWith('node_modules/'))
+      .every((path) => path.startsWith('node_modules/@logiparity/')),
+  );
+  for (const [profile, directory] of [
+    ['default', install],
+    ['full', full],
+  ]) {
+    const bin = join(directory, 'node_modules/logiparity/bin/logiparity.js');
+    for (const kind of ['ui', 'sql']) {
+      const candidate =
+        kind === 'ui'
+          ? { type: 'ui', url: 'http://127.0.0.1:9', table: '#rows', fields: { id: 'td' } }
+          : { type: 'sql', connectionEnv: 'TEST_DB', query: 'SELECT 1 AS id', fields: { id: 'id' } };
+      const config = {
+        version: 1,
+        entities: [
+          {
+            name: 'row',
+            key: 'id',
+            sources: { reference: { type: 'csv', file: 'unused.csv', fields: { id: 'ID' } }, candidate },
+          },
+        ],
+      };
+      await writeFile(join(directory, 'optional.yaml'), JSON.stringify(config));
+      const result = await run(process.execPath, [bin, 'validate', '--config', 'optional.yaml'], {
+        cwd: directory,
+        env: { ...process.env, TEST_DB: 'postgres://test@127.0.0.1:9/test' },
+      }).then(
+        (value) => ({ code: 0, ...value }),
+        (error) => error,
+      );
+      assert.equal(result.code, profile === 'default' ? 2 : 0);
+      if (profile === 'default')
+        assert(
+          result.stderr.includes(
+            kind === 'ui'
+              ? 'npm install --save-dev playwright@1.64.1'
+              : 'npm install --save-dev pg@8.23.1 pg-query-stream@4.17.1 pgsql-ast-parser@12.0.2',
+          ),
+        );
+    }
+  }
+  const overridden = join(temporary, 'consumer-overrides');
+  await mkdir(overridden);
+  await writeFile(
+    join(overridden, 'package.json'),
+    JSON.stringify({ name: 'override-probe', private: true, overrides: { luxon: '3.7.1' } }),
+  );
+  await npm(['install', archive], overridden);
+  assert.equal(
+    JSON.parse(await readFile(join(overridden, 'node_modules/luxon/package.json'), 'utf8')).version,
+    '3.7.1',
+  );
+  await run(process.execPath, [join(overridden, 'node_modules/logiparity/bin/logiparity.js'), '--help'], {
+    cwd: overridden,
+  });
+  await writeFile(join(overridden, 'reference.csv'), 'ID,At\nS1,2026-11-02T13:01:00Z\n');
+  await writeFile(join(overridden, 'source.csv'), 'ID,At\nS1,11/02/2026 08:01\n');
+  await writeFile(
+    join(overridden, 'parity.json'),
+    JSON.stringify({
+      version: 1,
+      entities: [
+        {
+          name: 'order',
+          key: 'id',
+          sources: {
+            reference: { type: 'csv', file: 'reference.csv', fields: { id: 'ID', at: 'At' } },
+            csv: { type: 'csv', file: 'source.csv', fields: { id: 'ID', at: 'At' } },
+          },
+          compare: {
+            at: { type: 'datetime', format: { csv: 'MM/dd/yyyy HH:mm' }, sourceTimezones: { csv: 'America/New_York' } },
+          },
+        },
+      ],
+    }),
+  );
+  await run(
+    process.execPath,
+    [join(overridden, 'node_modules/logiparity/bin/logiparity.js'), 'check', '--config', 'parity.json'],
+    { cwd: overridden },
+  );
   const npmVersion = (await npm(['--version'])).stdout.trim();
-  const publicProbe = `for (const [name,symbol] of [['core','compareEntities'],['adapters','adapters'],['scenarios','runScenario'],['ai','prepareDraft']]) { const m = await import('logiparity/'+name); if (!m[symbol]) throw new Error('Missing public API '+name); }`;
+  const publicProbe = `import {createRequire} from 'node:module'; const require=createRequire(import.meta.url); for (const [name,symbol] of [['core','compareEntities'],['adapters','adapters'],['scenarios','runScenario'],['ai','prepareDraft']]) { const m = await import('logiparity/'+name); if (!m[symbol]) throw new Error('Missing public API '+name); } if(Object.keys(require.cache).some(path=>['pg','pg-query-stream','pgsql-ast-parser','playwright'].some(name=>path.includes('/node_modules/'+name+'/'))))throw new Error('An unused optional adapter was loaded');`;
   await run(process.execPath, ['--input-type=module', '-e', publicProbe], { cwd: install });
+  await run(process.execPath, ['--input-type=module', '-e', publicProbe], { cwd: full });
   await writeFile(
     join(install, 'types.mts'),
     `import type {EntityConfig} from 'logiparity/core';
@@ -246,9 +367,12 @@ export {provider};
           name: dry.name,
           version: dry.version,
           compressedBytes: packed.size,
+          unpackedBytes: packed.unpackedSize,
           entries: dry.entryCount,
           bundledPackages: dry.bundled.length,
-          offlineInstall: true,
+          offlineInstall: offlineResults,
+          optionalPeerProfiles: ['default', 'full'],
+          consumerOverrides: true,
           consumerCi: true,
           consumerAudit: true,
           npm: npmVersion,
