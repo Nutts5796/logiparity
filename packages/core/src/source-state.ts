@@ -1,3 +1,5 @@
+import { resourceLimitMessage } from './resource-limit.js';
+import { reportLabels } from './labels.js';
 import { appendFinding } from './finding-limit.js';
 import { humanize } from './labels.js';
 import { rowCurrency, recordRawTotals, measureCurrencies } from './source-totals.js';
@@ -125,8 +127,8 @@ function normalizeRow(
 function formattedIdentity(field: string, value: NormalizedValue | undefined, entity: EntityConfig): string {
   const rule = entity.compare[field];
   return rule?.type === 'money' && typeof value === 'bigint'
-    ? `${field}=${formatMoneyMajor(value, rule.currency ?? 'USD')}`
-    : `${field}=${value === null ? '(blank)' : String(value)}`;
+    ? `${reportLabels({ entities: [entity] }).field(entity.name, field)}=${formatMoneyMajor(value, rule.currency ?? 'USD')}`
+    : `${reportLabels({ entities: [entity] }).field(entity.name, field)}=${value === null ? '(blank)' : typeof value === 'string' && !keyFields(entity.key).includes(field) ? humanize(value) : String(value)}`;
 }
 // Check duplicate identities before adding a line to its rolled-up amount.
 function duplicateLine(
@@ -195,7 +197,7 @@ function rollUpRow(
           field,
           row: state.position,
           values: [{ row: state.firstRows.get(key) ?? state.position, value: previous[field] ?? null }],
-          message: `${field} has conflicting values within ${keyText(key, state.parts.get(key))}. Check the source rows.`,
+          message: `${reportLabels({ entities: [entity] }).field(entity.name, field)} has conflicting values within ${keyText(key, state.parts.get(key))}. Check the source rows.`,
         };
         state.conflicts.set(id, finding);
         state.issues.push(finding);
@@ -215,7 +217,7 @@ function rollUpRow(
           field,
           row: state.position,
           actual: null,
-          message: `${field} is (blank) at row ${state.position}. Supply the missing amount.`,
+          message: `${reportLabels({ entities: [entity] }).field(entity.name, field)} is (blank) at row ${state.position}. Supply the missing amount.`,
         });
       uncertain(state, key, [field]);
       state.invalidRows.add(state.position);
@@ -305,7 +307,7 @@ function checkUniqueness(entity: EntityConfig, source: string, config: SourceCon
           actual: value,
           relatedKeys: keys,
           amounts,
-          message: `${field} ${String(value)} appears on ${keys.map((key) => keyText(key, state.parts.get(key))).join(' and ')}${paid ? `; amounts on additional records: ${paid}` : ''}.`,
+          message: `${reportLabels({ entities: [entity] }).field(entity.name, field)} ${String(value)} appears on ${keys.map((key) => keyText(key, state.parts.get(key))).join(' and ')}${paid ? `; amounts on additional records: ${paid}` : ''}.`,
         });
       }
   }
@@ -319,6 +321,7 @@ export async function readSource(
   report: Report,
   maxInvalidRows: number,
   maxFindings: number,
+  sourcePath = `sources.${source}`,
 ): Promise<SourceState | undefined> {
   const state: SourceState = {
     rows: new Map(),
@@ -348,6 +351,7 @@ export async function readSource(
   let records = 0;
   try {
     for await (const raw of read(source, config, {
+      sourcePath,
       warn: (message) => {
         report.warnings ??= [];
         const warning = { entity: entity.name, source, message: redactSecrets(message, secrets) };
@@ -361,10 +365,8 @@ export async function readSource(
     })) {
       records++;
       if (records > (config.maxRows ?? 100000))
-        throw new Error(
-          `Source ${source} exceeds maxRows (${(config.maxRows ?? 100000).toLocaleString('en-US')}). Reduce the export, or raise maxRows together with Node memory, for example NODE_OPTIONS=--max-old-space-size=6144.`,
-        );
-      if (state.issues.length > maxFindings) throw new Error(`Source ${source} exceeds maxFindings (${maxFindings}).`);
+        throw new Error(resourceLimitMessage(`${sourcePath}.maxRows`, config.maxRows ?? 100000));
+      if (state.issues.length > maxFindings) throw new Error(resourceLimitMessage('maxFindings', maxFindings));
       state.position = raw[sourceRow] ?? records;
       // Reject excluded rows before parsing unrelated cells or requiring their key.
       const filters = { ...config.where, ...(config.rollup?.where ?? {}) };
@@ -483,7 +485,11 @@ export async function readSource(
     measureCurrencies(entity, source, config, state);
     return state;
   } catch (error) {
-    const diagnostic = redactSecrets(errorText(error), secrets);
+    const message = errorText(error);
+    const prefix = [config.label ?? humanize(source), source].find((label) =>
+      message.toLowerCase().startsWith(label.toLowerCase() + ': '),
+    );
+    const diagnostic = redactSecrets(prefix ? message.slice(prefix.length + 2) : message, secrets);
     for (const issue of state.issues) appendFinding(report, issue);
     appendFinding(report, {
       type: 'source_error',

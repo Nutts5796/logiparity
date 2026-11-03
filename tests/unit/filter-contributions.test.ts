@@ -137,3 +137,84 @@ it('keeps aggregate accounting equal to independently computed qualifying contri
     if (report.findings.some((item) => item.accounting)) expect(unmatched).toBe(0n);
   }
 });
+it('preserves independent currency totals and page evidence with invalids, duplicates, rollups and lost page-edge keys (Crowd9)', async () => {
+  let seed = 20261104;
+  const random = (n: number) => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed % n;
+  };
+  const amount = (minor: number) => (minor / 100).toFixed(2);
+  for (let sample = 0; sample < 48; sample++) {
+    const rolled = !!(sample % 2),
+      lost = [1, 9, 11, 13, 19, 25, 87, 95][sample % 8]!;
+    const fields = { id: 'id', amount: 'amount', cur: 'cur', status: 'status' };
+    const candidate = {
+      type: 'rest',
+      baseUrl: 'http://fixture.test',
+      path: '/',
+      fields,
+      currencyField: 'cur',
+      pagination: { type: 'page', size: 10, totalPath: '$.total' },
+      ...(rolled
+        ? { rollup: { by: 'id', sum: ['amount'], first: ['cur', 'status'], duplicates: { by: ['id'] } } }
+        : {}),
+    };
+    const definition = entity({
+      sources: { reference: { type: 'csv', file: 'unused', fields, currencyField: 'cur' }, actual: candidate },
+      compare: { amount: { type: 'money', currency: 'USD' }, status: { type: 'enum' } },
+      aggregates: [{ name: 'pay', type: 'sum', field: 'amount' }],
+    });
+    const reference: DataRow[] = [],
+      actual: DataRow[] = [];
+    const expected = { USD: 0n, CAD: 0n },
+      retained = { USD: 0n, CAD: 0n };
+    const invalidKey = 2 + random(6),
+      duplicateKey = 31 + random(7);
+    for (let index = 1; index <= 95; index++) {
+      const cur = index % 2 ? 'USD' : 'CAD',
+        minor = 10000 + random(1000),
+        baselineInvalid = index === invalidKey && sample % 3 === 0;
+      reference.push({
+        id: 'O' + index,
+        cur,
+        status: 'delivered',
+        amount: baselineInvalid ? 'invalid' : amount(minor),
+      });
+      if (!baselineInvalid) expected[cur] += BigInt(minor);
+      if (index % 10 === 0 || index === lost) continue;
+      const bad = index === invalidKey,
+        changed = minor + random(3);
+      actual.push({
+        id: 'O' + index,
+        cur,
+        status: random(2) ? 'delivered' : 'in_transit',
+        amount: bad ? 'invalid' : amount(changed),
+      });
+      if (!bad && !(rolled && index === duplicateKey)) retained[cur] += BigInt(changed);
+      if (index === duplicateKey) actual.push({ ...actual.at(-1)! });
+    }
+    const report = await compare(definition, reference, actual),
+      total = report.entities[0]!.aggregates![0]!;
+    expect(total.valuesByCurrency?.reference, `sample ${sample}`).toEqual(expected);
+    expect(total.valuesByCurrency?.actual, `sample ${sample}`).toEqual(retained);
+    const page = report.groups?.find((group) => group.cause === 'pagination');
+    expect(page?.keys, `sample ${sample}`).toEqual([
+      ...Array.from({ length: 9 }, (_, i) => 'O' + (i + 1) * 10),
+      ...(lost === 95 ? ['O95'] : []),
+    ]);
+    for (const [currency, parts] of Object.entries(total.reconciliationByCurrency?.actual ?? {})) {
+      expect(
+        BigInt(parts.missingRows.amount) +
+          BigInt(parts.extraRows?.amount ?? 0) +
+          BigInt(parts.valueDifferences?.amount ?? 0) +
+          BigInt(parts.uncertain?.amount ?? 0) +
+          parts.patterns.reduce((sum, p) => sum + BigInt(p.amount), 0n) +
+          BigInt(parts.remainder),
+      ).toBe(retained[currency as 'USD' | 'CAD'] - expected[currency as 'USD' | 'CAD']);
+      if (parts.uncertain?.keys.length)
+        expect(
+          report.findings.find((f) => f.type === 'aggregate_mismatch' && f.currency === currency)?.accounting,
+        ).toBeUndefined();
+    }
+  }
+});

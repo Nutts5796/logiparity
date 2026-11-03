@@ -16,7 +16,8 @@
     "@logiparity/core": "1.1.0",
     "@logiparity/scenarios": "1.1.0",
     "yaml": "2.9.1",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "ajv": "6.15.0"
   },
   "files": [
     "bin/",

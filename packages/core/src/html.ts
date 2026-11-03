@@ -4,7 +4,7 @@ import { aggregateDisplay, rawAggregateDisplay, aggregateDifference, aggregateSt
 import { createHash } from 'node:crypto';
 import { groupMembership, reportGroups, accountedFindingIndexes } from './groups.js';
 import { reportLabels, humanize, uncertainKeyText } from './labels.js';
-import { formatMoneyMajor, readableDatetime, type ReportPresentation } from './money-display.js';
+import { formatMoneyMajor, readableDatetime, displayTimezoneLabel, type ReportPresentation } from './money-display.js';
 import { escapeMarkup as escape } from './report-utils.js';
 import {
   matchingHeadline,
@@ -143,7 +143,7 @@ function totals(report: Report, presentation: ReportPresentation): string {
               const uncertain = aggregate.uncertainKeys?.[source];
               const raw = rawAggregateDisplay(aggregate, source, entity.entity, presentation);
               const excluded = aggregate.excludedRows?.[source] ?? [];
-              return `<td class="num" data-l="${escape(labels.source(entity.entity, source))}">${span(aggregateValue(aggregate, entity, source, presentation))}${raw ? `<span class="sub-l">Raw source: ${escape(raw)}; retained/certain lines above.${excluded.length ? ` Excluded rows: ${excluded.join(', ')}` : ''}</span>` : ''}${difference ? `<span class="sub-l neg">${escape(difference)}</span>` : ''}${follows && difference && !uncertain?.length ? `<span class="sub-l">${escape(follows)}</span>` : ''}${uncertain?.length ? `<span class="sub-l">Uncertain lines: ${escape(uncertainKeyText(uncertain))}</span>` : ''}</td>`;
+              return `<td class="num" data-l="${escape(labels.source(entity.entity, source))}">${span(aggregateValue(aggregate, entity, source, presentation))}${raw ? `<span class="sub-l">Raw source: ${escape(raw)}; retained/certain lines above.${excluded.length ? ` Excluded rows: ${excluded.join(', ')}` : ''}</span>` : ''}${difference ? `<span class="sub-l${follows === 'Matches' ? '' : ' neg'}">${escape(difference)}</span>` : ''}${follows && difference && !uncertain?.length ? `<span class="sub-l">${escape(follows)}</span>` : ''}${uncertain?.length ? `<span class="sub-l">Uncertain lines: ${escape(uncertainKeyText(uncertain))}</span>` : ''}</td>`;
             })
             .join('');
           return `<tr><td>${span(labels.field(entity.entity, aggregate.name, true), aggregate.name)}</td>${values}</tr>`;
@@ -434,11 +434,7 @@ ${cards.length || reconciliation ? '<p class="details">Accounted for means each 
     hash,
     body,
     script,
-    timezone: presentation.entities?.some((entity) =>
-      Object.values(entity.compare).some((rule) => rule.displayTimezoneField),
-    )
-      ? 'each facility’s time zone (shown beside each value)'
-      : (presentation.displayTimezone ?? 'UTC'),
+    timezone: displayTimezoneLabel(presentation),
     version: report.schemaVersion,
   });
 }

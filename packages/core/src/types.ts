@@ -11,6 +11,8 @@ export function withSourceRow(row: DataRow, position: number): DataRow {
 }
 export interface AdapterContext {
   sourceName?: string;
+  sourcePath?: string;
+  fileMode?: number;
   baseDir: string;
   env: NodeJS.ProcessEnv;
   reportDir?: string;
@@ -51,6 +53,9 @@ export interface Finding {
   screenshot?: string;
   referencePosition?: number;
   evidence?: {
+    sourceContainsReference?: boolean;
+    referenceCount?: number;
+    matchingCount?: number;
     offsetFree?: boolean;
     paginated?: boolean;
     pageSizes?: number[];
@@ -100,7 +105,9 @@ export interface FindingGroup {
   field: string;
   count: number;
   currency?: string;
-  cause?: 'timezone' | 'pagination';
+  cause?: 'timezone' | 'pagination' | 'stale_value';
+  referenceCount?: number;
+  matchingCount?: number;
   kind: 'datetime_offset' | 'money_delta' | 'value_mapping' | 'missing_stride' | 'extra_stride';
   delta?: string;
   stride?: string;
@@ -116,6 +123,7 @@ export interface ReportWarning {
   source?: string;
 }
 export interface SourceReadContext {
+  sourcePath?: string;
   warn: (message: string) => void;
 }
 export interface Report {

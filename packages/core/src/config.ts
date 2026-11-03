@@ -49,13 +49,11 @@ const datetimeFormat = name.refine((format) => {
   }
 }, 'Use supported datetime format tokens, e.g. yyyy-MM-dd HH:mm; quote literal text');
 export const reportFileMode = z
-  .union([
-    z
-      .string()
-      .regex(/^0?[0-7]{3}$/)
-      .transform((value) => parseInt(value, 8)),
-    z.number().int().min(0).max(0o777),
-  ])
+  .string({
+    error: "Quote report.fileMode as an octal string, e.g. '0640' or '0o640'; plain integers are not accepted",
+  })
+  .regex(/^(?:0o|0)?[0-7]{3}$/, "Quote report.fileMode as an octal string, e.g. '0640' or '0o640'")
+  .transform((value) => parseInt(value.replace(/^0o/, ''), 8))
   .default(0o600);
 const sourceFormatting = {
   maxRows: z.number().int().min(1).max(10000000).default(100000),
@@ -69,8 +67,12 @@ const envName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
 export const fieldSchema = z.union([name, z.object({ path: name, label: name.optional() }).strict()]);
 const fields = z.record(name, fieldSchema).refine((v) => Object.keys(v).length > 0, 'Map at least one field');
 const httpUrl = z.url().refine((v) => {
-  const u = new URL(v);
-  return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password;
+  try {
+    const u = new URL(v);
+    return ['http:', 'https:'].includes(u.protocol) && !u.username && !u.password;
+  } catch {
+    return false;
+  }
 }, 'Use an HTTP(S) URL without embedded credentials');
 const pageSize = z.number().int().min(1).max(10000).default(200);
 const completionSignals = { totalPath: name.optional(), totalPagesPath: name.optional(), hasMorePath: name.optional() };

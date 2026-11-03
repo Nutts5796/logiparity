@@ -57,5 +57,5 @@ export function uncertainKeyText(keys: readonly string[][]): string {
 }
 
 export function sentenceLabel(label: string): string {
-  return /^[A-Z]{2,}/.test(label) ? label : label.charAt(0).toLowerCase() + label.slice(1);
+  return label.length <= 2 || /^[A-Z]{2,}/.test(label) ? label : label.charAt(0).toLowerCase() + label.slice(1);
 }

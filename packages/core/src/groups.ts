@@ -30,6 +30,32 @@ function strideSummary(
 export function strideGroups(bucket: readonly Finding[], minCount: number, finalKey?: string): FindingGroup[] {
   const first = bucket[0];
   if (!first) return [];
+  const sizes = [...new Set(bucket.flatMap((item) => item.evidence?.pageSizes ?? []))].filter(
+    (size) => Number.isSafeInteger(size) && size > 1,
+  );
+  if (sizes.length) {
+    const size = sizes[0]!;
+    const periodic = bucket.filter(
+      (item) => item.referencePosition !== undefined && item.referencePosition % size === 0,
+    );
+    if (periodic.length < minCount || periodic.length <= bucket.length / 2) return [];
+    const tail = bucket.find((item) => item.key === finalKey);
+    const members = [...periodic, ...(tail && !periodic.includes(tail) ? [tail] : [])].sort(
+      (a, b) => (a.referencePosition ?? 0) - (b.referencePosition ?? 0),
+    );
+    return [
+      {
+        ...identity(first),
+        field: '',
+        count: members.length,
+        keys: members.map((item) => item.key),
+        kind: first.type === 'missing_in_source' ? 'missing_stride' : 'extra_stride',
+        stride: String(size),
+        cause: 'pagination',
+        summary: '',
+      },
+    ];
+  }
   const prefixes = new Map<string, { key: string; number: bigint }[]>();
   for (const finding of bucket) {
     const match = finding.key.match(/^(.*?)(\d+)$/);
@@ -196,6 +222,13 @@ export function mappingGroups(bucket: readonly Finding[], minCount: number): Fin
         ...identity(first),
         count: entries.length,
         kind: 'value_mapping' as const,
+        ...(entries.some((item) => item.evidence?.sourceContainsReference)
+          ? {
+              cause: 'stale_value' as const,
+              referenceCount: first.evidence?.referenceCount ?? entries.length,
+              matchingCount: first.evidence?.matchingCount ?? 0,
+            }
+          : {}),
         expected: first.expected,
         actual: first.actual,
         summary,

@@ -1,7 +1,7 @@
+import { reconciliationDetails } from './reconciliation-display.js';
 import { aggregateDisplay, rawAggregateDisplay } from './money-display.js';
 import { safeConsole, redactTree, secretValues } from './diagnostics.js';
-import { atomicReportFile } from './atomic-file.js';
-import { mkdir } from 'node:fs/promises';
+import { atomicReportFile, ensureReportDirectory } from './atomic-file.js';
 import { join } from 'node:path';
 import { reportLabels, uncertainKeyText, humanize } from './labels.js';
 import { errorText, type Config } from './config.js';
@@ -56,6 +56,7 @@ export function consoleReport(report: Report, presentation: ReportPresentation =
             `  ${labels.entity(entity.entity)?.label ?? humanize(entity.entity)} · ${labels.field(entity.entity, aggregate.name, true)} · ${labels.source(entity.entity, source)}: raw source ${raw}; retained/certain lines ${aggregateDisplay(aggregate, source, entity.entity, presentation)}; excluded rows ${(aggregate.excludedRows?.[source] ?? []).join(', ') || 'none'}.${aggregate.uncertainKeys?.[source]?.length ? ` Uncertain lines: ${uncertainKeyText(aggregate.uncertainKeys[source])}.` : ''}`,
           );
       }
+  for (const detail of reconciliationDetails(report, presentation)) lines.push(`  ${detail}`);
   for (const finding of presentationFindings(report, presentation).slice(0, 10)) {
     const item = humanFinding(finding, presentation);
     const detail =
@@ -73,8 +74,9 @@ export function consoleReport(report: Report, presentation: ReportPresentation =
   }
   if (report.findings.length > 10)
     lines.push(
-      `  ${quantity(report.findings.length - 10, 'additional result')} not shown. Write the complete report with report.outputs: [console, html, json].`,
+      `  ${quantity(report.findings.length - 10, 'additional result')} not shown.${presentation.reportFiles?.length ? '' : ' Write the complete report with report.outputs: [console, html, json].'}`,
     );
+  for (const file of presentation.reportFiles ?? []) lines.push(`  Full report: ${file}`);
   return safeConsole(lines.join('\n') + '\n');
 }
 
@@ -99,8 +101,11 @@ export async function writeReports(
     const [file, render] = formats[output];
     const destination = join(directory, file);
     try {
-      await mkdir(directory, { recursive: true });
-      await atomicReportFile(destination, render(report), { mode: presentation.fileMode ?? 0o600 });
+      await ensureReportDirectory(directory, presentation.reportRoot ?? directory);
+      await atomicReportFile(destination, render(report), {
+        mode: presentation.fileMode ?? 0o600,
+        rootDir: presentation.reportRoot ?? directory,
+      });
     } catch (error) {
       throw new Error(
         `Cannot write ${output} report to ${destination}: ${errorText(error)} Check report.dir and write permissions.`,

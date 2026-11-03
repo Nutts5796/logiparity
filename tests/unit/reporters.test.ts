@@ -32,7 +32,7 @@ it('writes a versioned report with lossless money and bounded console details', 
   expect(text).toContain('Value differences: 12');
   expect(text).toContain('Missing: 1');
   expect(text).toContain('3 additional results');
-  expect(text).toContain('900,719,925,474,099,301');
+  expect(text).toContain('900719925474099301');
   const json = parseCheckedJson(jsonReport(report)) as { schemaVersion: number; findings: { expected: string }[] };
   expect(json.schemaVersion).toBe(1);
   expect(json.findings[0]?.expected).toBe('900719925474099301');

@@ -142,7 +142,7 @@ it('accepts additive report groups and redacts their values and summaries before
           entity: 'shipment',
           source: 'csv',
           field: 'customer_email',
-          count: 1,
+          count: 3,
           kind: 'value_mapping',
           expected: 'alice@example.test',
           actual: 'bob@example.test',

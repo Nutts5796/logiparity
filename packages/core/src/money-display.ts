@@ -6,6 +6,8 @@ import { displayValue } from './report-utils.js';
 // Presentation context stays outside Report, preserving the JSON wire format.
 export interface ReportPresentation {
   fileMode?: number;
+  reportFiles?: string[];
+  reportRoot?: string;
   entities?: readonly EntityConfig[];
   patterns?: { minCount: number };
   environment?: string;
@@ -56,6 +58,7 @@ export function presentationValue(
       : displayValue(value);
   const entity = presentation.entities?.find((e) => e.name === entityName);
   const rule = presentationRule(entity, field, aggregate);
+  if (!rule && !aggregate) return displayValue(value);
   if (rule?.type === 'datetime' && typeof value === 'number')
     return readableDatetime(value, presentation.displayTimezone) ?? plain;
   if (rule?.type === 'enum' && typeof value === 'string') return humanize(value);
@@ -159,6 +162,7 @@ export function presentationDifference(
     field,
     aggregate,
   );
+  if (!rule && !aggregate) return '—';
   const left = integerValue(expected),
     right = integerValue(actual);
   if (left !== undefined && right !== undefined) {
@@ -214,8 +218,9 @@ export function aggregateDifference(
 export function aggregateStatus(aggregate: AggregateResult, source: string, reference: string): string {
   if (aggregate.sourceStatus?.[source] === 'not_mapped') return 'Not mapped';
   if (aggregate.values[source] === undefined) return 'Not read';
-  if (aggregate.uncertainKeys?.[source]?.length) return 'Uncertain lines';
   if (source === reference) return 'Reference';
+  if (aggregate.uncertainKeys?.[source]?.length || aggregate.sourceStatus?.[source] === 'uncertain')
+    return 'Uncertain lines';
   const currencies = Object.keys({
     ...aggregate.valuesByCurrency?.[source],
     ...aggregate.valuesByCurrency?.[reference],
@@ -248,4 +253,12 @@ export function durationPhrase(delta: bigint): string {
     ({ ms: 'millisecond', s: 'second', m: 'minute', h: 'hour', d: 'day' } as Record<string, string>)[match[2] ?? ''] ??
     '';
   return `${match[1]} ${unit}${count === 1 ? '' : 's'} ${delta < 0n ? 'earlier' : 'later'}`;
+}
+
+export function displayTimezoneLabel(presentation: ReportPresentation): string {
+  return presentation.entities?.some((entity) =>
+    Object.values(entity.compare).some((rule) => rule.displayTimezoneField),
+  )
+    ? 'each facility’s time zone (shown beside each value)'
+    : (presentation.displayTimezone ?? 'UTC');
 }

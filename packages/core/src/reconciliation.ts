@@ -51,13 +51,19 @@ function collectBucket(
       actualRow = current.rows.get(key);
     const expected = contribution(entity, definition, baseline, key, reference, currency);
     const actual = contribution(entity, definition, current, key, source, currency);
-    if (
-      currency &&
-      definition.type === 'sum' &&
-      baseline.currencies.get(key)?.get(definition.field) !== currency &&
-      current.currencies.get(key)?.get(definition.field) !== currency
-    )
-      continue;
+    if (currency && definition.type === 'sum') {
+      const code = (state: SourceState, row: Row | undefined, name: string) => {
+        const known = state.currencies.get(key)?.get(definition.field);
+        if (known) return known;
+        if (!row) return undefined;
+        const rule = entity.compare[definition.field],
+          field = rule?.currencyField ?? entity.sources[name]?.currencyField;
+        const value = field ? row[field] : rule?.currency;
+        return typeof value === 'string' && /^[A-Z]{3}$/i.test(value) ? value.toUpperCase() : undefined;
+      };
+      const codes = [code(baseline, expectedRow, reference), code(current, actualRow, source)].filter(Boolean);
+      if (codes.length && codes.every((code) => code !== currency)) continue;
+    }
     const difference = actual - expected;
     if (current.excluded.get(definition.name)?.has(key) || baseline.excluded.get(definition.name)?.has(key)) {
       parts.uncertain?.keys.push(current.parts.get(key) ?? baseline.parts.get(key) ?? [key]);
@@ -75,7 +81,9 @@ function collectBucket(
         contributes(entity, definition, expectedRow, reference) !== contributes(entity, definition, actualRow, source);
       const currencyField =
         definition.type === 'sum'
-          ? (entity.compare[definition.field]?.currencyField ?? entity.sources[source]?.currencyField)
+          ? (entity.compare[definition.field]?.currencyField ??
+            entity.sources[source]?.currencyField ??
+            entity.sources[reference]?.currencyField)
           : undefined;
       const changedCurrency =
         currencyField &&

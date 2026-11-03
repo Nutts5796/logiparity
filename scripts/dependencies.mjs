@@ -21,6 +21,7 @@ Direct external runtime dependencies are pinned exactly. Optional peers use comp
 
 | Package | Version | License | Purpose |
 | --- | --- | --- | --- |
+| ajv | 6.15.0 | MIT | Validate AI explain input using the published report schema |
 | csv-parse | 7.0.3 | MIT | Streaming CSV parsing |
 | saxes | 6.0.0 | ISC | Streaming XML parsing for XLSX metadata, strings and rows |
 | jiti | 2.7.0 | MIT | Load explicitly configured TypeScript invariants on supported Node versions |
@@ -33,7 +34,7 @@ Direct external runtime dependencies are pinned exactly. Optional peers use comp
 | yaml | 2.9.1 | ISC | YAML parsing with duplicate-key checks |
 | zod | 4.6.7 | MIT | Strict configuration validation |
 
-First-party workspace packages use this repository's MIT license. ExcelJS is a development-only writer for independent test fixtures; it is not installed or bundled with the CLI. The runtime XLSX reader uses unzipper and saxes, with a temporary disk index and a bounded cache for shared strings. Only the six first-party packages are bundled. Third-party runtime dependencies install normally and remain patchable through consumer overrides. Development tools are pinned in package.json and package-lock.json.
+First-party workspace packages use this repository's MIT license. ExcelJS is a development-only writer for independent test fixtures; it is not installed or bundled with the CLI. The runtime XLSX reader uses unzipper and saxes, with a temporary disk index and a bounded cache for shared strings. First-party code ships in the root lib/ directory; consumers do not install private registry packages. Third-party runtime dependencies install normally and remain patchable through consumer overrides. Development tools are pinned in package.json and package-lock.json.
 
 The full transitive runtime inventory follows. Development-only jszip and pako retain their upstream notices in the fixture writer but are not distributed with the CLI. The SQL parser transitively includes railroad-diagrams under CC0-1.0; its declared license is recorded below and the package retains its notice. No runtime dependency has unknown license metadata.
 
@@ -45,7 +46,7 @@ Exact sizes depend on the release and platform. Package checks record compressed
 
 ## Embedded font notices
 
-The offline HTML report and demo embed Latin subsets of Manrope (500–800) and JetBrains Mono (400–600), both under the SIL Open Font License 1.1. The complete license texts are distributed with the core package in node_modules/logiparity/node_modules/@logiparity/core/assets/fonts/manrope-OFL.txt and node_modules/logiparity/node_modules/@logiparity/core/assets/fonts/jetbrainsmono-OFL.txt. See [third-party notices](third-party-notices.md) for the full texts. Font source URLs and SHA-256 hashes are recorded in the package's upstream.json and checked by check:third-party. The design previews in docs/design use Google Fonts for preview only; generated reports contain no remote font URLs.
+The offline HTML report and demo embed Latin subsets of Manrope (500–800) and JetBrains Mono (400–600), both under the SIL Open Font License 1.1. The complete license texts are distributed with the core package in node_modules/logiparity/lib/core/assets/fonts/manrope-OFL.txt and node_modules/logiparity/lib/core/assets/fonts/jetbrainsmono-OFL.txt. See [third-party notices](third-party-notices.md) for the full texts. Font source URLs and SHA-256 hashes are recorded in the package's upstream.json and checked by check:third-party. The design previews in docs/design use Google Fonts for preview only; generated reports contain no remote font URLs.
 
 ## Locked transitive runtime inventory
 

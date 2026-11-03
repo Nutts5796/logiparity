@@ -12,7 +12,7 @@ for (const entry of await runtimeGraph()) {
   const path = entry.location;
   const manifest = JSON.parse(await readFile(new URL(path + '/package.json', root), 'utf8'));
   const files = (await readdir(new URL(path + '/', root))).filter((file) =>
-    /^(?:licen[sc]e|copying|unlicense)(?:\.|$)/i.test(file),
+    /^(?:licen[sc]e|copying|unlicense)(?:[.-]|$)/i.test(file),
   );
   let text;
   const fallback = sources.find((source) => source.package === manifest.name && source.version === manifest.version);

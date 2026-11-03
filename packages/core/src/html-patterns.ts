@@ -6,6 +6,7 @@ import {
   durationValue,
   formatMoneyMajor,
   readableDatetime,
+  presentationValue,
   type ReportPresentation,
 } from './money-display.js';
 import { escapeMarkup as escape } from './report-utils.js';
@@ -32,6 +33,7 @@ export const kindInfo = {
 } as const;
 export function patternKind(group: FindingGroup) {
   const info = kindInfo[group.kind];
+  if (group.cause === 'stale_value') return { ...info, label: 'Stale or lagging values' };
   if (group.kind === 'datetime_offset' && group.cause !== 'timezone') return { ...info, label: 'Datetime offset' };
   if (group.kind.endsWith('_stride') && group.cause !== 'pagination')
     return { ...info, label: 'Repeated missing rows' };
@@ -91,7 +93,9 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
             ? durationPhrase(delta)
             : group.kind === 'money_delta' && rule?.currency
               ? `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, group.currency ?? rule.currency)}`.replace('-', '−')
-              : 'Consistent mapping',
+              : group.cause === 'stale_value'
+                ? 'Some values lag'
+                : 'Consistent mapping',
         hint: patternWords(group, presentation).hint,
         nextStep: patternWords(group, presentation).nextStep,
       };
@@ -242,8 +246,8 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
         svg(
           210,
           70,
-          `${sources}: consistent value mapping.`,
-          `<text x="105" y="25" text-anchor="middle" fill="var(--ink)" font-size="13">${escape(String(first.expected))} → ${escape(String(first.actual))}</text><text x="105" y="53" text-anchor="middle" fill="var(--muted)" font-size="12">${members.length} values</text>`,
+          `${sources}: ${first.cause === 'stale_value' ? 'stale or lagging values' : 'consistent value mapping'}.`,
+          `<text x="105" y="25" text-anchor="middle" fill="var(--ink)" font-size="13">${escape(presentationValue(first.expected, first.entity, first.field, false, presentation))} → ${escape(presentationValue(first.actual, first.entity, first.field, false, presentation))}</text><text x="105" y="53" text-anchor="middle" fill="var(--muted)" font-size="12">${members.length} values</text>`,
         ) + caption(`${sources}: ${labels.field(first.entity, first.field)}.`);
     }
   }

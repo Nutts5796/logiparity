@@ -14,4 +14,6 @@ export * from './keys.js';
 export * from './filters.js';
 export * from './hosts.js';
 export * from './human.js';
-export { atomicReportFile } from './atomic-file.js';
+export { atomicReportFile, ensureReportDirectory } from './atomic-file.js';
+
+export { resourceLimitMessage } from './resource-limit.js';

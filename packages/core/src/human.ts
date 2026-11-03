@@ -170,9 +170,17 @@ export function patternWords(group: FindingGroup, presentation: ReportPresentati
         : 'These repeated values have a consistent fixed difference.',
     };
   }
+  const value = (input: Finding['actual']) => presentationValue(input, group.entity, group.field, false, presentation);
+  if (group.cause === 'stale_value')
+    return {
+      label: 'Stale or lagging values',
+      sentence: `${numberText(group.count)} of ${numberText(group.referenceCount ?? group.count)} ${value(group.expected)} ${labels.entity(group.entity)?.pluralLabel ?? 'records'} show ${value(group.actual)} in ${source}; ${numberText(group.matchingCount ?? 0)} match.`,
+      nextStep: `Check refresh timing and synchronization in ${source}; preserve the distinct ${field} values.`,
+      hint: `Likely a stale or lagging ${field}.`,
+    };
   return {
     label: 'Value mapping',
-    sentence: `${numberText(group.count)} ${field} values in ${source} map ${String(group.expected)} to ${String(group.actual)}.`,
+    sentence: `${numberText(group.count)} ${field} values in ${source} map ${value(group.expected)} to ${value(group.actual)}.`,
     nextStep: `Check the ${field} mapping for ${source}.`,
     hint: 'Likely a different vocabulary for the same field.',
   };
@@ -216,11 +224,17 @@ export function mergedPatternWords(groups: readonly FindingGroup[], presentation
       sentence:
         values
           .map(
-            (group) =>
-              `${numberText(group.count)} ${group.kind.endsWith('_stride') ? (group.kind === 'missing_stride' ? 'missing rows' : 'extra rows') : sentenceLabel(labels.field(group.entity, group.field)) + ' values'} in ${labels.source(group.entity, group.source)}`,
+            (group, index) =>
+              `${numberText(group.count)} ${first.kind === 'value_mapping' && index > 0 ? '' : (group.kind.endsWith('_stride') ? (group.kind === 'missing_stride' ? 'missing rows' : 'extra rows') : sentenceLabel(labels.field(group.entity, group.field)) + ' values') + ' '}in ${labels.source(group.entity, group.source)}`,
           )
           .join(' and ') +
-        ` ${first.kind.endsWith('_stride') ? `follow ${first.cause === 'pagination' ? 'page boundaries' : `every ${ordinal(first.stride ?? 0)} row`}` : `differ by ${durationOrMoney(first, presentation)}`}.`,
+        ` ${
+          first.kind.endsWith('_stride')
+            ? `follow ${first.cause === 'pagination' ? 'page boundaries' : `every ${ordinal(first.stride ?? 0)} row`}`
+            : first.kind === 'value_mapping'
+              ? `show ${presentationValue(first.actual, first.entity, first.field, false, presentation)} where ${labels.source(first.entity, Object.keys(labels.entity(first.entity)?.sources ?? {})[0] ?? 'reference')} shows ${presentationValue(first.expected, first.entity, first.field, false, presentation)}`
+              : `differ by ${durationOrMoney(first, presentation)}`
+        }.`,
       nextStep:
         first.kind === 'datetime_offset'
           ? first.cause === 'timezone'

@@ -1,3 +1,4 @@
+import { reconciliationDetails } from './reconciliation-display.js';
 import { redactTree, secretValues } from './diagnostics.js';
 import { reportGroups } from './groups.js';
 import { mergedPatternWords } from './human.js';
@@ -59,7 +60,7 @@ export function junitReport(report: Report, timestamp = new Date(), presentation
             })
             .join('\n') +
             (findings.length > 10
-              ? `\n+${findings.length - 10} more; see report.html or report.json (enable those report outputs for all details).`
+              ? `\n+${(findings.length - 10).toLocaleString('en-US')} more; see report.html or report.json (enable those report outputs for all details).`
               : ''),
         )}</${tag}>`;
       }
@@ -73,7 +74,8 @@ ${cases.join('\n')}
         ...mergedPatternWords(
           reportGroups(report, presentation).filter((group) => group.entity === entity),
           presentation,
-        ).map((words) => `${words.label}: ${words.sentence} Next step: ${words.nextStep}`),
+        ).map((words) => `${words.label}: ${words.sentence} ${words.hint} Next step: ${words.nextStep}`),
+        ...reconciliationDetails(report, presentation, entity),
         ...(report.warnings ?? []).map((warning) => `Warning: ${warning.message}`),
       ].join('\n'),
     )}</system-out>

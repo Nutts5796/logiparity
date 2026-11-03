@@ -1,3 +1,4 @@
+import { reportLabels } from './labels.js';
 import { limitFindings, appendFinding, FindingsLimitError } from './finding-limit.js';
 import { secretValues, redactSecrets, redactTree } from './diagnostics.js';
 import { keyFields, type EntityConfig, type Config } from './config.js';
@@ -117,6 +118,27 @@ function compareSource(
   const config = entity.sources[source];
   if (!config) return;
   const keys = new Set(keyFields(entity.key));
+  const observationKey = (value: unknown) => (value == null ? null : String(value).trim());
+  // Count all valid observations, including matches, before diagnosing a mapping.
+  const observations = new Map<
+    string,
+    { actual: Set<unknown>; reference: Map<unknown, number>; matches: Map<unknown, number> }
+  >();
+  for (const [key, row] of baseline.rows)
+    for (const [field, value] of Object.entries(row)) {
+      if (keys.has(field) || ['money', 'number', 'datetime'].includes(entity.compare[field]?.type ?? '')) continue;
+      if (baseline.uncertain.get(key)?.has(field) || current.uncertain.get(key)?.has(field)) continue;
+      const stats = observations.get(field) ?? { actual: new Set(), reference: new Map(), matches: new Map() };
+      const token = observationKey(value);
+      stats.reference.set(token, (stats.reference.get(token) ?? 0) + 1);
+      const actual = current.rows.get(key);
+      if (actual && equalValues(actual[field] ?? null, value, entity.compare[field]))
+        stats.matches.set(token, (stats.matches.get(token) ?? 0) + 1);
+      observations.set(field, stats);
+    }
+  for (const [key, row] of current.rows)
+    for (const [field, value] of Object.entries(row))
+      if (!current.uncertain.get(key)?.has(field)) observations.get(field)?.actual.add(observationKey(value));
   const baselineInvalid = new Map(
     baseline.issues
       .filter((issue) => issue.type === 'invalid_value')
@@ -177,7 +199,7 @@ function compareSource(
           keyParts: baseline.parts.get(key) ?? [key],
           expected: expectedCurrency,
           actual: actualCurrency,
-          message: `Currency differs: ${expectedCurrency} on ${reference}, ${actualCurrency} on ${source}.`,
+          message: `Currency differs: ${expectedCurrency} on ${reportLabels({ entities: [entity] }).source(entity.name, reference)}, ${actualCurrency} on ${reportLabels({ entities: [entity] }).source(entity.name, source)}.`,
         });
         continue;
       }
@@ -194,6 +216,13 @@ function compareSource(
           ...(actualCurrency ? { currency: actualCurrency } : {}),
           evidence: {
             offsetFree: current.offsetFree.get(key)?.has(field) ?? false,
+            ...(!entity.compare[field] || ['string', 'enum'].includes(entity.compare[field]!.type)
+              ? {
+                  sourceContainsReference: observations.get(field)?.actual.has(observationKey(value)) ?? false,
+                  referenceCount: observations.get(field)?.reference.get(observationKey(value)) ?? 0,
+                  matchingCount: observations.get(field)?.matches.get(observationKey(value)) ?? 0,
+                }
+              : {}),
             ...(entity.compare[field]?.displayTimezoneField &&
             displayZone(expected[entity.compare[field]!.displayTimezoneField!])
               ? { timezone: displayZone(expected[entity.compare[field]!.displayTimezoneField!])! }
@@ -355,6 +384,7 @@ export async function compareEntities(
           report,
           options.maxInvalidRows ?? 50,
           options.maxFindings ?? 10000,
+          `entities[${entities.indexOf(entity)}].sources.${source}`,
         );
         if (!current) {
           if (source === reference) break;

@@ -58,6 +58,36 @@
             "items": {
               "$ref": "#/definitions/aggregate"
             }
+          },
+          "uniqueCounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "rollupSources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "filters": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "object"
+                },
+                "rollup": {
+                  "type": "object"
+                },
+                "caseSensitive": {
+                  "type": "boolean"
+                }
+              }
+            }
           }
         }
       }
@@ -215,6 +245,17 @@
               },
               "referenceValue": {
                 "$ref": "#/definitions/scalar"
+              },
+              "sourceContainsReference": {
+                "type": "boolean"
+              },
+              "referenceCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "matchingCount": {
+                "type": "integer",
+                "minimum": 0
               }
             }
           }
@@ -280,6 +321,14 @@
           },
           "actual": {
             "$ref": "#/definitions/scalar"
+          },
+          "referenceCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "matchingCount": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }
@@ -291,6 +340,9 @@
         "required": ["message"],
         "properties": {
           "message": {
+            "type": "string"
+          },
+          "entity": {
             "type": "string"
           }
         }

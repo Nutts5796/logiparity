@@ -73,7 +73,7 @@ export function reportDocument(input: {
 .card{min-width:0}.hero.clean{grid-template-columns:1fr}.totals{max-width:100%;min-width:0;overflow-x:auto}
 .totals th,.num{white-space:nowrap}.totals .sub-l{white-space:normal;overflow-wrap:anywhere;max-width:32ch;margin-left:auto}
 .t-info{background:var(--c-round-soft);color:var(--ink)}.next-step{font-size:12px}.detail-cell{font-size:12px;color:var(--muted)}
-@media(max-width:860px){.donut{justify-items:center}.legend{width:100%}}
+@media(max-width:860px){.donut{justify-items:center}.legend{width:100%}.totals .sub-l{margin-left:0;max-width:none;text-align:left}}
 </style></head><body><main class="wrap">${input.body}
 <footer>Generated locally by LogiParity · Report schema v${input.version} · Dates in ${escape(input.timezone)} · Raw values in JSON</footer></main><script>${input.script}</script></body></html>\n`;
 }

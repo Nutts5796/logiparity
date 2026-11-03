@@ -1,5 +1,12 @@
+import { reconciliationDetails } from './reconciliation-display.js';
 import { redactTree, secretValues } from './diagnostics.js';
-import { aggregateDisplay, rawAggregateDisplay, aggregateDifference, aggregateStatus } from './money-display.js';
+import {
+  aggregateDisplay,
+  rawAggregateDisplay,
+  aggregateDifference,
+  aggregateStatus,
+  displayTimezoneLabel,
+} from './money-display.js';
 import { reportGroups, groupMembership, accountedFindingIndexes } from './groups.js';
 import { verdict } from './report-utils.js';
 import { reportLabels, uncertainKeyText } from './labels.js';
@@ -30,7 +37,7 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
     `**${verdict(report)}** · ${!report.findings.length ? matchingHeadline(report) + ' · ' : ''}${quantity(counts.findings, 'finding')} · ${quantity(counts.blocking, 'blocking finding')} · ${quantity(counts.errors, 'source error')} · ${quantity(counts.warnings, 'warning')}`,
     '',
     'Dates use ' +
-      (presentation.displayTimezone ?? 'UTC') +
+      displayTimezoneLabel(presentation) +
       '. Amounts use their configured currency. JSON retains normalized values.',
     '',
   ];
@@ -81,11 +88,12 @@ export function markdownReport(report: Report, presentation: ReportPresentation 
           ? ` Raw source: ${raw}; retained/certain lines above. Excluded rows: ${(aggregate.excludedRows?.[source] ?? []).join(', ') || 'none'}.`
           : '';
         lines.push(
-          `| ${cell(labels.field(entity.entity, aggregate.name, true))} | ${cell(labels.source(entity.entity, source))} | ${cell(shown + retained)} | ${cell(difference)} | ${cell(aggregateStatus(aggregate, source, entity.reference) + (uncertain?.length ? ': ' + uncertainKeyText(uncertain) : ''))} |`,
+          `| ${cell(labels.field(entity.entity, aggregate.name, true))} | ${cell(labels.source(entity.entity, source))} | ${cell(shown + retained)} | ${cell(difference)} | ${cell(aggregateStatus(aggregate, source, entity.reference) + (uncertain?.length ? (source === entity.reference ? '; Uncertain lines: ' : ': ') + uncertainKeyText(uncertain) : ''))} |`,
         );
       }
     }
   }
+  for (const detail of reconciliationDetails(report, presentation)) lines.push('', cell(detail));
   const unexplained = report.findings.filter((_, index) => !accounted.has(index));
   if (unexplained.length) {
     lines.push(
