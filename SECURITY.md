@@ -16,6 +16,18 @@ Scenarios send only explicitly mapped requests to a configured test or staging t
 
 AI commands preview locally by default. --send and complete provider configuration are required for a request; normal checks and scenarios never use AI. Structured field masking is not general PII detection. Review the full prompt and protect preview logs. Draft files are marked for review, written privately and never executed automatically.
 
+## Supported versions
+
+| Version                | Security fixes                    |
+| ---------------------- | --------------------------------- |
+| Latest 1.x release     | Supported                         |
+| Older 1.x patches      | Upgrade to the latest 1.x release |
+| 1.1.0 pre-release work | Under review; not published       |
+
+The maintainer aims to acknowledge private reports within seven days and provide an initial assessment or progress update within 30 days. This is an expected response time, not a guaranteed service level.
+
 ## Dependencies and distribution
 
-Runtime versions and integrity hashes are locked; [licenses](docs/dependencies.md) and [audit notes](docs/dependency-audit.md) document the bundle. Existing ExcelJS dependencies have moderate advisories. Do not parse adversarial exports, and review the dependency chain and final container image before deployment. No telemetry or automatic update check runs during checks.
+Runtime dependencies are exact-pinned and consumer overrides remain available. Browser and PostgreSQL packages are optional peers. The source checkout has development-only moderate advisories; see [audit notes](docs/dependency-audit.md). The installed CLI excludes development tools. Full dependency and font license texts are included with the package. No telemetry or automatic update check runs during checks.
+
+`allowedHosts` restricts configured connections before I/O; mutation-enabled targets require it. `environment: test` remains a label. Scenario paths enforce the base path and encoded placeholders; setup fixture realpaths cannot escape the scenario directory. XLSX streaming quotas bound XML tokens, decompression and temporary disk use. Exit and signal handlers clean task-owned temporary files; SIGKILL cannot run cleanup handlers.

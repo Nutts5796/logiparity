@@ -1,42 +1,60 @@
-# Release preparation and retries
+# Release procedure
 
-Before tagging 1.0.1, run lint, type checks, unit tests and end-to-end tests on Node 20 and 22. Run `npm run test:package` with npm 10.9.9 and 11.6.0. The packaging check creates a fresh project and runs plain install, removes node_modules, runs plain npm ci and runs plain npm audit. All three must succeed and the audit must report zero vulnerabilities. The separate empty-cache offline installation remains covered.
+Release only reviewed changes. The 1.1.0 work is unreleased; 1.0.1 was never published and its notes are folded into 1.1.0. Local preparation never pushes, tags or publishes.
 
-`npm run check:third-party` compares the development schema fixture and its license with an immutable upstream tarball, and verifies the bundled font subsets and OFL texts against their recorded upstream URLs and hashes. No vendored runtime code remains. Review the [dependency audit](dependency-audit.md).
+## One-time setup
 
-## One-time npm setup
+The owner created the `logiparity` npm organization on 2026-11-03; the scope is claimed. First-party packages stay private and ship with the root CLI. Configure the root package's npm trusted publisher for GitHub repository `Nutts5796/logiparity`, workflow `release.yml` and the intended environment. Use npm's [trusted publishing setup](https://docs.npmjs.com/trusted-publishers/); no long-lived npm token is needed. In GHCR package settings, check **Manage Actions access** grants this repository write access. Review GitHub Actions attestation permissions and registry visibility.
 
-For the existing public `logiparity` package on npmjs.com, open package Settings, choose Trusted publishing and select GitHub Actions. Enter user `Nutts5796`, repository `logiparity` and workflow filename `release.yml`. Leave the environment blank because this workflow declares none. See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) for account requirements. The workflow uses npm 11.6.0 and Node 22, with OIDC and `--provenance`; no npm publish token is stored in GitHub secrets.
-
-## Prepare the artifact
+## Prepare and publish
 
 ```sh
+npm run release:bump -- 1.1.0
+npm install --package-lock-only --ignore-scripts
 npm ci --ignore-scripts
+npm run lint
+npm run format:check
+npm run typecheck
+npm test
+npm run test:e2e
+npm run check:docs
+npm run check:third-party
+npm run test:package
+npm run test:quickstart
+npm run test:docker
 npm run release:prepare
 ```
 
-This creates `output/release/logiparity-1.0.1.tgz`, its SHA-256 file and a CycloneDX SBOM from an offline consumer installation. The SBOM lists the bundled runtime tree and excludes the development fixture writer. These commands do not publish.
+Use the intended next version in the bump command. It updates all first-party manifests, lockfile records and the CLI version module. Review changelog and generated assets, set the publication date only when publishing, and commit. After release approval:
 
-After owner review, an annotated `v1.0.1` tag starts the release workflow. Its order is:
+```sh
+VERSION=$(node -p "require('./package.json').version")
+git tag -a "v$VERSION" -m "LogiParity $VERSION"
+git push origin main
+git push origin "v$VERSION"
+```
 
-1. Run CI against that tag, including both consumer npm versions.
-2. Prepare the tarball and verify its checksum.
-3. Create the GitHub release or verify matching existing assets.
-4. Publish npm with provenance or verify the existing version's SHA-512 integrity.
-5. Build and push both images from that exact checksummed tarball.
+A tag push builds the tarball once and passes it as an artifact. A separate job attests it; a contents-only job creates a draft GitHub release. The npm job has OIDC publishing permission. Image jobs have registry and attestation permissions, install that same checksum-verified archive, and add OCI revision/created labels, provenance and SBOMs. The notes job publishes the draft only after npm and both images succeed. Build jobs have no write permissions; all checkouts disable persisted credentials. Node is pinned exactly and release jobs do not use the npm cache action.
 
-The Dockerfile does not compile a second source tree. It mounts the prepared tarball, checks SHA-256 inside the build and installs the same bytes offline. Full and slim images support linux/amd64 and linux/arm64. Buildx attaches provenance and SBOM attestations. The full image adds Chromium; the slim image contains no browsers. Image index digests are written to the GitHub release notes.
+## Retries
 
-GH_TOKEN is scoped to the steps that read or update the GitHub release or authenticate GHCR. Only the release job has write permissions and OIDC access.
+Re-run a failed tag workflow to resume npm publication safely: the registry integrity must match the existing archive. Existing GitHub tarball, checksum and SBOM assets are downloaded and verified instead of rebuilding. Missing or mismatched assets fail for explicit investigation.
 
-## Safe re-runs
+Manual `workflow_dispatch` is image-only. Select the exact existing tag as the workflow ref and supply that same tag input. Other refs are rejected before checkout. It requires existing GitHub assets and the matching npm version; it never publishes npm. Existing versioned images are inspected and their digests reused. Missing images are built; retries do not replace existing digests.
 
-An ordinary workflow re-run checks existing GitHub assets and npm integrity before skipping completed work. A different tarball, checksum, SBOM dependency inventory or registry integrity stops the run. Existing SBOM bytes are retained when only generated timestamps or serial numbers differ. Release notes preserve existing prose and replace only the generated image-digest section.
+After publishing 1.1.0, copy the verified image index digests from the release notes into `LOGIPARITY_IMAGE` CI variables. A small follow-up commit can pin those references. Placeholder text such as `sha256:<verified index digest>` is documentation, never a runnable image or a fabricated digest. Do not substitute an older CLI image.
 
-For an image-only retry, open Actions, select Versioned release, choose Run workflow, supply the existing tag and leave images_only enabled. CI runs against that tag. Both the existing GitHub assets and the published npm version must match; this mode cannot create a release or publish a missing npm version. It then rebuilds the images from the verified tarball and updates their digest section.
+## Verify
 
-Container templates ship with the version tag `ghcr.io/nutts5796/logiparity:1.0.1-slim`; they contain no digest placeholder. For immutable pinning, append `@sha256:` followed by the verified index digest in the release notes. LOGIPARITY_IMAGE can override the default reference. The GitHub container job uses UID 0 only because checkout and artifact actions need access to runner-owned workspace mounts; normal image runs default to UID 1000.
+```sh
+VERSION=$(node -p "require('./package.json').version")
+gh release download "v$VERSION" --repo Nutts5796/logiparity --pattern "logiparity-$VERSION.tgz" --pattern "logiparity-$VERSION.tgz.sha256"
+shasum -a 256 -c "logiparity-$VERSION.tgz.sha256"
+gh attestation verify "logiparity-$VERSION.tgz" --repo Nutts5796/logiparity
+npm audit signatures
+docker buildx imagetools inspect "$LOGIPARITY_IMAGE"
+gh attestation verify "oci://$LOGIPARITY_IMAGE" --repo Nutts5796/logiparity
+docker run --rm "$LOGIPARITY_IMAGE" --version
+```
 
-## Verify distribution
-
-In a fresh project, install the published version, run npm ci and npm audit, and check the CLI version. To verify a downloaded tarball on macOS, run `shasum -a 256 --check logiparity-1.0.1.tgz.sha256`; on Linux use `sha256sum --check`. Compare npm provenance, the bundled SBOM and container index digests with the release notes. Never overwrite or delete a published npm version to resolve a mismatch.
+Set `LOGIPARITY_IMAGE` to a digest-pinned full or slim reference from the release notes. Verify both linux/amd64 and linux/arm64 index members. `npm audit signatures` verifies a consumer installation's registry signatures; local file tarballs have no npm registry signature until publication. GitHub provenance verification is separate. See [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations).

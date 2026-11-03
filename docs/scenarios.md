@@ -170,3 +170,13 @@ Rendered request path segments equal to `.` or `..`, including percent-encoded f
 For target request headers, `headersEnv: {Authorization: {env: STAGING_API_TOKEN, prefix: "Bearer "}}` reuses the raw token also named by REST `auth.tokenEnv`. A string value remains supported for an environment variable already containing the complete header value. All referenced variables are checked in preflight; configured secret values are redacted from errors and reports.
 
 A scenario that selects only `no_order_lost` and `single_assignment` emits a warning in every scenario report: these invariants cannot detect a replan that never ran. The warning points to the state-selection section above and does not change the exit code. An `affected_reassigned` invariant remains on the roadmap.
+
+## Reassignment and validation
+
+Run `logiparity scenario validate <scenario.yaml> --target <target.yaml>` before injecting events. Validation checks schemas, selected state mappings, request paths, environment names and confined fixture/module paths without opening sources or executing modules. If `validate --config` receives a target file, it prints this command.
+
+`affected_reassigned` reads the pre-event baseline, identifies active orders on the absent driver or broken vehicle, then requires exactly one different driver after replanning. Delivered and cancelled baseline orders are excluded. It fails when the replan never ran. Configure orders, assignments and drivers (including driver vehicle_id for vehicle events). This is the fix for the limitation warning from minimal lost-order/single-assignment checks; the warning appears only when affected_reassigned is absent. The demo no-show and breakdown scenarios and the staging example include it.
+
+`allowedHosts` is required on mutation-enabled targets and applies to state reads and mapped requests before network I/O. `environment: test` is a label. Fixtures must remain inside the scenario directory even through symlinks. Every path placeholder is URL encoded; put literal route separators in the template, for example `/events/{{params.event}}`. Placeholder values cannot contain whitespace or controls.
+
+Set `pagination.sizeParam` explicitly for a staging API; its default is `limit`. Both the configured page size and the API cap must agree.

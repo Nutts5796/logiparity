@@ -1,45 +1,41 @@
 # Changelog
 
-## [Unreleased]
-
-## [1.0.1]
-
-### Fixed
-
-- HTML reports use the Studio layout, readable labels, offline fonts and light and dark themes.
-- Pattern charts merge matching causes across sources and filter the paginated finding table.
-- Money totals reconcile missing rows and pattern deltas with an honest unexplained remainder.
-- Human reports show readable UTC dates and currency values with a separate difference. Raw JSON and JUnit values remain unchanged.
-- The demo dispatcher shows local depot time, a UTC toggle, operational counts and stacked mobile rows.
-
-- Consumer projects can install the tarball, run npm ci and run npm audit without audit suppression. The runtime no longer includes ExcelJS or its archiver chain.
-- XLSX reading streams XML and stores shared strings on disk with a bounded memory cache.
-- Short secrets no longer corrupt unrelated words, and encoded credentials are redacted from diagnostics.
-- AI previews mask URL userinfo, authorization schemes and credentials in free text.
-- Configuration checks report all missing environment variables and identify invalid field paths.
-- Datetime formats can be selected per source while other sources keep ISO parsing.
-- Rollup conflicts report observed values with line numbers, and duplicate messages state the excluded amount.
-- Warnings appear in every report without being counted as findings.
-- Page-boundary patterns explain a matching missing final key, and truncated reports prioritize unexplained findings.
-- Demo payouts use realistic stop amounts and name all six synthetic defects.
+## [1.1.0] - Unreleased
 
 ### Added
 
-- Release retries verify existing GitHub assets and npm integrity before skipping completed publication steps.
-- Manual image-only retries use the same checksummed npm tarball and preserve provenance and SBOM attestations.
-- Both container variants support amd64 and arm64. Packaged templates select a version tag and explain optional digest pinning.
-- Minimal scenario invariants warn when they cannot prove that replanning ran.
-- Repository formatting and upstream third-party fixture verification run in CI.
+- Composite entity and rollup keys, source and rollup row filters, non-key uniqueness checks and a synthetic 40-load freight day.
+- Reassignment invariants, scenario validation, a host allowlist, configurable pattern support and display timezone, per-row invalid values and an invalid-row limit.
+- Installed demo and browser-install commands, release provenance verification and version bump tooling.
+- Optional browser and PostgreSQL peers, patchable exact runtime dependencies and a verified offline installation kit.
+
+### Changed
+
+- Reports group supported causes, reconcile money and count totals, identify uncertain keys and open with findings requiring individual review.
+- Console, Markdown, HTML and JUnit share readable labels, currency amounts, dates and consistent counts; compact report data reduces file size.
+- The synthetic demo uses zone and distance payouts, varied delivery times and future in-transit ETAs.
+- Release jobs use minimal permissions, draft releases, exact version pins and reusable verified assets; CI covers Node 20, 22 and 24.
+
+### Fixed
+
+- Consumer installation, clean-lock installation and audit failures caused by the former ExcelJS runtime chain.
+- One-off differences incorrectly classified as patterns, incorrect chart denominators and aggregate accounting with filtered or uncertain data.
+- Runtime diagnostics, blank money and row locations, duplicate identities, command help and repeated warnings.
+- Installed example paths, CI templates, dependency notices and package contents.
+
+### Security
+
+- Scenario paths enforce encoded placeholders and the configured base path; fixture realpaths stay inside the scenario directory.
+- Environment credentials, Basic auth and file-report values use consistent redaction, including short secrets and AI quoted authorization text.
+- Streaming XLSX parsing bounds XML tokens, attributes, shared-string disk use and decompression ratios and cleans temporary files on exit and signals.
 
 ## [1.0.0] - 2026-11-02
 
 ### Added
 
-- Keyed REST, CSV, XLSX, browser-table and PostgreSQL comparisons, exact money/timezone normalization, aggregates and failure thresholds.
-- Console, HTML, Markdown, JSON and JUnit reports with screenshots, pattern groups and missing/extra record strides.
-- REST completion metadata, strict short-first-page checks, opt-in numeric money, per-key rollups and a freight settlement example.
-- Disruption scenarios, optional/fixed/polled waits, selected operational invariants, trusted custom checks and a synthetic delivery demo.
-- Optional AI drafts with local previews, explicit sending, credential redaction and non-execution guarantees.
-- Version/config validation commands, a bundled standalone package, public APIs, full/slim containers, checksum release assets and staging CI templates.
-- Read-only SQL guards, browser-origin checks, scenario path guards, explicit module opt-in and diagnostic sanitization.
-- Configuration, onboarding, design, contributor, security and dependency audit documentation.
+- Keyed REST, CSV, XLSX, browser-table and PostgreSQL comparisons with exact money, explicit timezones, aggregates and failure thresholds.
+- Console, HTML, Markdown, JSON and JUnit reports, disruption scenarios and local AI draft previews.
+- Synthetic delivery fixtures, public APIs, container images and staging CI examples.
+
+[1.1.0]: https://github.com/Nutts5796/logiparity/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Nutts5796/logiparity/releases/tag/v1.0.0

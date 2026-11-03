@@ -1,28 +1,25 @@
 # Docker
 
-Prepare the checksummed npm artifact from the repository root before building:
+Prepare the checksummed artifact, then supply its version to both targets:
 
 ```sh
 npm ci --ignore-scripts
 npm run release:prepare
-docker build --tag logiparity:1.0.1 .
-docker build --target slim --tag logiparity:1.0.1-slim .
+VERSION=$(node -p "require('./package.json').version")
+docker build --build-arg VERSION="$VERSION" --tag "logiparity:$VERSION" .
+docker build --build-arg VERSION="$VERSION" --target slim --tag "logiparity:$VERSION-slim" .
 ```
 
-Both images install the tarball under output/release after verifying its SHA-256 checksum inside the build. They do not compile another copy of the source. The Docker context includes only the prepared release files. The Node 22 base is pinned by an immutable manifest digest. Both variants support amd64 and arm64; the full image installs matching Chromium and system libraries, while slim installs no browsers.
+Both images install the checksum-verified release tarball, without compiling another copy of the source. The build context contains only release inputs. The Node base is pinned by digest. The full image includes browser/database adapters and Chromium; slim supports CSV, XLSX and REST without those optional peers. Release builds add revision/created OCI labels and attest linux/amd64 and linux/arm64 indexes.
 
 ```sh
-docker run --rm --network=none logiparity:1.0.1 --version
+docker run --rm --network=none "logiparity:$VERSION" --version
 docker run --rm --init --shm-size=1g \
   --mount type=bind,src="$PWD",dst=/work \
   --env STAGING_API_URL --env STAGING_API_TOKEN \
-  logiparity:1.0.1 check --config parity.yaml
+  "logiparity:$VERSION" check --config parity.yaml
 ```
 
-Images run as UID 1000. Config paths resolve inside /work; the report directory must be writable by that UID, or select an appropriate user and group. Credentials are supplied through explicit environment variables and are not baked into images. The entrypoint is logiparity, so pass normal CLI commands and flags after the image name.
+Images run as UID 1000. Config paths resolve inside `/work`; select a directory writable by that UID or the appropriate user/group. Pass credentials through explicit environment variables. The entrypoint is `logiparity`. Loopback inside a container refers to that container; use a reachable staging host, Docker network service or `host.docker.internal` when supported. The synthetic demo binds loopback, so port mapping alone does not expose it outside the container.
 
-localhost inside a container refers to that container. Use a reachable staging hostname, a Docker network service name or host.docker.internal when your engine provides it. The demo binds loopback; port mapping alone does not change that bind.
-
-`npm run test:docker` prepares the artifact, builds both variants and verifies non-root operation, Chromium in the full image, API and file checks, SQL validation, reports and offline AI. No images are pushed. Use LOGIPARITY_DOCKER_IMAGE to choose a local review tag.
-
-Published images include Buildx provenance and SBOM attestations. Use the image index digest in release notes for an immutable reference. The [GitHub container template](../templates/github-actions-container.yml) and [GitLab template](../templates/gitlab-ci.yml) use LOGIPARITY_IMAGE with a version-tag default. GitLab clears the CLI entrypoint for runner shell commands. The GitHub job overrides UID 1000 for checkout and artifact access, with the reason documented in the template. See the [release guide](release.md).
+`npm run test:docker` builds both variants locally and checks non-root operation, the full browser, absent slim peers, API/file checks, report generation and local AI previews. It never pushes. Set `LOGIPARITY_DOCKER_IMAGE` to select a review tag. Use [release notes](release.md) for verified image digests and provenance verification. CI templates require `LOGIPARITY_IMAGE` with a version tag and immutable digest; the CLI version is derived from that reference.

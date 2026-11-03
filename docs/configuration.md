@@ -31,7 +31,7 @@ Every source accepts an optional `label`. Each `fields` value can remain a path 
   compare: {delivered_at: {type: datetime}}
 ```
 
-HTML uses the first configured field label for that logical field, so name a field consistently across its sources. Missing labels are humanized (`delivered_count` → `Delivered count`). Missing-row findings use `Whole row`. Raw names remain in title tooltips, JSON and JUnit. Labels do not affect comparisons, extraction or grouping.
+Human formats use the first configured field label for that logical field, so name a field consistently across its sources. Missing labels are humanized (`delivered_count` → `Delivered count`). Missing-row findings use `Whole row`. JSON retains raw names; human formats, including JUnit, use labels. Labels do not affect comparisons, extraction or grouping.
 
 The dispatcher example reads visible Chicago clock and date text from `.parity-time`, excluding the adjacent CST/CDT abbreviation. Its per-source format is `format: {ui: "h:mm a'\n'LLL d, yyyy"}` with `sourceTimezones: {ui: America/Chicago}`. The quoted newline is part of the visible two-line value. API timestamps continue to use ISO parsing. Use [parity-ui.yaml](../examples/demo/parity-ui.yaml) after `npm run demo:login`; the main [parity.yaml](../examples/demo/parity.yaml) keeps the browser-free first report.
 
@@ -217,7 +217,7 @@ rollup:
 
 Values normalize before summing; money uses bigint and numbers use exact decimal accumulation. `first` retains the first normalized value in input order, including null, and reports every conflicting later value with `reason: rollup_conflict`, with a `values` array of observed values and input line numbers. These source-local observations do not use expected or actual reference values. A blank money input in `sum` produces `reason: rollup_missing_value`; blank numeric sum inputs continue to contribute zero. Repeated duplicate identities produce `duplicate_key` with `reason: rollup_duplicate` and are excluded before summing. Duplicate messages identify the excluded monetary amount.
 
-Conflicts mark their field uncertain; blank money or duplicate identities mark the affected sum fields uncertain. Comparisons involving those fields on that key are skipped on either side, and aggregate sums/predicates depending on them are skipped for that source. This prevents a data-quality problem from producing a misleading rounding or mapping pattern. Counts still record all input rows; count aggregates can operate on the valid unique keys. These findings use the existing mismatch/duplicate failure categories. Sources without rollup retain ordinary key duplicate detection. See the [freight settlement example](../examples/freight/README.md).
+Conflicts mark their field uncertain; blank money or duplicate identities mark the affected sum fields uncertain. Comparisons involving those fields on that key are skipped on either side, and aggregate sums/predicates depending on them exclude only those keys and report them as uncertain. This prevents a data-quality problem from producing a misleading rounding or mapping pattern. Counts still record all input rows; count aggregates can operate on the valid unique keys. These findings use the existing mismatch/duplicate failure categories. Sources without rollup retain ordinary key duplicate detection. See the [freight settlement example](../examples/freight/README.md).
 
 ## Validate without reading sources
 
@@ -229,8 +229,32 @@ Secret interpolation values are recorded before substitution and preserved throu
 
 ## Warnings
 
-An opted-in unverified short first page is recorded in `warnings` in the report as well as stderr. Warnings are counted separately from findings and do not change the exit code. Inspect the source counts: this opt-out accepts incomplete data without proving completeness. CLI validate and check also warn when a referenced secret is shorter than eight characters. Short secrets are redacted only as complete delimited tokens; longer secrets are scrubbed from substrings and their URI, URL-path, query and form encodings.
+An opted-in unverified short first page is recorded in `warnings` in the report as well as stderr. Warnings are counted separately from findings and do not change the exit code. Inspect the source counts: this opt-out accepts incomplete data without proving completeness. CLI validate and check also warn when a referenced secret is shorter than eight characters. Short secrets are redacted only as whole data values, URL components or header values; longer secrets are scrubbed from substrings and their URI, URL-path, query and form encodings.
 
 Missing environment diagnostics list all absent names together. Only validate suggests `--allow-missing-env`; check and scenario run require their credentials. Semantic errors include paths such as `entities[0].compare.refund_amt`.
 
 The SQL function allowlist checks names. Because the connection search path includes `pg_catalog, public`, a permitted unqualified name may resolve to an object in public when it is not provided by pg_catalog. The READ ONLY transaction and the restricted staging role are the execution boundary; the name allowlist alone cannot establish which implementation runs.
+
+## Composite keys, row filters and uniqueness
+
+`key: [load_id, charge]` matches each charge independently; every source maps both fields. Reports display `L101 · detention`. Composite identity preserves each part internally, so delimiter text cannot collide. Rollups use the same `by: [load_id, charge]`. Single-key stride detection remains available for ordinary shipment IDs.
+
+`where` on a source or rollup accepts equality (`{posting: posted}`), a nonempty list (`{charge: [fuel, detention]}`), or negation (`{posting: {not: [void, reversed]}}`). Map every filter field. Source and rollup filters both apply before summing; excluded rows need not have valid unrelated money cells. Aggregate `where` remains scalar equality only. Report headers show the filters used.
+
+`unique: [tender_id]` checks each named non-key field within one source across distinct keys. Blank values are ignored. A `duplicate_value` finding lists every sharing key and mapped money paid more than once. With rollups, keep uniqueness fields in `first`. See the [synthetic freight day](../examples/freight/README.md).
+
+## Pattern support and invalid rows
+
+`patterns: {minCount: 3}` sets minimum pattern support; smaller groups always need individual review. Configuring a threshold below 3 fails validation. Accounting a total does not resolve its underlying cause or relax `failOn`.
+
+An invalid cell produces `invalid_value` with key, field, spreadsheet row (header counted), observed value and a fix hint. Other valid cells and rows continue comparing. `maxInvalidRows` defaults to 50 per source; more invalid rows produce a source error and exit 2. Configuration, connection, extraction structure and file failures also exit 2. Ordinary findings exit 1 unless allowed by the configured failure policy. Blank money in a rolled-up sum makes that key uncertain rather than zero.
+
+## Environment guard and redaction
+
+`environment: test` is a label, not proof of the target environment. Optional `allowedHosts: [localhost, staging.example.test, 'db.example.test:5432']` restricts REST, UI and PostgreSQL connections before I/O. Hostnames allow any port on that host; an explicit host:port restricts the port. UI asset origins must satisfy both this guard and `allowedOrigins`. Mutation-enabled scenario targets require `allowedHosts`.
+
+Every variable interpolated into URL, path, header, auth or connection fields is a secret, regardless of its name. Explicit `publicEnv: [PUBLIC_API_URL]` permits non-secret values to appear. Never mark credentials public. Short secrets under eight characters are masked only as whole data values, URL components or header values so configuration and file paths remain readable; one warning names the variable. Basic-auth encodings and report data values are masked too. Redaction is not general PII detection.
+
+`report.displayTimezone: America/New_York` changes all human date displays; UTC is the default. Source parsing still requires explicit sourceTimezones for values without an offset.
+
+The XLSX reader caps each XML entry at 128 MiB, individual text tokens at 256 KiB, tags/attributes at 32 KiB and accumulated cells at 1 MiB. Shared-string temporary data plus its index have a 64 MiB quota; decompression above 200:1 after the first 1 MiB fails. Task-owned temporary files are removed on success, errors, exit, SIGINT and SIGTERM. An uncatchable SIGKILL can prevent cleanup; resource quotas bound the residue.

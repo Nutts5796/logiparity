@@ -1,6 +1,12 @@
-# Third-party font notices
+# Third-party notices
 
-The bundled Latin subsets are embedded into offline HTML reports. Both fonts use SIL OFL 1.1. Source URLs, hashes and the pinned upstream revision are in `packages/core/assets/fonts/upstream.json`.
+The root package includes `THIRD_PARTY_LICENSES.txt` with complete normal-runtime, optional-adapter and font license texts. Installed first-party files are under `node_modules/logiparity/node_modules/@logiparity/`. Font metadata is at `node_modules/logiparity/node_modules/@logiparity/core/assets/fonts/upstream.json`; both OFL texts are beside it. External runtime dependencies resolve through the consuming project's `node_modules`, so its lockfile and overrides control them.
+
+Some upstream npm packages omit a separate LICENSE: isarray, pg-types and pgpass include full terms in their README; saxes' omitted file is recovered from its exact upstream revision. pgsql-ast-parser declares MIT and railroad-diagrams declares CC0; their notices include the corresponding complete standard SPDX texts and identify that source explicitly. No copyright year is inferred. `licenses/upstream/sources.json` in the source repository records immutable sources and hashes. `node scripts/licenses.mjs` generates the combined file.
+
+# Font texts
+
+The bundled Latin subsets are embedded into offline HTML reports. Both fonts use SIL OFL 1.1. Source URLs, hashes and the pinned upstream revision are in the installed core package's `assets/fonts/upstream.json`.
 
 ## Manrope
 

@@ -1,8 +1,8 @@
 # LogiParity
 
-Keyed parity means matching records by a shared identifier, such as a shipment ID. LogiParity compares logistics data and tests how a system responds to disruptions.
+The same shipment appears in an API, a dispatcher screen and an accounting export. A missing export row or a one-cent payout difference can survive ordinary endpoint tests. LogiParity compares the same records across those surfaces and checks orders after disruptions.
 
-The same shipment appears in an API, a dispatcher screen and an accounting export. A missing export row or a one-cent payout difference can survive ordinary endpoint tests. LogiParity compares these records by a shared key and identifies the affected records and fields.
+Keyed matching means joining records by a shared identifier, such as a shipment ID, regardless of row order. Composite keys can identify a load and its charge type together.
 
 ## Why this matters
 
@@ -25,22 +25,44 @@ An endpoint test can pass while another surface shows different records. A contr
 | [Great Expectations](https://docs.greatexpectations.io/docs/core/introduction/)                | Data validation through expectations and validation workflows. |
 | [data-diff style tools](https://github.com/datafold/data-diff)                                 | Record and value differences within or across database tables. |
 
+| **LogiParity** | Keyed comparisons across API, file, browser and SQL sources, plus disruption invariants. |
+
+It names likely causes (page boundary, timezone, rounding), accounts for money differences, and checks orders after a disruption, all from one config.
+
 One configuration compares records across browser tables, APIs, files and SQL. Scenario runs add invariant checks after disruptions, such as whether every order remains present and has one assignment.
 
 ## Install
 
-Install the CLI in your project with Node.js 20 or later:
+Use Node.js 20 or later. CI tests Node 20, 22 and 24. Node 20 is [end-of-life](https://nodejs.org/en/about/eol); support ends in LogiParity 2.0.
 
 ```sh
-npm install --save-dev logiparity
-./node_modules/.bin/logiparity --version
+npm install --save-dev --save-exact logiparity
+npx logiparity --version
 ```
 
-Pin a published version in CI so dependency updates happen through review. For the synthetic demo and source development, use the checkout below. CI tests Node 20 and 22.
+The commands below describe 1.1.0, currently **Unreleased**. To review it before publication, install the locally prepared `logiparity-1.1.0.tgz` instead of the registry package. Published 1.0.0 does not include the `demo` command.
 
 ## Quickstart
 
-Use Node.js 20 or later; CI tests Node 20 and 22. The demo contains 55 synthetic drivers and 2,750 orders. No browser or database installation is needed for this first report.
+The installed package runs a synthetic delivery day with 55 drivers and 2,750 orders:
+
+```sh
+npx logiparity demo
+```
+
+Keep the service open. It creates `logiparity-demo/parity.yaml` without overwriting an existing file and prints these commands for a second terminal in the same project:
+
+```sh
+cd logiparity-demo
+curl --max-time 60 --retry 3 -fS http://127.0.0.1:3010/exports/shipments.xlsx -o shipments.xlsx
+curl --max-time 60 --retry 3 -fS http://127.0.0.1:3010/exports/shipments.csv -o shipments.csv
+npx logiparity validate --config parity.yaml
+npx logiparity check --config parity.yaml
+```
+
+Expected: zero findings, exit 0. Open `logiparity-demo/report/report.html` from the project directory. Stop the service, run `npx logiparity demo --bugs`, and repeat both downloads and the check. The report finds page-boundary losses, rounding differences and shifted datetimes. The three cause cards account for the money and count differences; each cause still needs a fix. JSON retains every normalized finding.
+
+For a source checkout:
 
 ```sh
 git clone https://github.com/Nutts5796/logiparity.git
@@ -49,18 +71,16 @@ npm ci --ignore-scripts
 DEMO_PORT=3010 npm run demo
 ```
 
-`DEMO_PORT` selects the local port. Keep that terminal open. In a second terminal, from `logiparity`:
+In another terminal, from `logiparity`:
 
 ```sh
 export DEMO_API_URL=http://127.0.0.1:3010
 npm run demo:export
-./node_modules/.bin/logiparity validate --config examples/demo/parity.yaml
-./node_modules/.bin/logiparity check --config examples/demo/parity.yaml
+npx logiparity validate --config examples/demo/parity.yaml
+npx logiparity check --config examples/demo/parity.yaml
 ```
 
-Expected: zero findings and exit 0. Open `logiparity-report/report.html`. The same directory contains JSON, Markdown and JUnit reports. If you change the port, use the same value in `DEMO_API_URL`.
-
-Stop the demo, run `DEMO_PORT=3010 npm run demo:bugs`, then repeat the export and check commands. The report finds missing rows, payout differences and shifted datetimes. Repeated patterns get one summary line each, for example "1,833 delivered_at values in csv differ by exactly -6h (likely timezone)", and every individual finding stays listed below.
+The checkout report is `logiparity-report/report.html`. Use `npm run demo:bugs` after stopping the service to enable the six synthetic defects. `DEMO_PORT` and `DEMO_API_URL` must agree. A source checkout currently reports moderate development-dependency advisories; see [dependency audit notes](docs/dependency-audit.md). Those development tools are excluded from the installed CLI.
 
 ![Light parity report](docs/images/report.png)
 
@@ -76,7 +96,7 @@ Stop the demo, run `DEMO_PORT=3010 npm run demo:bugs`, then repeat the export an
 
 </details>
 
-HTML, Markdown and console reports show currency amounts and readable UTC dates, with a separate difference. HTML tooltips and JSON keep the raw values. The offline HTML report groups causes, reconciles money totals and opens with the findings that need individual review.
+HTML, Markdown and console reports show currency amounts and readable UTC dates, with a separate difference. JSON keeps the raw values. The offline HTML report groups causes, reconciles money totals and opens with the findings that need individual review.
 
 ## Try it on your staging
 
@@ -131,12 +151,12 @@ Download a current export, validate the configuration, then compare:
 
 ```sh
 export STAGING_API_URL=http://127.0.0.1:3010
-curl --fail --silent --show-error "$STAGING_API_URL/exports/shipments.csv" --output shipments.csv
+curl --max-time 60 --retry 3 --fail --silent --show-error "$STAGING_API_URL/exports/shipments.csv" --output shipments.csv
 ./node_modules/.bin/logiparity validate --config parity.yaml
 ./node_modules/.bin/logiparity check --config parity.yaml
 ```
 
-Read the export and API at the same cutoff time, or compare a closed day to avoid in-flight updates. `totalPath` detects capped pages and confirms completion. Money uses decimal strings by default; opt into numeric input only after reviewing precision. The [configuration reference](docs/configuration.md) also covers SQL, browser sources and `validate --allow-missing-env` for CI lint steps without secrets.
+Read the export and API at the same cutoff time: freeze a snapshot or pass the same `as_of` value to both requests if the target supports it. Downloading them one after another does not freeze changing data. Otherwise compare a closed day after updates have stopped. `totalPath` detects capped pages and confirms completion. Money uses decimal strings by default; opt into numeric input only after reviewing precision. The [configuration reference](docs/configuration.md) also covers SQL, browser sources and `validate --allow-missing-env` for CI lint steps without secrets.
 
 The [GitHub Actions template](templates/github-actions.yml) installs a pinned CLI, downloads a staging export and retains reports for seven days. Tokens are scoped to the download and comparison steps. Shared staging checks run manually or nightly; enable pull requests only with an isolated target. A [container job](templates/github-actions-container.yml) and a [GitLab job](templates/gitlab-ci.yml) are also available.
 
@@ -148,7 +168,7 @@ Run a disruption against the demo after starting it and setting `DEMO_API_URL`:
 ./node_modules/.bin/logiparity scenario run examples/demo/scenarios/02-vehicle-breakdown.yaml --target examples/demo/target.yaml
 ```
 
-Five examples cover no-show, breakdown, traffic delay, cancellation and capacity reduction. Select the state needed by each check:
+Five examples cover no-show, breakdown, traffic delay, cancellation and capacity reduction. Run `logiparity scenario validate <scenario.yaml> --target <target.yaml>` before injecting events. `affected_reassigned` verifies that each affected active order acquired a different driver, including when a replan never ran. Select the state needed by each check:
 
 - The lost-order check reads the order list. The single-assignment check also reads assignments.
 - Capacity checks add drivers and vehicles.
@@ -158,17 +178,52 @@ For asynchronous replanning, configure a completion signal before reading the fi
 
 ![Synthetic breakdown scenario](docs/images/scenario.png)
 
+## U.S. freight and delivery
+
+The [synthetic freight day](examples/freight/README.md) covers driver and carrier settlement, accessorials such as detention, duplicate tenders and charge-line reconciliation. Compare a closed day at one cutoff, configure explicit zones for DST and multi-timezone fleets, and map EDI 210/214 data exported as CSV to the same load keys. LogiParity reads the exported tables; it does not decode EDI messages.
+
+![Synthetic freight reconciliation](docs/images/freight.png)
+
+## How it was built
+
+The author defined the problem and design rules from his own work. The [origin stories](docs/design-decisions.md) cover waybill reconciliation, money in minor units after a FinTech rounding issue, and never guessing timezones.
+
+AI coding assistants wrote the implementation in milestones, with each milestone reviewed before the next. Repeated rounds with AI-simulated users found real defects that were fixed: redaction hiding ordinary values such as the version number; consumer `npm ci` and `npm audit` failures that led to replacing ExcelJS; one-off differences labelled as patterns; and base-path and secret-redaction gaps.
+
+The author chose the report design from eight prototypes, rejected decorative tick-mark charts, and required readable labels, dates and a money reconciliation.
+
+## Verify
+
+After publication, verify the installed dependency signatures and release artifacts:
+
+```sh
+npm audit signatures
+VERSION=$(node -p "require('./node_modules/logiparity/package.json').version")
+gh release download "v$VERSION" --repo Nutts5796/logiparity --pattern "logiparity-$VERSION.tgz" --pattern "logiparity-$VERSION.tgz.sha256"
+shasum -a 256 -c "logiparity-$VERSION.tgz.sha256"
+gh attestation verify "logiparity-$VERSION.tgz" --repo Nutts5796/logiparity
+# Set LOGIPARITY_IMAGE to the full verified reference in that release's notes:
+# ghcr.io/nutts5796/logiparity:<version>-slim@sha256:<verified index digest>
+docker buildx imagetools inspect "$LOGIPARITY_IMAGE"
+gh attestation verify "oci://$LOGIPARITY_IMAGE" --repo Nutts5796/logiparity
+docker run --rm "$LOGIPARITY_IMAGE" --version
+```
+
+A 1.1.0 digest will exist only after publication. Use a CI variable for the reference, then commit the verified digest from the release notes in a small follow-up change. Do not combine a 1.0.0 image with a 1.1.0 CLI.
+
 ## Safety
 
 Test and staging only. Read-only except scenario events you map yourself. No telemetry. [Security details](SECURITY.md).
 
 ## Status
 
-First public release, maintained by one author. Feedback and pilots welcome.
+1.0.0 is published; 1.1.0 is under review. Maintained by one author.
+
+Pilots and feedback: share a sanitized use case or defect through [Issues](https://github.com/Nutts5796/logiparity/issues).
 
 ## About
 
-Built by Sergei Orekhovskii, a QA engineer who previously ran transport logistics for a delivery service and worked in railway operations. Developed with AI coding assistants; design decisions, review and testing by the author. Read the [technical design decisions](docs/design-decisions.md).
+Built by Sergei Orekhovskii, a QA engineer who previously ran transport logistics for a delivery service. Read the [technical design decisions](docs/design-decisions.md).
 
 ## Reference
 

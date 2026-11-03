@@ -1,51 +1,7 @@
-# Build history
+# Development history
 
-LogiParity is written in strict TypeScript and ESM for Node.js 20 or later. Tests run on Node 20 and 22. Software license: MIT, copyright Sergei Orekhovskii.
+The initial release introduced keyed comparisons across APIs, exports, browser tables and PostgreSQL, followed by disruption scenarios and local AI draft previews. Reports, packaging, security checks and staging examples were developed and reviewed in successive milestones.
 
-| Milestone | Delivered                                                                                                                 |
-| --------- | ------------------------------------------------------------------------------------------------------------------------- |
-| M1        | Keyed comparisons, exact normalization, REST and streaming file adapters, synthetic delivery API and export bug fixtures. |
-| M2        | HTML, Markdown and JUnit reports, aggregates, failure thresholds and config initialization.                               |
-| M3        | Dispatcher login and UI adapter, read-only PostgreSQL, stale-status and timezone bug fixtures, currency display.          |
-| M4        | Disruption scenarios, virtual clock, operational invariants, fresh post-scenario comparisons and UTC display.             |
-| M5        | Optional AI drafts with local payload previews, redaction and mock-provider tests.                                        |
-| M6        | Standalone bundled package, public API exports, Docker build, CI templates and user guides.                               |
+Later test rounds led to a streaming XLSX reader, clearer configuration errors and an offline report with readable labels, dates, money reconciliation and light and dark themes. AI-simulated users supplied test cases; the resulting defects were reproduced and corrected.
 
-M6 verification: 205 unit and adapter tests, 62 end-to-end tests, and 100% core line coverage on Node 20.20.2 and 22.23.4. The standalone package installed offline with an empty cache. The Docker image passed non-root Chromium and report checks on linux/arm64. A clean-source quickstart with fresh dependency downloads finished in 15.33 seconds.
-
-## M7 — Pre-release fixes
-
-- Added REST completion signals and cap detection, opt-in numeric money, pattern groups, HTML finding counts, console UTC values and clearer column/key diagnostics. Selected invariants read only their required state. Implementation: `e02381e`.
-- Reworked onboarding and contributor guides, manual/nightly staging CI defaults, release-tarball installation instructions and a generic driver no-show example.
-- Node 20.20.2 and 22.23.4: lint, typecheck, 244 unit/adapter tests and 73 end-to-end tests passed. Core line coverage: 99.75% (404/405).
-- The README workflow and clean-source quickstart passed: 2,750 records per source, zero findings and all four report files. Empty-cache offline package installation, public APIs/types, CLI reports, documentation checks, workflow lint and desktop/mobile report search passed.
-- M7 container verification remains covered by the M6 results; the Docker daemon was unavailable for a repeat run.
-
-## M8 — Release readiness
-
-- Enforced UI redirect origins, rejected rendered dot-segments, required explicit opt-in for scenario-local module entries, and rejected executable AI drafts. Expanded secret masking and sanitized diagnostic paths and terminal output. Main implementation: `bbafc39`.
-- Added strict short-first-page handling with an explicit opt-out, exact per-key rollups and a freight settlement example, optional/fixed scenario waits, record-stride summaries, version output and source-free configuration validation.
-- Prepared checksum-verified release assets, a CI-gated tag workflow, full/slim Docker targets and consumer caching/timeouts. Documented design rationales and refreshed the parity/scenario screenshots. Build preparation: `91acdbb`.
-- Node 20.20.2 and 22.23.4 passed lint, typecheck, 284 unit/adapter tests and 82 end-to-end tests each, with two local test workers. Core line coverage: 99.78% (468/469). Empty-cache offline package installation, public APIs/types and installed CLI checks passed, including missing/extra groups in AI explanations (`13de83a`).
-- README and freight commands passed from a clean checkout. The clean-source helper also passed: 2,750 records per demo source and three freight loads rolled up from nine settlement lines, all with zero findings. Both Docker targets passed on linux/arm64 as UID 1000; the full image ran Chromium and the slim image contained no browsers. API/file checks, SQL validation, report generation, offline AI, documentation links/YAML and workflow lint passed.
-
-## M9 — 1.0.1 public-test fixes
-
-- Fixed consumer npm ci with explicit dependencies for the then-vendored ExcelJS reader.
-- Preserved secret interpolation values for redaction and expanded AI credential masks.
-- Shared semantic validation between check and validate and added environment linting.
-- Added findings for rollup conflicts, blank money and duplicate line identities.
-- Added currency-symbol options and custom datetime formats.
-- Improved monetary display, report grammar and pattern placement.
-- Prepared npm trusted publishing, checksums and a CycloneDX SBOM.
-- Node 20.20.2 and 22.23.4 passed 301 unit and adapter tests and 87 end-to-end tests. Core line coverage was 99.64%. Package checks, documented examples and browser report checks passed. Both container targets passed on arm64, and the slim image also passed on amd64.
-
-## M9.1 — Final 1.0.1 corrections
-
-Replaced runtime ExcelJS with streaming XML and a bounded shared-string cache backed by temporary files. Plain consumer install, npm ci and npm audit passed with zero vulnerabilities on Node 20 and 22 with npm 10.9.9 and 11.6.0. The baseline null.trim crash did not reproduce locally; its failing audit is documented.
-
-Fixed short and encoded credential redaction. Added datetime formats selected per source, clearer rollup explanations and persistent warnings. Reports include matching final-page losses and prioritize unexplained findings. Release retries verify existing assets and registry integrity. Both image variants install the same checksummed tarball and target amd64 and arm64 with provenance and SBOM attestations.
-
-Implemented the approved Studio report and dispatcher. Optional labels provide readable names. Offline charts use exact pattern membership. Money totals retain an honest unexplained remainder. Findings are paginated and searchable across the complete result. Readable UTC dates and currency amounts have separate differences; raw values remain in JSON, JUnit and HTML tooltips. Both themes and mobile layouts were visually checked, and documentation screenshots were regenerated.
-
-Node 20.20.2 and 22.23.4 passed lint, type checks, 348 unit and adapter tests and 103 end-to-end tests. Core line coverage was 98.46%. Clean README commands and the four-source UI example passed. Package installation, upstream verification and container checks are recorded in the local review evidence. Repository formatting was isolated in a separate style commit. No release was published. Work stops here for owner review.
+M10 adds supported pattern thresholds, certain-key reconciliation, composite charge keys, row filters, tender uniqueness and reassignment checks. It also improves report language, bounds XLSX resource use and separates optional browser and database adapters from the small default installation. Version 1.1.0 is unreleased and awaits review.
