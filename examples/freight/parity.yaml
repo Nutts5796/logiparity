@@ -1,4 +1,4 @@
-# Synthetic closed day. Defects are intentional; no production data.
+# Synthetic closed settlement period including the fall-back day; intentional defects, no production data.
 version: 1
 environment: test
 entities:
