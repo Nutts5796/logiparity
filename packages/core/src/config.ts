@@ -397,7 +397,7 @@ export const entitySchema = z
               : condition;
           for (const value of Array.isArray(choice) ? choice : [choice]) {
             try {
-              normalize(value, sourceRule(v.compare[field], config), source);
+              normalize(value, sourceRule(v.compare[field], config, source), source);
             } catch {
               ctx.addIssue({
                 code: 'custom',

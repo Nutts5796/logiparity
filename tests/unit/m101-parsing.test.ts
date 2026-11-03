@@ -150,3 +150,15 @@ it('reports a misspelled key without a second required-key error', async () => {
     expect(message).not.toContain('entities[0].key:');
   }
 });
+it('keeps source date defaults when a field overrides only another source', async () => {
+  const config = definition({
+    sources: { a: csv, b: { ...csv, datetimeFormat: 'MM/dd/yyyy HH:mm' } },
+    compare: {
+      at: { type: 'datetime', format: { a: "yyyy-MM-dd'T'HH:mm:ss'Z'" }, sourceTimezones: { a: 'UTC', b: 'UTC' } },
+    },
+  });
+  const report = await compareEntities([config], async function* (name) {
+    yield { id: 'O1', at: name === 'a' ? '2026-11-02T13:01:00Z' : '11/02/2026 13:01' };
+  });
+  expect(report.findings).toEqual([]);
+});

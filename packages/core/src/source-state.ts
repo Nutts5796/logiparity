@@ -51,7 +51,9 @@ function readKey(
       (typeof value === 'number' && !Number.isSafeInteger(value))
     )
       throw new Error(`Key field ${field} must be a nonempty string or safe integer.`);
-    return String(normalize(value, sourceRule(entity.compare[field], entity.sources[source]), source) ?? '').trim();
+    return String(
+      normalize(value, sourceRule(entity.compare[field], entity.sources[source], source), source) ?? '',
+    ).trim();
   });
   return typeof entity.key === 'string' ? { key: parts[0] ?? '' } : { key: JSON.stringify(parts), parts };
 }
@@ -97,7 +99,7 @@ function normalizeRow(
   for (const [field, value] of Object.entries(raw)) {
     try {
       if (value instanceof Error) throw value;
-      let rule = sourceRule(entity.compare[field], entity.sources[source]);
+      let rule = sourceRule(entity.compare[field], entity.sources[source], source);
       const config = entity.sources[source];
       if (rule?.type === 'money' && config) rule = { ...rule, currency: rowCurrency(rule, config, raw) };
       row[field] = normalize(value, rule, source);
@@ -359,7 +361,7 @@ export async function readSource(
       let filterInvalid = false;
       for (const field of Object.keys(filters)) {
         try {
-          filterRow[field] = normalize(raw[field], sourceRule(entity.compare[field], config), source);
+          filterRow[field] = normalize(raw[field], sourceRule(entity.compare[field], config, source), source);
         } catch {
           filterInvalid = true;
           break;

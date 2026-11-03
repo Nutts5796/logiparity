@@ -6,13 +6,14 @@ import { wallClock, type NormalizedValue } from './types.js';
 export function sourceRule(
   rule: ComparisonRule | undefined,
   config: SourceConfig | undefined,
+  source = '',
 ): ComparisonRule | undefined {
   return (
     rule && {
       ...rule,
       locale: rule.locale ?? config?.locale ?? 'en-US',
       numberFormat: rule.numberFormat ?? config?.numberFormat,
-      format: rule.format ?? config?.datetimeFormat,
+      format: typeof rule.format === 'string' ? rule.format : (rule.format?.[source] ?? config?.datetimeFormat),
     }
   );
 }
@@ -170,7 +171,7 @@ function normalizeDatetime(text: string, rule: ComparisonRule, source: string): 
   const format = typeof rule.format === 'string' ? rule.format : rule.format?.[source];
   const zone = rule.sourceTimezones[source];
   const iso = text.replace(' ', 'T');
-  const explanation = format ? DateTime.fromFormatExplain(text, format, { locale: rule.locale }) : undefined;
+  const explanation = format ? DateTime.fromFormatExplain(text, format, { locale: rule.locale ?? 'en-US' }) : undefined;
   if (format && (!explanation?.rawMatches || explanation.invalidReason))
     throw new Error(`Datetime value does not match configured format "${format}" for source ${source}.`);
   const hasTime = format
@@ -182,7 +183,7 @@ function normalizeDatetime(text: string, rule: ComparisonRule, source: string): 
     ? typeof explanation?.matches?.Z === 'number'
     : /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(text);
   const date = format
-    ? DateTime.fromFormat(text, format, { zone: zone ?? 'UTC', setZone: true, locale: rule.locale })
+    ? DateTime.fromFormat(text, format, { zone: zone ?? 'UTC', setZone: true, locale: rule.locale ?? 'en-US' })
     : DateTime.fromISO(iso, { zone: zone ?? 'UTC', setZone: true });
   if (!date.isValid)
     throw new Error(
@@ -232,10 +233,10 @@ export function normalize(value: unknown, rule: ComparisonRule | undefined, sour
   }
   switch (rule.type) {
     case 'string':
-      return rule.caseFold ? text.toLocaleLowerCase(rule.locale) : text;
+      return rule.caseFold ? text.toLocaleLowerCase(rule.locale ?? 'en-US') : text;
     case 'enum': {
       const mapped = Object.hasOwn(rule.map, text) ? (rule.map[text] ?? text) : text;
-      return rule.caseFold ? mapped.toLocaleLowerCase(rule.locale) : mapped;
+      return rule.caseFold ? mapped.toLocaleLowerCase(rule.locale ?? 'en-US') : mapped;
     }
     case 'money': {
       if (typeof value === 'number') {
