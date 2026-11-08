@@ -1,0 +1,16 @@
+version: 1
+environment: test
+entities:
+  - name: item
+    key: id
+    sources:
+      api:
+        {
+          type: rest,
+          baseUrl: 'http://127.0.0.1:8765',
+          path: /items.json,
+          items: '$[*]',
+          fields: { id: $.id, name: $.name },
+        }
+      export: { type: csv, file: ./export.csv, fields: { id: id, name: name } }
+report: { outputs: [console], dir: ./out }

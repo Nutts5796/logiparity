@@ -187,19 +187,28 @@ export async function* readRest(config: RestConfig, context: AdapterContext): As
       if (signals.some((value) => value !== signals[0]))
         throw new Error(`${location}; completion signals disagree. Correct the response metadata or pagination paths.`);
       more = signals[0];
+      const unverified =
+        'API returned no total count or completion metadata; completeness is not verified. Compare rows read with a separate count request using the same filter, or configure totalPath, totalPagesPath or hasMorePath.';
       if (more === undefined && page === 0 && items.length < pagination.size) {
         const message = `${location}; no completion signal is configured. This is an unverified short first page. Set totalPath, totalPagesPath or hasMorePath to verify completeness.`;
         if (!pagination.allowShortFirstPage)
           throw new Error(
             `${message} Set size: ${items.length} to match the server cap, or allowShortFirstPage: true only to accept an unverified short first page.`,
           );
-        (context.warn ?? console.warn)(safeConsole(message));
-      }
+        (context.warn ?? console.warn)(safeConsole(`${message} ${unverified}`));
+      } else if (more === undefined && page === 0) (context.warn ?? console.warn)(safeConsole(unverified));
     }
     for (let index = 0; index < items.length; index++) {
       try {
         yield Object.fromEntries(
-          Object.entries(config.fields).map(([field, path]) => [field, selectOne(items[index], fieldPath(path))]),
+          Object.entries(config.fields).map(([field, path]) => [
+            field,
+            selectOne(
+              items[index],
+              fieldPath(path),
+              config.absentAsNull || (typeof path !== 'string' && path.missing === null),
+            ),
+          ]),
         );
       } catch (error) {
         throw new Error(

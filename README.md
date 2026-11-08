@@ -57,7 +57,7 @@ npm install --save-dev --save-exact pg@8.23.1 pg-query-stream@4.17.1 pgsql-ast-p
 
 These are optional peers loaded only for UI or SQL configurations. Missing peers fail with exit 2 and the exact install command. External runtime dependencies are exact-pinned ordinary dependencies, so consumer `overrides` can patch them. See [dependencies and sizes](docs/dependencies.md) and the [offline kit](docs/release.md#offline-installation).
 
-Version **1.1.0** adds the installed demo, optional browser parity and independent currency reconciliation.
+Version **1.2.0** adds calendar dates, opt-in absent REST properties, exact number-total breakdowns and more precise cause labels. For this development snapshot, install a locally built tarball; registry examples apply after release.
 
 ## Quickstart
 
@@ -89,7 +89,7 @@ cd logiparity-demo
 npx logiparity check --config parity-ui.yaml
 ```
 
-The login command records a private synthetic session in `logiparity-demo/auth/state.json`; restart invalidates it. The generated directory ignores auth and reports. Download CSV/XLSX as above before the UI check. With `--bugs`, the UI adds the stale-status cause to the API/export checks. `demo login` uses the generated service marker, including its actual port.
+The login command records a private synthetic session in `logiparity-demo/auth/state.json`; restart invalidates it. The generated directory ignores auth and reports. Download CSV/XLSX as above before the UI check. With `--bugs`, the UI adds the stale-status cause to the API/export checks. Its explanation asks to compare refresh timing in both sources and field definitions; the planted demo fixture establishes the UI lag, while this heuristic alone cannot assign blame in real datasets. `demo login` uses the generated service marker, including its actual port.
 
 For a source checkout:
 
@@ -186,7 +186,7 @@ npx logiparity validate --config parity.yaml
 npx logiparity check --config parity.yaml
 ```
 
-Read the export and API at the same cutoff time: freeze a snapshot or pass the same `as_of` value to both requests if the target supports it. Downloading them one after another does not freeze changing data. Otherwise compare a closed day after updates have stopped. `totalPath` detects capped pages and confirms completion. Money uses decimal strings by default; opt into numeric input only after reviewing precision. The [configuration reference](docs/configuration.md) also covers SQL, browser sources and `validate --allow-missing-env` for CI lint steps without secrets.
+Read the export and API at the same cutoff time: freeze a snapshot or pass the same `as_of` value to both requests if the target supports it. Downloading them one after another does not freeze changing data. Otherwise compare a closed day after updates have stopped. `totalPath` detects capped pages and confirms completion. Money uses decimal strings by default; opt into numeric input only after reviewing precision. Calendar dates use `type: date`; REST null omission can be accepted explicitly with `absentAsNull: true` or per-field `missing: null`. Reads without pagination metadata warn that completeness needs a separate count check. The [Socrata recipe](docs/recipes/socrata.md) covers these API shapes. The [configuration reference](docs/configuration.md) also covers SQL, browser sources and `validate --allow-missing-env` for CI lint steps without secrets.
 
 The [GitHub Actions template](templates/github-actions.yml) installs a pinned CLI, downloads a staging export and retains reports for seven days. Tokens are scoped to the download and comparison steps. Shared staging checks run manually or nightly; enable pull requests only with an isolated target. A [container job](templates/github-actions-container.yml) and a [GitLab job](templates/gitlab-ci.yml) are also available.
 
@@ -216,11 +216,11 @@ The [synthetic freight day](examples/freight/README.md) covers carrier settlemen
 
 ## How it is tested
 
-The automated suite passed 564 [unit](https://github.com/Nutts5796/logiparity/tree/main/tests/unit) and [adapter](https://github.com/Nutts5796/logiparity/tree/main/tests/adapters) tests. The 116 passing [end-to-end tests](https://github.com/Nutts5796/logiparity/tree/main/tests/e2e) exercise real Chromium, disposable PostgreSQL and synthetic HTTP services. Coverage includes core, adapters, scenarios and CLI; packages/ai is tested but excluded from this coverage figure. Unit/adapter line coverage is 91.84% (3,233/3,520), above the 80% gate: core 97.22%, adapters 90.93%, scenarios 82.29% and CLI 60.59%. Scenario runner.ts and CLI subprocess behavior are exercised by e2e and installed-package checks and do not increase unit-process coverage.
+The automated suite passed 593 [unit](https://github.com/Nutts5796/logiparity/tree/main/tests/unit) and [adapter](https://github.com/Nutts5796/logiparity/tree/main/tests/adapters) tests. The 117 passing [end-to-end tests](https://github.com/Nutts5796/logiparity/tree/main/tests/e2e) exercise real Chromium, disposable PostgreSQL and synthetic HTTP services. Coverage includes core, adapters, scenarios and CLI; packages/ai is tested but excluded from this coverage figure. Unit/adapter line coverage is 91.94% (3,321/3,612), above the 80% gate: core 97.14%, adapters 91.01%, scenarios 82.29% and CLI 60.59%. Scenario runner.ts and CLI subprocess behavior are exercised by e2e and installed-package checks and do not increase unit-process coverage.
 
-Installed-package checks cover both optional-peer profiles, public imports and declarations, installed demo/scenario commands and empty-cache offline installation. Six clean consumer profiles on npm 10.9.9 and 11.6.0 passed plain npm install, npm ci, npm audit and npm audit signatures, including coexistence with Playwright 1.63.0 and pg 8.16.0. The clean-source quickstart executed the README commands, including plain npm ci, and checked all report formats.
+Installed-package checks cover both optional-peer profiles, public imports and declarations, installed demo/scenario commands and empty-cache offline installation. The 1.2.0 package check uses npm 11.6.0 for plain npm install, npm ci, npm audit and npm audit signatures in default and optional-peer consumer profiles. The full profile uses the exact recorded tested peers (Playwright 1.64.1), matching the lockfile browser and offline kit; public peer ranges remain unchanged. Historical 1.1.0 verification also covered six npm 10/11 profiles and coexistence with older compatible peers. The clean-source quickstart executed the README commands, including plain npm ci, and checked all report formats.
 
-The seeded property-based test [filter-contributions.test.ts](https://github.com/Nutts5796/logiparity/blob/main/tests/unit/filter-contributions.test.ts) checks reconciliation while amounts and filter fields change independently. Regression cases include one-off differences that never become patterns, DST gaps and overlaps, capped pages, duplicate keys, source filters and currency partitions, XLSX amplification, temporary-file cleanup, path escape, redirect refusal and report symlinks. Tests and fixtures are synthetic; these results are not claims about production use. Live publication, Docker builds/image execution and real staging APIs are not tested by this review. Detailed commands and review limits are in the [milestone report](https://github.com/Nutts5796/logiparity/blob/main/docs/development/MILESTONE_REPORT.md).
+The seeded mixed-cause regression [m11-causes.test.ts](https://github.com/Nutts5796/logiparity/blob/main/tests/unit/m11-causes.test.ts) plants case, whitespace, numeric and consistent enum changes together. The seeded property-based test [filter-contributions.test.ts](https://github.com/Nutts5796/logiparity/blob/main/tests/unit/filter-contributions.test.ts) checks reconciliation while amounts and filter fields change independently. Regression cases include one-off differences that never become patterns, DST gaps and overlaps, capped pages, duplicate keys, source filters and currency partitions, XLSX amplification, temporary-file cleanup, path escape, redirect refusal and report symlinks. Tests and fixtures are synthetic; these results are not claims about production use. Live publication, Docker builds/image execution and real staging APIs are not tested by this review. Detailed commands and review limits are in the [milestone report](https://github.com/Nutts5796/logiparity/blob/main/docs/development/MILESTONE_REPORT.md).
 
 ## How it was built
 
@@ -251,7 +251,7 @@ Test and staging only. Read-only except scenario events you map yourself. No tel
 
 ## Status
 
-Version 1.1.0 — 2026-11-03. Maintained by Sergei Orekhovskii.
+Development target 1.2.0; latest registry release 1.1.0 — 2026-11-03. Maintained by Sergei Orekhovskii.
 
 Pilots and feedback: share a sanitized use case or defect through [Issues](https://github.com/Nutts5796/logiparity/issues).
 
@@ -262,6 +262,7 @@ Sergei Orekhovskii, the maintainer, is a QA engineer who previously ran transpor
 ## Reference
 
 - [Configuration](docs/configuration.md), [scenarios](docs/scenarios.md) and [optional AI drafts](docs/ai.md)
+- [Socrata/FMCSA recipe](docs/recipes/socrata.md)
 - [Reports](docs/report-formats.md), [JSON schema](docs/report-schema.md) and [adapter development](docs/writing-adapters.md)
 - [CI](docs/ci.md), [Docker](docs/docker.md), [FAQ](docs/faq.md) and [release guide](docs/release.md)
 - [Dependencies](docs/dependencies.md), [audit notes](docs/dependency-audit.md) and [build history](https://github.com/Nutts5796/logiparity/blob/main/docs/development/milestones.md)

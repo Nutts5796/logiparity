@@ -1,3 +1,4 @@
+import { DecimalSum, displayDecimal, negateDecimal, sumDecimal } from './aggregates.js';
 import { reportHeader, reportHero, findingDonut, findingsSection, reportDocument } from './html-layout.js';
 import { redactTree, secretValues } from './diagnostics.js';
 import { aggregateDisplay, rawAggregateDisplay, aggregateDifference, aggregateStatus } from './money-display.js';
@@ -169,55 +170,58 @@ function reconciliationCards(report: Report, presentation: ReportPresentation): 
             return partitions.flatMap(({ currency, parts }) => {
               const actual = currency
                   ? (aggregate.valuesByCurrency?.[source]?.[currency] ?? 0n)
-                  : aggregate.values[source],
+                  : (aggregate.exactValues?.[source] ?? aggregate.values[source]),
                 reference = currency
                   ? (aggregate.valuesByCurrency?.[entity.reference]?.[currency] ?? 0n)
-                  : aggregate.values[entity.reference];
+                  : (aggregate.exactValues?.[entity.reference] ?? aggregate.values[entity.reference]);
               if (actual === undefined || reference === undefined || actual === reference) return [];
               const definition = labels.entity(entity.entity)?.aggregates.find((item) => item.name === aggregate.name);
               const rule =
                 definition?.type === 'sum' ? labels.entity(entity.entity)?.compare[definition.field] : undefined;
-              const difference = BigInt(actual) - BigInt(reference);
-              const amount = (value: bigint) =>
-                `${value > 0n ? '+' : ''}${(currency ?? rule?.currency) ? formatMoneyMajor(value, currency ?? rule?.currency ?? 'USD') : numberText(value)}`;
+              const difference = sumDecimal(actual, negateDecimal(String(reference)));
+              const amount = (value: bigint | string) =>
+                `${sumDecimal(value) !== '0' && !String(value).startsWith('-') ? '+' : ''}${(currency ?? rule?.currency) ? formatMoneyMajor(BigInt(value), currency ?? rule?.currency ?? 'USD') : displayDecimal(value)}`;
               const buckets = [
                 {
                   label: `Missing rows (${numberText(parts.missingRows.count)})`,
-                  value: BigInt(parts.missingRows.amount),
+                  value: parts.missingRows.amount,
                   color: 'page',
-                  show: BigInt(parts.missingRows.amount) !== 0n,
+                  show: sumDecimal(parts.missingRows.amount) !== '0',
                 },
                 ...[
                   { label: 'Extra rows', part: parts.extraRows },
                   { label: 'Value differences', part: parts.valueDifferences },
                 ].map(({ label, part }) => ({
                   label: `${label} (${numberText(part?.count ?? 0)})`,
-                  value: BigInt(part?.amount ?? 0),
+                  value: part?.amount ?? 0n,
                   color: 'round',
                   show: !!part?.count,
                 })),
                 ...parts.patterns.map((part) => ({
                   label: `${BigInt(report.groups?.[part.group]?.delta ?? 0) >= -3n && BigInt(report.groups?.[part.group]?.delta ?? 0) <= 3n ? 'Rounding' : 'Fixed differences'} (${numberText(part.count)})`,
-                  value: BigInt(part.amount),
+                  value: part.amount,
                   color: 'round',
-                  show: BigInt(part.amount) !== 0n,
+                  show: sumDecimal(part.amount) !== '0',
                 })),
                 {
                   label: `Uncertain lines${parts.uncertain?.keys.length ? ': ' + uncertainKeyText(parts.uncertain.keys) : ''}`,
-                  value: BigInt(parts.uncertain?.amount ?? 0),
+                  value: parts.uncertain?.amount ?? 0n,
                   color: 'tz',
                   show: !!parts.uncertain?.keys.length,
                 },
-                { label: 'Unexplained remainder', value: BigInt(parts.remainder), color: 'review', show: true },
+                { label: 'Unexplained remainder', value: parts.remainder, color: 'review', show: true },
               ].filter((part) => part.show);
-              const total = buckets.reduce((sum, part) => sum + (part.value < 0n ? -part.value : part.value), 0n);
-              const accounted = BigInt(parts.remainder) === 0n && !parts.uncertain?.keys.length;
+              const total = new DecimalSum();
+              for (const part of buckets)
+                total.add(String(part.value).startsWith('-') ? negateDecimal(part.value) : part.value);
+              const accounted = sumDecimal(parts.remainder) === '0' && !parts.uncertain?.keys.length;
               const bars = buckets
-                .filter((part) => part.value)
-                .map(
-                  (part) =>
-                    `<i style="width:${total ? Number(((part.value < 0n ? -part.value : part.value) * 10000n) / total) / 100 : 0}%;background:var(--c-${part.color})"></i>`,
-                )
+                .filter((part) => sumDecimal(part.value) !== '0')
+                .map((part) => {
+                  const absolute = new DecimalSum();
+                  absolute.add(String(part.value).startsWith('-') ? negateDecimal(part.value) : part.value);
+                  return `<i style="width:${absolute.percentOf(total)}%;background:var(--c-${part.color})"></i>`;
+                })
                 .join('');
               const rows = buckets
                 .map(
@@ -370,7 +374,7 @@ export function htmlReport(report: Report, presentation: ReportPresentation = {}
       const info = kindInfo[card.kind],
         group = groups[card.groups[0] ?? -1],
         words = group ? patternWords(group, presentation) : undefined;
-      return `<article class="card pat" style="--c:var(--c-${info.color});--soft:var(--c-${info.color}-soft)"><div class="ic">${icon(info.path)}</div><div class="kind">${escape(card.label)}</div><div class="delta">${escape(card.headline)}</div><p>${escape(card.hint)}</p><div class="viz" title="${escape(words?.sentence ?? '')}">${card.chart}</div><p class="next-step"><b>Next step:</b> ${escape(card.nextStep)}</p><button class="btn btn-soft" data-card="${index}" type="button" aria-pressed="false">Show these findings</button></article>`;
+      return `<article class="card pat" style="--c:var(--c-${info.color});--soft:var(--c-${info.color}-soft)"><div class="ic">${icon(info.path)}</div><div class="kind">${escape(card.label)}</div><div class="delta">${escape(card.headline)}</div><p${card.kind === 'formatting_difference' ? ' style="white-space:pre-wrap"' : ''}>${escape(card.hint)}</p><div class="viz" title="${escape(words?.sentence ?? '')}">${card.chart}</div><p class="next-step"><b>Next step:</b> ${escape(card.nextStep)}</p><button class="btn btn-soft" data-card="${index}" type="button" aria-pressed="false">Show these findings</button></article>`;
     })
     .join('');
   const options = (values: [string, string][]) =>

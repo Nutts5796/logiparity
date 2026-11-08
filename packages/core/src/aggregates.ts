@@ -7,7 +7,7 @@ import type { NormalizedValue } from './types.js';
 export class DecimalSum {
   private units = 0n;
   private scale = 0;
-  add(value: number): void {
+  add(value: number | bigint | string): void {
     const [mantissa = '', exponent = '0'] = String(value).toLowerCase().split('e');
     const fraction = mantissa.split('.')[1]?.length ?? 0;
     let scale = fraction - Number(exponent);
@@ -21,6 +21,22 @@ export class DecimalSum {
       this.scale = scale;
     }
     this.units += units * 10n ** BigInt(this.scale - scale);
+  }
+  text(): string {
+    const absolute = String(this.units < 0n ? -this.units : this.units).padStart(this.scale + 1, '0');
+    const decimal = this.scale
+      ? `${absolute.slice(0, -this.scale)}.${absolute.slice(-this.scale)}`.replace(/\.?0+$/, '')
+      : absolute;
+    return `${this.units < 0n ? '-' : ''}${decimal}`;
+  }
+  percentOf(other: DecimalSum): number {
+    if (other.units === 0n) return 0;
+    const scale = Math.max(this.scale, other.scale);
+    return (
+      Number(
+        (this.units * 10n ** BigInt(scale - this.scale) * 10000n) / (other.units * 10n ** BigInt(scale - other.scale)),
+      ) / 100
+    );
   }
   value(): number {
     const value = Number(`${this.units}e-${this.scale}`);
@@ -38,6 +54,22 @@ export class DecimalSum {
     return absolute * 10n ** BigInt(scale - this.scale) <= bound.units * 10n ** BigInt(scale - bound.scale);
   }
 }
+export const negateDecimal = (value: bigint | string): bigint | string =>
+  typeof value === 'bigint' ? -value : value.startsWith('-') ? value.slice(1) : '-' + value;
+export function sumDecimal(...values: (bigint | string | number)[]): string {
+  const sum = new DecimalSum();
+  values.forEach((value) => sum.add(value));
+  return sum.text();
+}
+export function displayDecimal(value: bigint | string): string {
+  const text = sumDecimal(value),
+    [integer = '0', fraction] = text.split('.');
+  return (
+    (text.startsWith('-') ? '−' : '') +
+    BigInt(integer.replace(/^-/, '')).toLocaleString('en-US') +
+    (fraction ? '.' + fraction : '')
+  );
+}
 
 export function measureAggregate(
   aggregate: AggregateConfig,
@@ -45,6 +77,7 @@ export function measureAggregate(
   source: string,
   config: SourceConfig,
   rows: Map<string, Record<string, NormalizedValue>>,
+  exactSums?: Map<string, string>,
 ): number | bigint | undefined {
   const required = [...Object.keys(aggregate.where), ...(aggregate.type === 'sum' ? [aggregate.field] : [])];
   if (required.some((field) => !Object.hasOwn(config.fields, field))) return undefined;
@@ -67,15 +100,20 @@ export function measureAggregate(
       );
   }
   if (aggregate.type === 'count') return count;
+  if (entity.compare[aggregate.field]?.type === 'number') exactSums?.set(aggregate.name, decimal.text());
   return entity.compare[aggregate.field]?.type === 'money' ? money : decimal.value();
 }
 
-export function aggregateEqual(expected: number | bigint, actual: number | bigint, config: AggregateConfig): boolean {
+export function aggregateEqual(
+  expected: number | bigint | string,
+  actual: number | bigint | string,
+  config: AggregateConfig,
+): boolean {
   if (typeof expected === 'bigint' && typeof actual === 'bigint')
     return (expected > actual ? expected - actual : actual - expected) <= BigInt(config.tolerance);
-  if (typeof expected !== 'number' || typeof actual !== 'number') return false;
+  if (typeof expected === 'bigint' || typeof actual === 'bigint') return false;
   const difference = new DecimalSum();
   difference.add(expected);
-  difference.add(-actual);
+  difference.add(negateDecimal(String(actual)));
   return difference.within(config.tolerance);
 }

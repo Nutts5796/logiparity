@@ -2,6 +2,7 @@ import type { EntityConfig } from './config.js';
 import type { NormalizedValue, AggregateResult } from './types.js';
 import { humanize, presentationRule } from './labels.js';
 import { displayValue } from './report-utils.js';
+import { displayDecimal, negateDecimal, sumDecimal } from './aggregates.js';
 
 // Presentation context stays outside Report, preserving the JSON wire format.
 export interface ReportPresentation {
@@ -61,6 +62,8 @@ export function presentationValue(
   if (!rule && !aggregate) return displayValue(value);
   if (rule?.type === 'datetime' && typeof value === 'number')
     return readableDatetime(value, presentation.displayTimezone) ?? plain;
+  if (rule?.type === 'number' && typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value))
+    return displayDecimal(value);
   if (rule?.type === 'enum' && typeof value === 'string') return humanize(value);
   if (rule?.type !== 'money' || !rule.currency || integerValue(value) === undefined) return plain;
   return formatMoneyMajor(integerValue(value)!, rule.currency);
@@ -122,7 +125,13 @@ export function aggregateDisplay(
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([currency, value]) => formatMoneyMajor(BigInt(value), currency))
       .join('; ');
-  return presentationValue(aggregate.values[source], entity, aggregate.name, true, presentation);
+  return presentationValue(
+    aggregate.exactValues?.[source] ?? aggregate.values[source],
+    entity,
+    aggregate.name,
+    true,
+    presentation,
+  );
 }
 export function rawAggregateDisplay(
   aggregate: AggregateResult,
@@ -171,9 +180,12 @@ export function presentationDifference(
     if (rule?.type === 'money') return `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, rule.currency!)}`;
     return `${delta > 0n ? '+' : ''}${delta.toLocaleString('en-US')}`.replace(/^-/, '−');
   }
-  if (typeof expected === 'number' && typeof actual === 'number') {
-    const delta = actual - expected;
-    return `${delta > 0 ? '+' : ''}${delta.toLocaleString('en-US', { maximumFractionDigits: 12 })}`.replace(/^-/, '−');
+  if (
+    (typeof expected === 'number' && typeof actual === 'number') ||
+    (rule?.type === 'number' && expected !== undefined && actual !== undefined)
+  ) {
+    const delta = sumDecimal(String(actual), negateDecimal(String(expected)));
+    return `${delta !== '0' && !delta.startsWith('-') ? '+' : ''}${displayDecimal(delta)}`;
   }
   return '—';
 }
@@ -207,8 +219,8 @@ export function aggregateDifference(
       })
       .join('; ');
   return presentationDifference(
-    aggregate.values[reference],
-    aggregate.values[source],
+    aggregate.exactValues?.[reference] ?? aggregate.values[reference],
+    aggregate.exactValues?.[source] ?? aggregate.values[source],
     entity,
     aggregate.name,
     true,
@@ -231,7 +243,8 @@ export function aggregateStatus(aggregate: AggregateResult, source: string, refe
           BigInt(aggregate.valuesByCurrency?.[source]?.[currency] ?? 0) ===
           BigInt(aggregate.valuesByCurrency?.[reference]?.[currency] ?? 0),
       )
-    : aggregate.values[source] === aggregate.values[reference];
+    : (aggregate.exactValues?.[source] ?? aggregate.values[source]) ===
+      (aggregate.exactValues?.[reference] ?? aggregate.values[reference]);
   if (matches) return 'Matches';
   const buckets = aggregate.reconciliationByCurrency?.[source];
   const parts = buckets
@@ -239,7 +252,7 @@ export function aggregateStatus(aggregate: AggregateResult, source: string, refe
     : aggregate.reconciliation?.[source]
       ? [aggregate.reconciliation[source]]
       : [];
-  return parts.length && parts.every((part) => BigInt(part.remainder) === 0n && !part.uncertain?.keys.length)
+  return parts.length && parts.every((part) => sumDecimal(part.remainder) === '0' && !part.uncertain?.keys.length)
     ? 'Accounted for'
     : 'Needs review';
 }

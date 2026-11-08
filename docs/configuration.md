@@ -45,7 +45,7 @@ Fields map logical names to paths, column headers or selectors. `{path: ..., lab
 
 ## Common source options and filters
 
-Every source accepts `label`, `fields`, `where`, `caseSensitive` (false), `unique` (empty), `rollup`, `maxRows` (100,000, maximum 10,000,000), `locale`, `numberFormat`, `datetimeFormat` and `currencyField`. Row limits count physical input records before filtering; exceeding a limit yields a source error. The engine indexes the reference and one candidate in memory. With Node's default heap (about 2 GB on an 8 GB Mac), two 1,000,000-row CSV sources with six columns ran out of memory; the same check passed with `NODE_OPTIONS=--max-old-space-size=6144`. Raise `maxRows` together with the heap size.
+Every source accepts `label`, `fields`, `where`, `caseSensitive` (false), `unique` (empty), `rollup`, `maxRows` (100,000, maximum 10,000,000), `locale`, `numberFormat`, `datetimeFormat`, `dateFormat` and `currencyField`. Row limits count physical input records before filtering; exceeding a limit yields a source error. The engine indexes the reference and one candidate in memory. With Node's default heap (about 2 GB on an 8 GB Mac), two 1,000,000-row CSV sources with six columns ran out of memory; the same check passed with `NODE_OPTIONS=--max-old-space-size=6144`. Raise `maxRows` together with the heap size.
 
 `where` combines fields with AND. Values can be scalar equality, a nonempty list, or `{not: value}` / `{not: [values]}`. The same predicate grammar applies to source, rollup and aggregate filters. Text equality is case-insensitive by default; set source `caseSensitive: true` for exact text matching. Typed filter values use their field normalization without comparison tolerances; untyped values use canonical strings. Quote money in major units: `{pay: "10.00"}`. Source filters run before unrelated cells are parsed; an all-filtered source warns with its entity/source and applied predicates.
 
@@ -57,7 +57,7 @@ datetimeFormat: 'dd.MM.yyyy HH:mm'
 maxRows: 100000
 ```
 
-A rule's explicit locale, numberFormat or format overrides the source default. Validation checks locales and formats. `unique: [tender_id]` finds a nonblank value reused across distinct keys in one source (`duplicate_value`); with rollups, keep that field in `by` or `first`. A repeated tender alone does not prove a duplicate payment.
+A rule's explicit locale, numberFormat or format overrides the source default. `dateFormat` is the default for calendar-date fields; `datetimeFormat` applies to datetime fields. Validation checks locales and formats. `unique: [tender_id]` finds a nonblank value reused across distinct keys in one source (`duplicate_value`); with rollups, keep that field in `by` or `first`. A repeated tender alone does not prove a duplicate payment.
 
 ## Source types
 
@@ -70,6 +70,18 @@ A rule's explicit locale, numberFormat or format overrides the source default. V
 | sql  | `connectionEnv`, `query`, `fields` | `params: []`, `timeoutMs: 10000`, `batchSize: 1000`                                                                                                                             |
 
 REST mappings use supported JSONPath property/index/wildcard selections; unsupported syntax names its source and field. File/SQL mappings use headers/column names. UI mappings are selectors relative to each row; extraction reads rendered text. UI requires Playwright and Chromium; SQL requires the three optional PostgreSQL peers. Missing-peer errors give exact `--save-exact` install commands. Playwright supports `>=1.63.0 <2.0.0`; installed-package tests cover 1.63.0 and the pinned development version 1.64.1. Other peer ranges are in [dependencies](dependencies.md).
+
+### Absent REST properties
+
+REST mappings are strict by default. If an API omits null-valued JSON properties, opt in for the whole REST source with `absentAsNull: true`, or just one field with `missing: null`:
+
+```yaml
+fields:
+  id: $.id
+  name: {path: $.name, label: Name, missing: null}
+```
+
+An absent property, including an absent ancestor object, becomes null. Explicit null already maps to null. Wrong object/array shapes, multiple selected values and unreadable pages still fail; missing pagination metadata is never treated as a null field. The setting does not make a missing entity key valid. `missing: null` is a REST-only mapping option; `absentAsNull` defaults to false. The strict error names both opt-ins. Use a per-field opt-in when omitted properties might otherwise hide a misspelled mapping.
 
 ### REST completion and authentication
 
@@ -84,6 +96,8 @@ pagination:
 
 Page pagination also supports `start: 1`; offset pagination uses `type: offset`, `offsetParam: offset`, `sizeParam`, `size`. Both support `totalPath`, `totalPagesPath` or `hasMorePath` completion signals. A short first page without a signal fails unless `allowShortFirstPage: true` explicitly opts into an unverified result (warning). Cursor pagination uses `type: cursor`, required `next`, `cursorParam: cursor`, `sizeParam: limit`, `size: 200`; link pagination uses `type: link`. Page sizes are 1–10,000. Exhausted page limits, loops and inconsistent completion fail instead of comparing partial data. Redirects are refused immediately; selected items are counted while decoding, before large arrays materialize.
 
+When page/offset pagination has none of those completion signals, a successful read emits one report warning: completeness is not verified. A short later page still ends the read; an empty probe page does too. A matching comparison is not proof of complete extraction. Run a separate count request with the same filter and a stable dataset version, then compare the count with the physical rows read. Cursor/Link endpoints retain their explicit next-pointer termination. The [Socrata recipe](recipes/socrata.md) shows count requests and stable ordering. There is no automatic `countUrl` option in this version.
+
 Use `auth: {type: bearer, tokenEnv: STAGING_TOKEN}` or `auth: {type: basic, usernameEnv: STAGING_USER, passwordEnv: STAGING_PASSWORD}`. `headersEnv: {Authorization: {env: STAGING_TOKEN, prefix: 'Bearer '}}` constructs a header; a string names an environment variable containing the complete value. Literal `headers` cannot contain sensitive auth/cookie/API-key headers. Credentials must not be embedded in URLs.
 
 ### Browser and SQL restrictions
@@ -96,11 +110,12 @@ SQL accepts the restricted read-only SELECT grammar and bound `params`; the adap
 
 | Type     | Behavior                                                                                                                                                                                                                                                                                                      |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| string   | Trim text; optional `caseFold: true`. `emptyAsNull: true` by default.                                                                                                                                                                                                                                         |
-| enum     | Apply `map: {Delivered: delivered}` and optional case folding. Unknown values keep their trimmed text.                                                                                                                                                                                                        |
+| string   | Trim text; optional `caseFold: true` and `whitespaceFold: true` (collapse repeated whitespace to one space). `emptyAsNull: true` by default.                                                                                                                                                                  |
+| enum     | Apply `map: {Delivered: delivered}`, optional case folding and `whitespaceFold`. Unknown values keep their trimmed text.                                                                                                                                                                                      |
 | number   | Finite decimals with locale or explicit separators, Latin digits, valid grouping; `tolerance: 0`. Numeric JSON/exponent input is accepted; exponent text and currency symbols are rejected.                                                                                                                   |
 | money    | Required fallback `currency: USD`; decimal text becomes bigint minor units. `allowNumber: false`, `allowCurrencySymbol: false`, `negativeParentheses: false` by default. `tolerance: 0` in integer minor units. Excess nonzero decimal places fail unless `round: half-up` or `round: half-even` is selected. |
 | datetime | ISO 8601 becomes UTC epoch milliseconds; `toleranceSeconds: 0`. Offset-free values require `sourceTimezones`; missing zones, impossible dates, DST gaps and ambiguous wall clocks fail.                                                                                                                       |
+| date     | Calendar day normalized as `yyyy-MM-dd`, without a time zone, epoch or tolerance; see below.                                                                                                                                                                                                                  |
 
 Null compares equal only to null. Empty input becomes null by default; `emptyAsNull: false` preserves empty strings only for string/enum fields. Currency digits follow Intl, not a hard-coded two decimals. Numeric sums use exact canonical decimals before returning a finite number; overflow fails.
 
@@ -120,9 +135,17 @@ Map `currency` in every source using it. A source-level `currencyField` is also 
 
 `allowNumber: true` converts finite numeric values through their canonical decimal text, including exponent notation. Decimal strings preserve original precision and remain preferable: conversion cannot recover precision already lost by JavaScript. For USD, 12.345 fails unless explicit rounding is configured; `0.1 + 0.2` can fail for the same reason. String inputs still use locale parsing. Rounding applies to input normalization, not to a combined total.
 
+### Calendar dates
+
+Use `type: date` for a calendar day, rather than an instant. The default input is strict ISO `yyyy-MM-dd`; month/year-only, timestamps and zone suffixes fail. `format: yyyyMMdd` or `format: {sms: dd-MMM-yy, census: yyyyMMdd}` selects supported calendar formats by source. The source-level `dateFormat` supplies a fallback; an explicit field format takes precedence. Formats must contain year, month and day and must not contain time or zone tokens. Impossible dates, including invalid leap days, become invalid-value findings. Null follows the normal null rules. Excel serial dates use their recorded calendar day; native JavaScript Date inputs use their UTC day.
+
+The `yy` rule is fixed: **00–68 means 2000–2068; 69–99 means 1969–1999**. It is independent of the current year, host time zone and Luxon global settings. Prefer four-digit years when century ambiguity matters. For example, `20250107` and `07-JAN-25` normalize to `2025-01-07`. A date rule rejects time zones, display-zone fields and nonzero time/numeric tolerances. JSON and every human format retain the canonical day. Calendar-day mismatches stay individual findings rather than timezone or vocabulary patterns.
+
+String/enum comparison still trims surrounding whitespace by default. Repeated internal whitespace remains significant unless `whitespaceFold: true`; letter case remains significant unless `caseFold: true`. Both fold settings default to false. Formatting patterns preserve the actual normalized spelling and suggest those opt-ins without automatically accepting differences.
+
 ### Datetimes and facility display
 
-`format: 'MM/dd/yyyy HH:mm'` applies a supported Luxon format to every source; `format: {export: 'MM/dd/yyyy HH:mm'}` applies only to that source. Other sources keep ISO parsing. Literal text must be quoted within a format. Explicit Z/±hh:mm offsets are authoritative, including XLSX `t="d"` cells. Naive cells and Excel serials use `sourceTimezones: {export: America/Chicago}`; ambiguous serials require a time zone column or unambiguous text, not a guessed offset.
+Validation rejects a datetime format without time tokens and recommends `type: date`, including a source's effective `datetimeFormat`. `format: 'MM/dd/yyyy HH:mm'` applies a supported Luxon format to every source; `format: {export: 'MM/dd/yyyy HH:mm'}` applies only to that source. Other sources keep ISO parsing. Literal text must be quoted within a format. Explicit Z/±hh:mm offsets are authoritative, including XLSX `t="d"` cells. Naive cells and Excel serials use `sourceTimezones: {export: America/Chicago}`; ambiguous serials require a time zone column or unambiguous text, not a guessed offset.
 
 `report.displayTimezone: America/New_York` changes human displays (default UTC), never parsing. A datetime rule's optional `displayTimezoneField: facility_zone` selects a mapped per-row IANA zone from the reference record for finding values and example charts; retain it in rollup `first`. Invalid/absent display metadata falls back to the report zone. This display-only option cannot repair offset-free input; configure source parsing separately. JSON retains normalized epoch milliseconds.
 

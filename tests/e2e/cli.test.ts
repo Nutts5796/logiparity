@@ -119,7 +119,7 @@ async function writeConfig(
               type: 'rest',
               baseUrl: url,
               path: '/api/shipments',
-              pagination: { type: 'page', size: 200 },
+              pagination: { type: 'page', size: 200, totalPath: '$.pagination.total' },
               items: '$.data[*]',
               fields: { id: '$.id', payout: '$.driver_payout', status: '$.status', delivered_at: '$.delivered_at' },
             },

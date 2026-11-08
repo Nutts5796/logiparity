@@ -15,26 +15,34 @@ export function jsonPathTokens(path: string): string[] {
   }
   return tokens;
 }
-export function selectJson(value: unknown, path: string): unknown[] {
+export function selectJson(value: unknown, path: string, absentAsNull = false): unknown[] {
+  const absent = Symbol('absent');
   const tokens = jsonPathTokens(path);
   let nodes: unknown[] = [value];
   for (const token of tokens) {
     nodes = nodes.flatMap((node) => {
+      if (node === absent) return [absent];
       if (token === '*') {
         if (!Array.isArray(node))
           throw new Error(`JSONPath ${path}: [*] requires an array; correct the extraction path.`);
         return node as unknown[];
       }
-      if (!node || typeof node !== 'object' || !Object.hasOwn(node, token))
-        throw new Error(`JSONPath ${path}: property ${token} is missing; correct the field mapping.`);
+      if (!node || typeof node !== 'object')
+        throw new Error(`JSONPath ${path}: property ${token} requires an object; correct the field mapping.`);
+      if (!Object.hasOwn(node, token)) {
+        if (absentAsNull) return [absent];
+        throw new Error(
+          `JSONPath ${path}: property ${token} is missing; correct the field mapping or opt in with absentAsNull: true (source) or missing: null (field).`,
+        );
+      }
       return [Reflect.get(node, token) as unknown];
     });
   }
-  return nodes;
+  return nodes.map((node) => (node === absent ? null : node));
 }
 
-export function selectOne(value: unknown, path: string): unknown {
-  const nodes = selectJson(value, path);
+export function selectOne(value: unknown, path: string, absentAsNull = false): unknown {
+  const nodes = selectJson(value, path, absentAsNull);
   if (nodes.length !== 1) throw new Error(`JSONPath ${path} selected ${nodes.length} values; map exactly one scalar.`);
   return nodes[0];
 }

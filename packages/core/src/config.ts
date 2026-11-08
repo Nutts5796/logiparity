@@ -13,6 +13,7 @@ import { normalize, sourceRule } from './normalize.js';
 import { validAllowedHost } from './hosts.js';
 import { DateTime } from 'luxon';
 import { findingCategories } from './policy.js';
+import { formatHasTime, isCalendarFormat } from './calendar.js';
 
 const name = z.string().min(1);
 const locale = name.refine((value) => {
@@ -48,6 +49,10 @@ const datetimeFormat = name.refine((format) => {
     return false;
   }
 }, 'Use supported datetime format tokens, e.g. yyyy-MM-dd HH:mm; quote literal text');
+const dateFormat = datetimeFormat.refine(
+  isCalendarFormat,
+  'Use a calendar date format with year, month and day, without time or time zone',
+);
 export const reportFileMode = z
   .string({
     error: "Quote report.fileMode as an octal string, e.g. '0640' or '0o640'; plain integers are not accepted",
@@ -61,11 +66,18 @@ const sourceFormatting = {
   locale: locale.optional(),
   numberFormat: numberFormat.optional(),
   datetimeFormat: datetimeFormat.optional(),
+  dateFormat: dateFormat.optional(),
 };
 
 const envName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
 export const fieldSchema = z.union([name, z.object({ path: name, label: name.optional() }).strict()]);
 const fields = z.record(name, fieldSchema).refine((v) => Object.keys(v).length > 0, 'Map at least one field');
+const restFields = z
+  .record(
+    name,
+    z.union([name, z.object({ path: name, label: name.optional(), missing: z.null().optional() }).strict()]),
+  )
+  .refine((v) => Object.keys(v).length > 0, 'Map at least one field');
 const httpUrl = z.url().refine((v) => {
   try {
     const u = new URL(v);
@@ -169,7 +181,8 @@ export const sourceSchema = z.discriminatedUnion('type', [
       unique: z.array(name).default([]),
       baseUrl: httpUrl,
       path: name,
-      fields,
+      fields: restFields,
+      absentAsNull: z.boolean().default(false),
       items: name.default('$.data[*]'),
       headers: z
         .record(name, z.string())
@@ -268,12 +281,13 @@ export const sourceSchema = z.discriminatedUnion('type', [
 ]);
 export const ruleSchema = z
   .object({
-    type: z.enum(['string', 'number', 'money', 'datetime', 'enum']),
+    type: z.enum(['string', 'number', 'money', 'datetime', 'date', 'enum']),
     allowCurrencySymbol: z.boolean().default(false),
     negativeParentheses: z.boolean().default(false),
     format: z.union([datetimeFormat, z.record(name, datetimeFormat)]).optional(),
     allowNumber: z.boolean().default(false),
     caseFold: z.boolean().default(false),
+    whitespaceFold: z.boolean().default(false),
     emptyAsNull: z.boolean().default(true),
     locale: locale.optional(),
     numberFormat: numberFormat.optional(),
@@ -291,6 +305,28 @@ export const ruleSchema = z
   })
   .strict()
   .superRefine((v, ctx) => {
+    for (const [source, format] of Object.entries(typeof v.format === 'string' ? { '': v.format } : (v.format ?? {}))) {
+      if (v.type === 'datetime' && !formatHasTime(format))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['format', ...(source ? [source] : [])],
+          message: 'Datetime date has no time in the configured format; use type: date for a calendar date',
+        });
+      if (v.type === 'date' && !isCalendarFormat(format))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['format', ...(source ? [source] : [])],
+          message: 'Use a calendar date format without time or time zone',
+        });
+    }
+    if (
+      v.type === 'date' &&
+      (Object.keys(v.sourceTimezones).length || v.tolerance || v.toleranceSeconds || v.displayTimezoneField)
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Calendar dates have no time zone or time tolerance; compare the calendar day exactly',
+      });
     if (v.type === 'money' && !v.currency)
       ctx.addIssue({ code: 'custom', path: ['currency'], message: 'Money requires a currency (e.g. USD)' });
     if (v.type === 'money' && !Number.isSafeInteger(v.tolerance))
@@ -348,6 +384,19 @@ export const entitySchema = z
         message: 'Configure at least two sources; the first is the reference',
       });
     for (const [source, config] of Object.entries(v.sources)) {
+      for (const [field, rule] of Object.entries(v.compare))
+        if (
+          rule.type === 'datetime' &&
+          Object.hasOwn(config.fields, field) &&
+          !(typeof rule.format === 'string' ? rule.format : rule.format?.[source]) &&
+          config.datetimeFormat &&
+          !formatHasTime(config.datetimeFormat)
+        )
+          ctx.addIssue({
+            code: 'custom',
+            path: ['sources', source, 'datetimeFormat'],
+            message: `Datetime format for ${field} has no time; use type: date for a calendar date`,
+          });
       if (keyFields(v.key).some((field) => !Object.hasOwn(config.fields, field)))
         ctx.addIssue({
           code: 'custom',

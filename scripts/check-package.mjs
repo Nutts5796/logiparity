@@ -126,7 +126,15 @@ try {
   const full = join(temporary, 'consumer-full');
   await mkdir(full);
   await npm(['init', '-y'], full);
-  const optional = parseCheckedJson(await readFile(join(root, 'package.json'), 'utf8')).peerDependencies;
+  const sourceManifest = parseCheckedJson(await readFile(join(root, 'package.json'), 'utf8'));
+  const optional = sourceManifest.logiparityTestedPeers;
+  assert.deepEqual(Object.keys(optional).sort(), Object.keys(sourceManifest.peerDependencies).sort());
+  for (const [name, version] of Object.entries(optional))
+    assert.equal(
+      version,
+      sourceManifest.devDependencies[name],
+      `Keep tested peer ${name} aligned with the lockfile browser/tooling`,
+    );
   await npm(['install', archive, ...Object.entries(optional).map(([name, value]) => `${name}@${value}`)], full);
   const fullLock = await readFile(join(full, 'package-lock.json'), 'utf8');
   await npm(['ci'], full);

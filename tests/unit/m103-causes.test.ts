@@ -57,7 +57,7 @@ it('distinguishes lagging statuses from a vocabulary map using matched rows (Cro
     matchingCount: 7,
   });
   for (const text of formats(report, entity)) {
-    expect(text).toContain('stale or lagging');
+    expect(text).toContain('lagging update or a different definition');
     expect(text).not.toContain('different vocabulary');
     expect(text).toContain('In transit');
   }

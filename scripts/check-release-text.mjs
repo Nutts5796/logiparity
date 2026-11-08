@@ -2,7 +2,7 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const defaultRoot = fileURLToPath(new URL('../', import.meta.url));
-export async function checkReleaseText(root = defaultRoot) {
+export async function checkReleaseText(root = defaultRoot, { publication = false } = {}) {
   const manifest = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
   const files = new Set(['package.json']);
   const walk = async (directory) => {
@@ -37,14 +37,25 @@ export async function checkReleaseText(root = defaultRoot) {
   for (const file of files) {
     if (!/\.(?:md|txt|json|ya?ml|html|js|ts)$/.test(file)) continue;
     const text = await readFile(resolve(root, file), 'utf8');
-    for (const [index, line] of text.split('\n').entries())
+    for (const [index, line] of text.split('\n').entries()) {
+      // Development/package checks accept only the current version's exact heading.
+      // Actual release preparation/publication still rejects every unreleased entry.
+      if (!publication && file === 'CHANGELOG.md' && line === `## [${manifest.version}] - Unreleased`) continue;
       if (
         /\bunreleased\b|\bunder review\b|\bnot published\b|https?:\/\/[^\s)"']*\/compare\/[^\s)"']*HEAD\b/i.test(line)
       )
         failures.push(`${file}:${index + 1}: ${line.trim()}`);
+    }
   }
   if (failures.length) throw new Error('Release text contains pre-publication wording:\n' + failures.join('\n'));
   console.log(`Release text passed for ${files.size} shipped files at version ${manifest.version}.`);
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
-  await checkReleaseText(process.argv[2] ? resolve(process.argv[2]) : defaultRoot);
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const args = process.argv.slice(2),
+    positional = args.filter((arg) => arg !== '--publication');
+  if (positional.length > 1 || positional.some((arg) => arg.startsWith('--')))
+    throw new Error('Usage: check-release-text.mjs [root] [--publication]');
+  await checkReleaseText(positional[0] ? resolve(positional[0]) : defaultRoot, {
+    publication: args.includes('--publication'),
+  });
+}

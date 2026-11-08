@@ -33,6 +33,7 @@ export interface SourceState {
   identities: Map<string, number>;
   sums: Map<string, Map<string, DecimalSum>>;
   measurements: Map<string, number | bigint | undefined>;
+  exactMeasurements: Map<string, string>;
   excluded: Map<string, Set<string>>;
   count: number;
   position: number;
@@ -263,6 +264,7 @@ function measureSource(entity: EntityConfig, source: string, config: SourceConfi
           source,
           { ...config, fields },
           new Map([...state.rows].filter(([key]) => !excluded.has(key))),
+          state.exactMeasurements,
         ),
       );
     } catch (error) {
@@ -343,6 +345,7 @@ export async function readSource(
     identities: new Map(),
     sums: new Map(),
     measurements: new Map(),
+    exactMeasurements: new Map(),
     excluded: new Map(),
     count: 0,
     position: 0,

@@ -200,7 +200,11 @@ export function deltaGroups(
       : [],
   );
 }
-export function mappingGroups(bucket: readonly Finding[], minCount: number): FindingGroup[] {
+export function mappingGroups(
+  bucket: readonly Finding[],
+  minCount: number,
+  rule?: EntityConfig['compare'][string],
+): FindingGroup[] {
   const pairs = new Map<string, Finding[]>();
   for (const finding of bucket) {
     if (finding.reason === 'currency_mismatch') continue;
@@ -217,18 +221,40 @@ export function mappingGroups(bucket: readonly Finding[], minCount: number): Fin
     const first = entries[0];
     if (!first || entries.length < minCount || first.expected === undefined || first.actual === undefined) return [];
     const summary = `${entries.length.toLocaleString('en-US')} ${first.field} values in ${first.source} map ${quoted(first.expected)} to ${quoted(first.actual)}.`;
+    const fold = (value: string) => value.trim().replace(/\s+/gu, ' ');
+    const formatting =
+      (!rule || rule.type === 'enum' || rule.type === 'string') &&
+      typeof first.expected === 'string' &&
+      typeof first.actual === 'string' &&
+      fold(first.expected).toLocaleLowerCase(rule?.locale ?? 'en-US') ===
+        fold(first.actual).toLocaleLowerCase(rule?.locale ?? 'en-US');
+    const formattingCause = formatting
+      ? fold(String(first.expected)) === fold(String(first.actual))
+        ? ('whitespace_only' as const)
+        : String(first.expected).toLocaleLowerCase(rule?.locale ?? 'en-US') ===
+            String(first.actual).toLocaleLowerCase(rule?.locale ?? 'en-US')
+          ? ('case_only' as const)
+          : ('case_whitespace' as const)
+      : undefined;
     return [
       {
         ...identity(first),
         count: entries.length,
-        kind: 'value_mapping' as const,
-        ...(entries.some((item) => item.evidence?.sourceContainsReference)
-          ? {
-              cause: 'stale_value' as const,
-              referenceCount: first.evidence?.referenceCount ?? entries.length,
-              matchingCount: first.evidence?.matchingCount ?? 0,
-            }
-          : {}),
+        kind:
+          rule?.type === 'number'
+            ? ('number_change' as const)
+            : formatting
+              ? ('formatting_difference' as const)
+              : ('value_mapping' as const),
+        ...(formattingCause
+          ? { cause: formattingCause }
+          : rule?.type !== 'number' && entries.some((item) => item.evidence?.sourceContainsReference)
+            ? {
+                cause: 'stale_value' as const,
+                referenceCount: first.evidence?.referenceCount ?? entries.length,
+                matchingCount: first.evidence?.matchingCount ?? 0,
+              }
+            : {}),
         expected: first.expected,
         actual: first.actual,
         summary,
@@ -263,7 +289,9 @@ export function groupFindings(
     const candidates =
       rule?.type === 'money' || rule?.type === 'datetime'
         ? deltaGroups(bucket, entities, minCount)
-        : mappingGroups(bucket, minCount);
+        : rule?.type === 'date'
+          ? []
+          : mappingGroups(bucket, minCount, rule);
     for (const group of candidates) groups.push(group);
   }
   for (const group of groups) {
@@ -304,7 +332,7 @@ export function groupMembership(report: Report, presentation: ReportPresentation
           ? [index]
           : [];
       if (finding.type !== 'field_mismatch' || finding.field !== group.field) return [];
-      if (group.kind === 'value_mapping')
+      if (['value_mapping', 'formatting_difference', 'number_change'].includes(group.kind))
         return finding.expected === group.expected && finding.actual === group.actual ? [index] : [];
       const expected = integerValue(finding.expected),
         actual = integerValue(finding.actual);

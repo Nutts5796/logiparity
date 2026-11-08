@@ -1,6 +1,6 @@
 # Release procedure
 
-Release only reviewed changes. Version 1.1.0 is dated 2026-11-03; 1.0.1 was never published and its notes are folded into 1.1.0. Local preparation never pushes, tags or publishes. Use `npm run pack:artifact` for the sanitized CLI alone or `npm run release:prepare` for the complete release assets. Direct workspace `npm pack`/`npm publish` is rejected so a manifest with development fields cannot be distributed accidentally; release jobs publish the reviewed tarball.
+Release only reviewed changes. Development/package checks allow only the current version’s exact development heading in `CHANGELOG.md`; `check:release-text -- --publication`, release preparation, release builds and publishing reject it. Replace it with the actual date only after owner approval. Version 1.1.0 is dated 2026-11-03; 1.0.1 was never published and its notes are folded into 1.1.0. Local preparation never pushes, tags or publishes. Use `npm run pack:artifact` for the sanitized CLI alone or `npm run release:prepare` for the complete release assets. Direct workspace `npm pack`/`npm publish` is rejected so a manifest with development fields cannot be distributed accidentally; release jobs publish the reviewed tarball.
 
 ## One-time setup
 

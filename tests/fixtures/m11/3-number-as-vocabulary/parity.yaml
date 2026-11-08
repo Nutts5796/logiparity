@@ -1,0 +1,11 @@
+version: 1
+environment: test
+entities:
+  - name: carrier
+    key: id
+    sources:
+      a: { type: csv, file: ./a.csv, fields: { id: id, units: { path: units, label: Power units } } }
+      b: { type: csv, file: ./b.csv, fields: { id: id, units: units } }
+    compare:
+      units: { type: number }
+report: { outputs: [console], dir: ./out }

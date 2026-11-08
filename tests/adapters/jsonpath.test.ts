@@ -11,7 +11,7 @@ it('extracts properties, quoted keys, array indexes and wildcard values without 
   expect(() => selectJson({}, '$..data')).toThrow('Unsupported');
   expect(() => selectJson({}, '$[?(@.x)]')).toThrow('Unsupported');
   expect(() => selectJson({}, '$.__proto__')).toThrow('missing');
-  expect(() => selectJson({ x: null }, '$.x.y')).toThrow('missing');
+  expect(() => selectJson({ x: null }, '$.x.y')).toThrow('requires an object');
   expect(() => selectJson({}, '$[*]')).toThrow('array');
   expect(() => selectOne([1, 2], '$[*]')).toThrow('exactly one');
 });

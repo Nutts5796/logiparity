@@ -2,6 +2,7 @@ import { DateTime } from 'luxon';
 import type { ExplainedFormat } from 'luxon';
 import type { ComparisonRule, SourceConfig } from './config.js';
 import { wallClock, type NormalizedValue } from './types.js';
+import { normalizeDate } from './calendar.js';
 
 export function sourceRule(
   rule: ComparisonRule | undefined,
@@ -13,7 +14,10 @@ export function sourceRule(
       ...rule,
       locale: rule.locale ?? config?.locale ?? 'en-US',
       numberFormat: rule.numberFormat ?? config?.numberFormat,
-      format: typeof rule.format === 'string' ? rule.format : (rule.format?.[source] ?? config?.datetimeFormat),
+      format:
+        typeof rule.format === 'string'
+          ? rule.format
+          : (rule.format?.[source] ?? (rule.type === 'date' ? config?.dateFormat : config?.datetimeFormat)),
     }
   );
 }
@@ -217,6 +221,12 @@ export function normalize(value: unknown, rule: ComparisonRule | undefined, sour
   if (value === undefined || value === null) return null;
   if (value instanceof Date) {
     const local: unknown = Reflect.get(value, wallClock);
+    if (rule?.type === 'date')
+      return normalizeDate(
+        typeof local === 'string' ? local.slice(0, 10) : value.toISOString().slice(0, 10),
+        undefined,
+        rule.locale ?? 'en-US',
+      );
     if (typeof local === 'string' && rule?.type === 'datetime') {
       const isoRule = { ...rule, format: undefined };
       try {
@@ -233,7 +243,8 @@ export function normalize(value: unknown, rule: ComparisonRule | undefined, sour
   }
   if (!['string', 'number', 'boolean', 'bigint'].includes(typeof value))
     throw new Error('Expected a scalar field; map a scalar JSONPath or file column.');
-  const text = String(value).trim();
+  const trimmed = String(value).trim();
+  const text = rule?.whitespaceFold && ['string', 'enum'].includes(rule.type) ? trimmed.replace(/\s+/gu, ' ') : trimmed;
   if (text === '' && (rule?.emptyAsNull ?? true)) return null;
   if (!rule) {
     if (typeof value === 'number' && !Number.isFinite(value)) throw new Error('Expected a finite number.');
@@ -268,6 +279,12 @@ export function normalize(value: unknown, rule: ComparisonRule | undefined, sour
     }
     case 'datetime':
       return normalizeDatetime(text, rule, source);
+    case 'date':
+      return normalizeDate(
+        text,
+        typeof rule.format === 'string' ? rule.format : rule.format?.[source],
+        rule.locale ?? 'en-US',
+      );
   }
 }
 

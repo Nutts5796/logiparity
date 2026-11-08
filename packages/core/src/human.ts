@@ -171,12 +171,37 @@ export function patternWords(group: FindingGroup, presentation: ReportPresentati
     };
   }
   const value = (input: Finding['actual']) => presentationValue(input, group.entity, group.field, false, presentation);
+  const reference = labels.source(
+    group.entity,
+    Object.keys(labels.entity(group.entity)?.sources ?? {})[0] ?? 'reference',
+  );
+  if (group.kind === 'formatting_difference') {
+    const difference =
+      group.cause === 'case_only'
+        ? 'letter case'
+        : group.cause === 'whitespace_only'
+          ? 'whitespace'
+          : 'letter case and whitespace';
+    return {
+      label: 'Formatting difference',
+      sentence: `${numberText(group.count)} ${field} values in ${source} differ from ${reference} only in ${difference} (${JSON.stringify(group.actual)} vs ${JSON.stringify(group.expected)}).`,
+      hint: 'Likely a formatting difference.',
+      nextStep: `Consider ${group.cause === 'whitespace_only' ? 'whitespaceFold: true' : group.cause === 'case_only' ? 'caseFold: true' : 'caseFold: true and whitespaceFold: true'} for this field after reviewing the raw values.`,
+    };
+  }
+  if (group.kind === 'number_change')
+    return {
+      label: 'Repeated numeric change',
+      sentence: `${numberText(group.count)} ${field} values in ${source} are ${value(group.actual)} where ${reference} has ${value(group.expected)}.`,
+      hint: 'Repeated numeric values differ between sources.',
+      nextStep: `Check how ${field} is derived or updated in each source.`,
+    };
   if (group.cause === 'stale_value')
     return {
       label: 'Stale or lagging values',
-      sentence: `${numberText(group.count)} of ${numberText(group.referenceCount ?? group.count)} ${value(group.expected)} ${labels.entity(group.entity)?.pluralLabel ?? 'records'} show ${value(group.actual)} in ${source}; ${numberText(group.matchingCount ?? 0)} match.`,
-      nextStep: `Check refresh timing and synchronization in ${source}; preserve the distinct ${field} values.`,
-      hint: `Likely a stale or lagging ${field}.`,
+      sentence: `${numberText(group.count)} of ${numberText(group.referenceCount ?? group.count)} ${labels.entity(group.entity)?.pluralLabel ?? 'records'} with ${field} ${value(group.expected)} in ${reference} show ${value(group.actual)} in ${source}; ${numberText(group.matchingCount ?? 0)} match.`,
+      nextStep: 'Compare refresh timing in both sources and the field definitions.',
+      hint: 'Likely a lagging update or a different definition of the field.',
     };
   return {
     label: 'Value mapping',
@@ -218,6 +243,12 @@ export function mergedPatternWords(groups: readonly FindingGroup[], presentation
     if (!first) throw new Error('Empty pattern bucket');
     const words = patternWords(first, presentation);
     if (values.length === 1) return words;
+    if (first.kind === 'formatting_difference' || first.kind === 'number_change' || first.cause === 'stale_value')
+      return {
+        ...words,
+        sentence: values.map((group) => patternWords(group, presentation).sentence).join(' '),
+        nextStep: [...new Set(values.map((group) => patternWords(group, presentation).nextStep))].join(' '),
+      };
     const labels = reportLabels(presentation);
     return {
       ...words,

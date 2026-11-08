@@ -79,6 +79,7 @@ export interface AggregateResult {
   name: string;
   type: 'count' | 'sum';
   values: Record<string, number | bigint>;
+  exactValues?: Record<string, string>;
   rawValues?: Record<string, number | bigint>;
   valuesByCurrency?: Record<string, Record<string, bigint | string>>;
   rawValuesByCurrency?: Record<string, Record<string, bigint | string>>;
@@ -105,10 +106,17 @@ export interface FindingGroup {
   field: string;
   count: number;
   currency?: string;
-  cause?: 'timezone' | 'pagination' | 'stale_value';
+  cause?: 'timezone' | 'pagination' | 'stale_value' | 'case_only' | 'whitespace_only' | 'case_whitespace';
   referenceCount?: number;
   matchingCount?: number;
-  kind: 'datetime_offset' | 'money_delta' | 'value_mapping' | 'missing_stride' | 'extra_stride';
+  kind:
+    | 'datetime_offset'
+    | 'money_delta'
+    | 'value_mapping'
+    | 'formatting_difference'
+    | 'number_change'
+    | 'missing_stride'
+    | 'extra_stride';
   delta?: string;
   stride?: string;
   keys?: string[];

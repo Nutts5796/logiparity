@@ -1,6 +1,7 @@
 import { reportLabels, uncertainKeyText } from './labels.js';
 import { formatMoneyMajor, type ReportPresentation } from './money-display.js';
 import type { Report, AggregateReconciliation } from './types.js';
+import { displayDecimal, sumDecimal } from './aggregates.js';
 
 export function reconciliationDetails(
   report: Report,
@@ -19,22 +20,24 @@ export function reconciliationDetails(
           ? Object.entries(value).map(([currency, parts]) => ({ currency, parts: parts as AggregateReconciliation }))
           : [{ currency: undefined, parts: value as AggregateReconciliation }];
         for (const { currency, parts } of partitions) {
-          const actual = currency ? (aggregate.valuesByCurrency?.[source]?.[currency] ?? 0) : aggregate.values[source];
+          const actual = currency
+            ? (aggregate.valuesByCurrency?.[source]?.[currency] ?? 0)
+            : (aggregate.exactValues?.[source] ?? aggregate.values[source]);
           const expected = currency
             ? (aggregate.valuesByCurrency?.[entity.reference]?.[currency] ?? 0)
-            : aggregate.values[entity.reference];
+            : (aggregate.exactValues?.[entity.reference] ?? aggregate.values[entity.reference]);
           if (
             actual === undefined ||
             expected === undefined ||
-            (BigInt(actual) === BigInt(expected) &&
+            (sumDecimal(actual) === sumDecimal(expected) &&
               !parts.uncertain?.keys.length &&
               !parts.missingRows.count &&
               !parts.extraRows?.count)
           )
             continue;
           const amount = (value: bigint | string) => {
-            const n = BigInt(value);
-            return `${n > 0n ? '+' : ''}${currency ? formatMoneyMajor(n, currency) : n.toLocaleString('en-US').replace(/^-/, '−')}`;
+            const n = sumDecimal(value);
+            return `${n !== '0' && !n.startsWith('-') ? '+' : ''}${currency ? formatMoneyMajor(BigInt(n), currency) : displayDecimal(n)}`;
           };
           const components = [
             `Missing rows (${parts.missingRows.count.toLocaleString('en-US')}): ${amount(parts.missingRows.amount)}`,

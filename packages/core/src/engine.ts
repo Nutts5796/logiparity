@@ -5,7 +5,7 @@ import { keyFields, type EntityConfig, type Config } from './config.js';
 import type { Report, Finding, SourceReader, EntitySummary } from './types.js';
 import { readSource, type SourceState } from './source-state.js';
 import { equalValues } from './normalize.js';
-import { aggregateEqual } from './aggregates.js';
+import { aggregateEqual, sumDecimal } from './aggregates.js';
 import { applyFailurePolicies } from './policy.js';
 import { groupFindings, attachGroupMembership } from './groups.js';
 import { collectReconciliation, reconcileAggregates } from './reconciliation.js';
@@ -126,7 +126,8 @@ function compareSource(
   >();
   for (const [key, row] of baseline.rows)
     for (const [field, value] of Object.entries(row)) {
-      if (keys.has(field) || ['money', 'number', 'datetime'].includes(entity.compare[field]?.type ?? '')) continue;
+      if (keys.has(field) || ['money', 'number', 'datetime', 'date'].includes(entity.compare[field]?.type ?? ''))
+        continue;
       if (baseline.uncertain.get(key)?.has(field) || current.uncertain.get(key)?.has(field)) continue;
       const stats = observations.get(field) ?? { actual: new Set(), reference: new Map(), matches: new Map() };
       const token = observationKey(value);
@@ -259,6 +260,11 @@ function publishAggregates(
     aggregate.sourceStatus[source] = excluded.size ? 'uncertain' : 'certain';
     aggregate.uncertainKeys[source] = [...excluded].map((key) => state.parts.get(key) ?? [key]);
     aggregate.values[source] = actual;
+    const exactActual = state.exactMeasurements.get(definition.name);
+    if (exactActual !== undefined) {
+      aggregate.exactValues ??= {};
+      aggregate.exactValues[source] = exactActual;
+    }
     aggregate.rawValues ??= {};
     aggregate.rawValues[source] = state.rawMeasurements.get(definition.name) ?? actual;
     aggregate.excludedRows ??= {};
@@ -296,16 +302,21 @@ function publishAggregates(
       }
       continue;
     }
-    const expected = aggregate.values[reference];
-    if (source !== reference && expected !== undefined && !aggregateEqual(expected, actual, definition))
+    const expected = aggregate.values[reference],
+      exactExpected = aggregate.exactValues?.[reference];
+    if (
+      source !== reference &&
+      expected !== undefined &&
+      !aggregateEqual(exactExpected ?? expected, exactActual ?? actual, definition)
+    )
       appendFinding(report, {
         type: 'aggregate_mismatch',
         entity: entity.name,
         source,
         key: '',
         field: definition.name,
-        expected,
-        actual,
+        expected: exactExpected !== undefined && sumDecimal(expected) !== exactExpected ? exactExpected : expected,
+        actual: exactActual !== undefined && sumDecimal(actual) !== exactActual ? exactActual : actual,
         message: `${definition.name} differs from ${reference}.`,
       });
   }

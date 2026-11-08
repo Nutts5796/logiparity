@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/Nutts5796/logiparity/v1.1.0/docs/report-schema.json",
+  "$id": "https://raw.githubusercontent.com/Nutts5796/logiparity/v1.2.0/docs/report-schema.json",
   "title": "LogiParity parity report, schemaVersion 1",
   "type": "object",
   "required": ["schemaVersion", "entities", "findings"],
@@ -281,7 +281,15 @@
             "type": "string"
           },
           "kind": {
-            "enum": ["datetime_offset", "money_delta", "value_mapping", "missing_stride", "extra_stride"]
+            "enum": [
+              "datetime_offset",
+              "money_delta",
+              "value_mapping",
+              "missing_stride",
+              "extra_stride",
+              "formatting_difference",
+              "number_change"
+            ]
           },
           "count": {
             "type": "integer",
@@ -440,6 +448,13 @@
               "$ref": "#/definitions/reconciliation"
             }
           }
+        },
+        "exactValues": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"
+          }
         }
       }
     },
@@ -472,7 +487,7 @@
           "minimum": 0
         },
         "amount": {
-          "$ref": "#/definitions/integerAmount"
+          "$ref": "#/definitions/decimalAmount"
         }
       }
     },
@@ -504,13 +519,13 @@
                 "minimum": 0
               },
               "amount": {
-                "$ref": "#/definitions/integerAmount"
+                "$ref": "#/definitions/decimalAmount"
               }
             }
           }
         },
         "remainder": {
-          "$ref": "#/definitions/integerAmount"
+          "$ref": "#/definitions/decimalAmount"
         },
         "uncertain": {
           "type": "object",
@@ -520,7 +535,7 @@
               "$ref": "#/definitions/keyParts"
             },
             "amount": {
-              "$ref": "#/definitions/integerAmount"
+              "$ref": "#/definitions/decimalAmount"
             }
           }
         },
@@ -531,6 +546,17 @@
           }
         }
       }
+    },
+    "decimalAmount": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$"
+        },
+        {
+          "type": "integer"
+        }
+      ]
     }
   }
 }

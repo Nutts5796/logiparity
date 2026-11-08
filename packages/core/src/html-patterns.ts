@@ -30,6 +30,8 @@ export const kindInfo = {
     path: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 9h18M7 14h4"/>',
   },
   value_mapping: { label: 'Value mapping', color: 'tz', path: '<path d="M4 7h16l-4-4M20 17H4l4 4"/>' },
+  formatting_difference: { label: 'Formatting difference', color: 'tz', path: '<path d="M4 7h16M4 12h10M4 17h16"/>' },
+  number_change: { label: 'Repeated numeric change', color: 'round', path: '<path d="M4 7h16l-4-4M20 17H4l4 4"/>' },
 } as const;
 export function patternKind(group: FindingGroup) {
   const info = kindInfo[group.kind];
@@ -74,7 +76,9 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
         group.stride,
         group.cause,
         group.currency ?? rule?.currency,
-        group.kind === 'value_mapping' ? [group.expected, group.actual] : [],
+        ['value_mapping', 'formatting_difference', 'number_change'].includes(group.kind)
+          ? [group.expected, group.actual]
+          : [],
       ],
       (_, value: unknown) => (typeof value === 'bigint' ? String(value) : value),
     );
@@ -95,7 +99,11 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
               ? `${delta > 0n ? '+' : ''}${formatMoneyMajor(delta, group.currency ?? rule.currency)}`.replace('-', '−')
               : group.cause === 'stale_value'
                 ? 'Some values lag'
-                : 'Consistent mapping',
+                : group.kind === 'formatting_difference'
+                  ? 'Formatting differs'
+                  : group.kind === 'number_change'
+                    ? 'Numeric values differ'
+                    : 'Consistent mapping',
         hint: patternWords(group, presentation).hint,
         nextStep: patternWords(group, presentation).nextStep,
       };
@@ -246,8 +254,8 @@ export function patternCards(report: Report, presentation: ReportPresentation): 
         svg(
           210,
           70,
-          `${sources}: ${first.cause === 'stale_value' ? 'stale or lagging values' : 'consistent value mapping'}.`,
-          `<text x="105" y="25" text-anchor="middle" fill="var(--ink)" font-size="13">${escape(presentationValue(first.expected, first.entity, first.field, false, presentation))} → ${escape(presentationValue(first.actual, first.entity, first.field, false, presentation))}</text><text x="105" y="53" text-anchor="middle" fill="var(--muted)" font-size="12">${members.length} values</text>`,
+          `${sources}: ${patternKind(first).label}.`,
+          `<text x="105" y="25" text-anchor="middle" fill="var(--ink)" font-size="13" style="white-space:pre">${escape(first.kind === 'formatting_difference' ? JSON.stringify(first.expected) : presentationValue(first.expected, first.entity, first.field, false, presentation))} → ${escape(first.kind === 'formatting_difference' ? JSON.stringify(first.actual) : presentationValue(first.actual, first.entity, first.field, false, presentation))}</text><text x="105" y="53" text-anchor="middle" fill="var(--muted)" font-size="12">${members.length} values</text>`,
         ) + caption(`${sources}: ${labels.field(first.entity, first.field)}.`);
     }
   }

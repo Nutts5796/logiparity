@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.2.0] - Unreleased
+
+### Added
+
+- Calendar-day comparisons with `type: date`, per-source `dateFormat`/field `format`, and a fixed 1969–2068 two-digit-year window.
+- Opt-in REST `absentAsNull: true` and per-field `missing: null`, retaining strict extraction by default.
+- Exact decimal reconciliation for number sums in every report format; additive `exactValues` retains totals beyond combined JavaScript-number precision.
+- Separate formatting and repeated numeric-change patterns; opt-in `whitespaceFold` for string/enum fields.
+- A warning when page/offset pagination has no completeness metadata, including later short pages, and a Socrata recipe.
+
+### Fixed
+
+- Case/whitespace-only differences retain actual candidate spelling and no longer become stale or vocabulary diagnoses. Numeric fields never receive a vocabulary cause.
+- Consistent enum changes name the field and compare timing/definitions in both sources without assigning blame to the candidate.
+- Validation rejects datetime formats without a time and points to `type: date`.
+- Package verification pins optional peers to the recorded tested versions, matching the browser installed by CI and the offline kit.
+- Local checks permit only this version's exact development changelog heading; release preparation and publication still reject that heading.
+
 ## [1.1.0] - 2026-11-03
 
 ### Added

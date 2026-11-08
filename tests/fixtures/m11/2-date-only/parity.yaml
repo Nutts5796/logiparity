@@ -1,0 +1,11 @@
+version: 1
+environment: test
+entities:
+  - name: row
+    key: id
+    sources:
+      a: { type: csv, file: ./a.csv, fields: { id: id, d: d } }
+      b: { type: csv, file: ./b.csv, fields: { id: id, d: d } }
+    compare:
+      d: { type: datetime, format: { a: 'yyyyMMdd', b: 'dd-MMM-yy' }, sourceTimezones: { a: UTC, b: UTC } }
+report: { outputs: [console], dir: ./out }
