@@ -182,7 +182,7 @@ export function presentationDifference(
   }
   if (
     (typeof expected === 'number' && typeof actual === 'number') ||
-    (rule?.type === 'number' && expected !== undefined && actual !== undefined)
+    (rule?.type === 'number' && expected !== undefined && actual !== undefined && expected !== null && actual !== null)
   ) {
     const delta = sumDecimal(String(actual), negateDecimal(String(expected)));
     return `${delta !== '0' && !delta.startsWith('-') ? '+' : ''}${displayDecimal(delta)}`;

@@ -1,6 +1,6 @@
 {
   "name": "logiparity",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "license": "MIT",
   "author": "Sergei Orekhovskii",
@@ -86,12 +86,12 @@
     "docs/recipes/*.md"
   ],
   "dependencies": {
-    "@logiparity/adapters": "1.2.0",
-    "@logiparity/ai": "1.2.0",
-    "@logiparity/cli": "1.2.0",
-    "@logiparity/core": "1.2.0",
-    "@logiparity/demo-delivery": "1.2.0",
-    "@logiparity/scenarios": "1.2.0",
+    "@logiparity/adapters": "1.2.1",
+    "@logiparity/ai": "1.2.1",
+    "@logiparity/cli": "1.2.1",
+    "@logiparity/core": "1.2.1",
+    "@logiparity/demo-delivery": "1.2.1",
+    "@logiparity/scenarios": "1.2.1",
     "ajv": "6.15.0",
     "csv-parse": "7.0.3",
     "jiti": "2.7.0",

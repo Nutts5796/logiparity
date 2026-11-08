@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/Nutts5796/logiparity/v1.2.0/docs/report-schema.json",
+  "$id": "https://raw.githubusercontent.com/Nutts5796/logiparity/v1.2.1/docs/report-schema.json",
   "title": "LogiParity parity report, schemaVersion 1",
   "type": "object",
   "required": ["schemaVersion", "entities", "findings"],

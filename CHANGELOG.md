@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.1] - 2026-11-08
+
+### Fixed
+
+- Reports no longer stop with "Cannot convert null to a BigInt" when a `type: number` field is blank in one source and numeric in the other. The difference is shown as "—", as for other blank values. Found while running 1.2.0 on public FMCSA data.
+
 ## [1.2.0] - 2026-11-08
 
 ### Added

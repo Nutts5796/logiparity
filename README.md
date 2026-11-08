@@ -57,7 +57,7 @@ npm install --save-dev --save-exact pg@8.23.1 pg-query-stream@4.17.1 pgsql-ast-p
 
 These are optional peers loaded only for UI or SQL configurations. Missing peers fail with exit 2 and the exact install command. External runtime dependencies are exact-pinned ordinary dependencies, so consumer `overrides` can patch them. See [dependencies and sizes](docs/dependencies.md) and the [offline kit](docs/release.md#offline-installation).
 
-Version **1.2.0** adds calendar dates, opt-in absent REST properties, exact number-total breakdowns and more precise cause labels.
+Version **1.2.0** adds calendar dates, opt-in absent REST properties, exact number-total breakdowns and more precise cause labels; 1.2.1 fixes a report crash on blank number values.
 
 ## Quickstart
 
@@ -251,7 +251,7 @@ Test and staging only. Read-only except scenario events you map yourself. No tel
 
 ## Status
 
-Version 1.2.0 — 2026-11-08. Maintained by Sergei Orekhovskii.
+Version 1.2.1 — 2026-11-08. Maintained by Sergei Orekhovskii.
 
 Pilots and feedback: share a sanitized use case or defect through [Issues](https://github.com/Nutts5796/logiparity/issues).
 

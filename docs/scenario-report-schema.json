@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/Nutts5796/logiparity/v1.2.0/docs/scenario-report-schema.json",
+  "$id": "https://raw.githubusercontent.com/Nutts5796/logiparity/v1.2.1/docs/scenario-report-schema.json",
   "title": "LogiParity scenario report, schemaVersion 1",
   "type": "object",
   "required": ["schemaVersion", "kind", "name", "target", "environment", "events", "invariants", "exitCode"],
@@ -46,7 +46,7 @@
       "type": "string"
     },
     "parity": {
-      "$ref": "https://raw.githubusercontent.com/Nutts5796/logiparity/v1.2.0/docs/report-schema.json"
+      "$ref": "https://raw.githubusercontent.com/Nutts5796/logiparity/v1.2.1/docs/report-schema.json"
     },
     "events": {
       "type": "array",

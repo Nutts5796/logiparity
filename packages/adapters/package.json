@@ -1,6 +1,6 @@
 {
   "name": "@logiparity/adapters",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -14,7 +14,7 @@
     }
   },
   "dependencies": {
-    "@logiparity/core": "1.2.0",
+    "@logiparity/core": "1.2.1",
     "csv-parse": "7.0.3",
     "unzipper": "0.12.5",
     "saxes": "6.0.0"
