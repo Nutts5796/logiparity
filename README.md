@@ -214,6 +214,8 @@ The [synthetic freight day](examples/freight/README.md) covers carrier settlemen
 
 ![Synthetic freight reconciliation](https://github.com/Nutts5796/logiparity/blob/main/docs/images/freight.png)
 
+On public data, the [FMCSA Data Parity Monitor](https://nutts5796.github.io/fmcsa-parity-monitor/) runs LogiParity every week on FMCSA carrier registration data from data.transportation.gov: the Company Census API against its CSV export, and the monthly SMS census against the daily Company Census. It publishes counts and cause summaries only ([source](https://github.com/Nutts5796/fmcsa-parity-monitor)).
+
 ## How it is tested
 
 The automated suite passed 593 [unit](https://github.com/Nutts5796/logiparity/tree/main/tests/unit) and [adapter](https://github.com/Nutts5796/logiparity/tree/main/tests/adapters) tests. The 117 passing [end-to-end tests](https://github.com/Nutts5796/logiparity/tree/main/tests/e2e) exercise real Chromium, disposable PostgreSQL and synthetic HTTP services. Coverage includes core, adapters, scenarios and CLI; packages/ai is tested but excluded from this coverage figure. Unit/adapter line coverage is 91.94% (3,321/3,612), above the 80% gate: core 97.14%, adapters 91.01%, scenarios 82.29% and CLI 60.59%. Scenario runner.ts and CLI subprocess behavior are exercised by e2e and installed-package checks and do not increase unit-process coverage.
