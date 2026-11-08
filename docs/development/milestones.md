@@ -25,6 +25,8 @@ The dated entries below come from the repository commit history. The maintainer 
 | 2026-11-03 | [c848d86..7b32fa9](https://github.com/Nutts5796/logiparity/compare/c848d86...7b32fa9) | M10.2 implementation and verification: per-currency totals, compatibility, bounded input, release authority and report UX.                                                                                         |
 | 2026-11-03 | [7b32fa9..572e69b](https://github.com/Nutts5796/logiparity/compare/7b32fa9...572e69b) | M10.3 implementation range, starting with owner maxRows commit a67a934: causes, uncertainty, AI report validation, report directories and publication/retry checks. Final review documentation follows this range. |
 
+| 2026-11-08 | [8c94c0e](https://github.com/Nutts5796/logiparity/commit/8c94c0e) | M11 implementation: `feat: add calendar dates and reliable real-data diagnoses`. Baseline 3e9ad04; formatting/numeric/neutral causes, REST null opt-ins, calendar dates, exact number reconciliation, pagination warnings, offline regressions and Socrata recipe for 1.2.0. |
+
 The [current milestone report](MILESTONE_REPORT.md) records executed checks, remaining limitations and exact owner setup steps.
 
 M10.1 implementation commits include 5bf0780 and 1178f3c (correctness/security first), 9d73ce5 (worksheet locations), ac8f7f6 (packaging/release), 63b8e3f (reports/examples), f8d5655 (exact chart evidence), eeac9f3 (SBOM attestation), 8fdabc4 (partial source-format overrides), d1ee8fc (report schema) and d90c82c (screenshots). Validation and screenshots were regenerated on 2026-11-03.
