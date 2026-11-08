@@ -28,6 +28,14 @@ An endpoint test can pass while another surface shows different records. A contr
 
 One configuration compares records across browser tables, APIs, files and SQL. Scenario runs add invariant checks after disruptions, such as whether every order remains present and has one assignment.
 
+### When you may not need LogiParity
+
+- **A one-off check by someone fluent in SQL.** [DuckDB](https://duckdb.org/docs/) reads CSV, XLSX, JSON and PostgreSQL, and a `FULL OUTER JOIN` on the key finds missing rows and changed values. If you already know which defect you are looking for, a short query is often enough.
+- **Large tables between two databases.** [reladiff](https://github.com/erezsh/reladiff) compares tables by hashing segments, so it does not pull every row to your machine.
+- **Two DataFrames in Python.** [datacompy](https://github.com/capitalone/datacompy) reports row and column differences between pandas or Spark DataFrames.
+
+LogiParity is meant for the cases those tools leave to you: reading paginated REST APIs and browser tables, refusing money and time values it cannot parse unambiguously, grouping thousands of differences into a few likely causes with a next step, explaining a total's difference line by line, checking orders after disruptions, and returning CI-friendly exit codes and reports.
+
 ## Install
 
 Use Node.js 22 or later. CI tests Node 22, 24 and 26.
