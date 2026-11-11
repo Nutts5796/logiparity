@@ -1,0 +1,22 @@
+# Synthetic records; no domain-specific engine settings.
+version: 1
+entities:
+  - name: record
+    key: id
+    sources:
+      reference:
+        type: csv
+        file: ./reference.csv
+        fields: { id: id, amount: amount, status: status, date: date }
+      candidate:
+        type: csv
+        file: ./candidate.csv
+        fields: { id: id, amount: amount, status: status, date: date }
+    compare:
+      id: { type: string }
+      amount: { type: money, currency: USD }
+      status: { type: enum }
+      date: { type: date }
+report:
+  outputs: [console, json, html, markdown, junit]
+  dir: ./report

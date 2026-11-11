@@ -20,3 +20,5 @@ logiparity-ai-drafts/
 *.tgz
 
 logiparity-demo/
+
+examples/generic/report/

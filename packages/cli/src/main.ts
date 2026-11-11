@@ -18,12 +18,14 @@ import { aiCommand } from './ai.js';
 import { installBrowser, loginDemo } from './browser.js';
 import { version } from './version.js';
 import { initConfig } from './init.js';
+import { suggestCommand, suggestHelp } from './suggest/command.js';
 
 let configuredSecrets = secretValues(undefined);
 const output = (text: string) => process.stdout.write(safeConsole(redactSecrets(text, configuredSecrets)));
 const help = `LogiParity ${version} — data parity checks for TEST AND STAGING ENVIRONMENTS ONLY.
 
-Usage: logiparity demo [--bugs]
+Usage: logiparity suggest --source reference=old.csv --source candidate=new.json
+       logiparity demo [--bugs]
        logiparity demo login
        logiparity install-browser [--with-deps]
        logiparity check --config <parity.yaml>
@@ -54,6 +56,7 @@ init writes a commented starter config without overwriting an existing file.
 
 function commandHelp(commands: readonly string[]): string {
   const command = commands[0];
+  if (command === 'suggest') return suggestHelp;
   if (command === 'scenario')
     return `Usage: logiparity scenario run <scenario.yaml> --target <target.yaml> [--report-dir <dir>] [--allow-modules]\n       logiparity scenario validate <scenario.yaml> --target <target.yaml>\nValidation opens no sources and performs no mutations.\n`;
   if (command === 'check')
@@ -71,13 +74,17 @@ function commandHelp(commands: readonly string[]): string {
   return help;
 }
 async function main(): Promise<number> {
-  const known = new Set(['demo', 'install-browser', 'scenario', 'ai', 'init', 'validate', 'check']);
+  const known = new Set(['demo', 'install-browser', 'scenario', 'ai', 'init', 'validate', 'check', 'suggest']);
   const first = process.argv.slice(2).find((item) => !item.startsWith('-'));
   if (first && !known.has(first) && process.argv[2] === first) throw new Error(`Unknown command ${first}; see --help.`);
   const { values, positionals, tokens } = parseArgs({
     tokens: true,
     options: {
       config: { type: 'string', short: 'c' },
+      source: { type: 'string', multiple: true },
+      sheet: { type: 'string', multiple: true },
+      items: { type: 'string', multiple: true },
+      'sample-rows': { type: 'string' },
       target: { type: 'string' },
       'report-dir': { type: 'string' },
       bugs: { type: 'boolean' },
@@ -108,6 +115,17 @@ async function main(): Promise<number> {
     output(version + '\n');
     return 0;
   }
+  if (positionals[0] === 'suggest') {
+    if (
+      positionals.length !== 1 ||
+      Object.keys(values).some((key) => !['source', 'sheet', 'items', 'sample-rows', 'output'].includes(key))
+    )
+      throw new Error(suggestHelp);
+    output(await suggestCommand(values));
+    return 0;
+  }
+  if (values.source || values.sheet || values.items || values['sample-rows'] !== undefined)
+    throw new Error('Sample options require logiparity suggest; see --help.');
   if (positionals[0] === 'demo' && positionals[1] === 'login' && positionals.length === 2) {
     output(await loginDemo());
     return 0;

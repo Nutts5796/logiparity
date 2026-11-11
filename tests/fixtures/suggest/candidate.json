@@ -1,0 +1,39 @@
+{
+  "data": [
+    {
+      "id": "001",
+      "amount": "1234.50",
+      "date": "2026-11-02",
+      "status": "Delivered",
+      "Empty": null,
+      "candidate_only": "A",
+      "quantity": 1000
+    },
+    {
+      "id": "002",
+      "amount": "10.00",
+      "date": "2026-11-03",
+      "status": "delivered",
+      "candidate_only": "B",
+      "quantity": 2
+    },
+    {
+      "id": "003",
+      "amount": "11.25",
+      "date": "2026-11-04",
+      "status": "Delivered",
+      "Empty": null,
+      "candidate_only": "C",
+      "quantity": 3
+    },
+    {
+      "id": "004",
+      "amount": "12.00",
+      "date": "2026-11-05",
+      "status": "delivered",
+      "Empty": null,
+      "candidate_only": "D",
+      "quantity": 4
+    }
+  ]
+}

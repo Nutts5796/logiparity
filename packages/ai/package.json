@@ -1,6 +1,6 @@
 {
   "name": "@logiparity/ai",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -13,8 +13,8 @@
     }
   },
   "dependencies": {
-    "@logiparity/core": "1.2.1",
-    "@logiparity/scenarios": "1.2.1",
+    "@logiparity/core": "1.3.0",
+    "@logiparity/scenarios": "1.3.0",
     "yaml": "2.9.1",
     "zod": "4.6.7",
     "ajv": "6.15.0"

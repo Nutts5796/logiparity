@@ -32,6 +32,8 @@ npm run typecheck
 npm run check:docs
 npm run check:release-text
 npm run check:architecture
+npm run eval:causes
+npm run check:causes
 npm run test:package
 ```
 
@@ -40,3 +42,5 @@ npm run test:package
 Never weaken a check, hand-edit generated reports, silently drop a mapped field or silently fall back in a way that hides a mismatch. Keep strict parsing by default. No network in regression tests; use fixtures or local servers. Guesses require explicit review. Never fill human evaluation verdicts or stopwatch measurements yourself. Do not claim figures you have not measured.
 
 Keep the AI authorship statement. Commits use Conventional Commits and end with `Assisted-by: AI coding agent`. Refactors and features have separate commits. Follow [docs/release.md](docs/release.md) for release preparation; this milestone authorizes no push, tag, publication or Docker build.
+
+The setup draft command lives in `packages/cli/src/suggest`; bounded local sample I/O is in adapters/sample.ts. Saved JSON suggests REST mappings with unresolved endpoint TODOs; it never calls an API. `docs/evaluation` holds the measured synthetic method and unfilled human protocols. Regenerate the 50-group sample to a new `--output` path; never overwrite entered verdicts.

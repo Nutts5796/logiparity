@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.0] - Unreleased
+
+### Added
+
+- Offline `logiparity suggest` drafts from bounded local CSV/TSV, XLSX and saved JSON samples, with key candidates, alias matching, every unmatched column and explicit type-evidence/TODO review markers.
+- Seeded mixed-defect cause evaluation, a guard for previously correct labels, an unfilled 50-group FMCSA review sample and an unfilled setup-time measurement protocol. Measured tables and limitations are in docs/evaluation.
+- Contributor rules, architecture documentation, concern-based core layout and an enforced dependency-direction check.
+- A generic local example before the preserved delivery/freight example packs, with README-verified comparisons including Reconlify and duckdiff.
+
+### Changed
+
+- Core implementation paths are grouped by concern; public package exports and source compatibility entries retain behavior. The refactor was verified with unchanged existing tests and byte-identical controlled JSON reports.
+- The README leads with the domain-agnostic engine and treats logistics as example packs. Existing published example paths remain valid.
+
 ## [1.2.1] - 2026-11-08
 
 ### Fixed

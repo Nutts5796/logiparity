@@ -1,0 +1,700 @@
+{
+  "capturedOn": "2026-11-11",
+  "sources": [
+    {
+      "state": "IA",
+      "source": "local fmcsa-parity-monitor/report-IA/report.json",
+      "sha256": "de4429638fe02ca2df1f3e7eade70abac77159cbeec99fe1ea99fa53d61ead16",
+      "runAt": null
+    },
+    {
+      "state": "VT",
+      "source": "https://github.com/Nutts5796/fmcsa-parity-monitor/blob/main/docs/data/latest.json",
+      "sha256": "edac34b58fbb6ea7286348f48678b5681bb3f949e2ca3d814c5e49559adc11a1",
+      "runAt": "2026-11-08T15:36:37.226Z",
+      "selection": "public top-12 cause summaries; not the full Vermont group population"
+    }
+  ],
+  "groups": [
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "carrier_operation",
+      "count": 12,
+      "summary": "12 of 14,663 carriers with carrier operation C in SMS census API (monthly) show A in Company Census CSV export (active only); 14,617 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "carrier_operation",
+      "count": 15,
+      "summary": "15 of 11,211 carriers with carrier operation A in SMS census API (monthly) show C in Company Census CSV export (active only); 10,997 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "carrier_operation",
+      "count": 3,
+      "summary": "3 of 3 carriers with carrier operation B in SMS census API (monthly) show C in Company Census CSV export (active only); 0 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "hazmat",
+      "count": 1691,
+      "summary": "1,691 of 25,772 carriers with hazmat flag N in SMS census API (monthly) show Y in Company Census CSV export (active only); 23,868 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "hazmat",
+      "count": 17,
+      "summary": "17 of 105 carriers with hazmat flag Y in SMS census API (monthly) show N in Company Census CSV export (active only); 69 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "mcs150_mileage",
+      "count": 3,
+      "summary": "3 MCS-150 mileage values in Company Census CSV export (active only) are 10,000 where SMS census API (monthly) has 1. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "mcs150_mileage",
+      "count": 4,
+      "summary": "4 MCS-150 mileage values in Company Census CSV export (active only) are 1 where SMS census API (monthly) has 0. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 19,
+      "summary": "19 of 8,152 carriers with mileage year 0 in SMS census API (monthly) show 2026 in Company Census CSV export (active only); 8,065 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 23,
+      "summary": "23 of 2,098 carriers with mileage year 2023 in SMS census API (monthly) show 2025 in Company Census CSV export (active only); 2,014 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 3,
+      "summary": "3 of 443 carriers with mileage year 2021 in SMS census API (monthly) show 2026 in Company Census CSV export (active only); 436 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 3,
+      "summary": "3 of 846 carriers with mileage year 2022 in SMS census API (monthly) show 2025 in Company Census CSV export (active only); 834 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 33,
+      "summary": "33 of 5,623 carriers with mileage year 2024 in SMS census API (monthly) show 2026 in Company Census CSV export (active only); 5,482 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 36,
+      "summary": "36 of 2,098 carriers with mileage year 2023 in SMS census API (monthly) show 2026 in Company Census CSV export (active only); 2,014 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 39,
+      "summary": "39 of 4,296 carriers with mileage year 2025 in SMS census API (monthly) show 2026 in Company Census CSV export (active only); 4,200 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 39,
+      "summary": "39 of 5,623 carriers with mileage year 2024 in SMS census API (monthly) show 2025 in Company Census CSV export (active only); 5,482 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 4,
+      "summary": "4 of 846 carriers with mileage year 2022 in SMS census API (monthly) show 2026 in Company Census CSV export (active only); 834 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 5,
+      "summary": "5 of 645 carriers with mileage year 2026 in SMS census API (monthly) show 2025 in Company Census CSV export (active only); 633 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 5,
+      "summary": "5 of 8,152 carriers with mileage year 0 in SMS census API (monthly) show 2025 in Company Census CSV export (active only); 8,065 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 10,
+      "summary": "10 power units values in Company Census CSV export (active only) are 4 where SMS census API (monthly) has 3. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 10,
+      "summary": "10 power units values in Company Census CSV export (active only) are 8 where SMS census API (monthly) has 4. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 11,
+      "summary": "11 power units values in Company Census CSV export (active only) are 4 where SMS census API (monthly) has 0. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 127,
+      "summary": "127 power units values in Company Census CSV export (active only) are 1 where SMS census API (monthly) has 0. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 150,
+      "summary": "150 power units values in Company Census CSV export (active only) are 2 where SMS census API (monthly) has 1. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 17,
+      "summary": "17 power units values in Company Census CSV export (active only) are 6 where SMS census API (monthly) has 3. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 21,
+      "summary": "21 power units values in Company Census CSV export (active only) are 1 where SMS census API (monthly) has 2. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 28,
+      "summary": "28 power units values in Company Census CSV export (active only) are 3 where SMS census API (monthly) has 1. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 3,
+      "summary": "3 power units values in Company Census CSV export (active only) are 11 where SMS census API (monthly) has 9. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 3,
+      "summary": "3 power units values in Company Census CSV export (active only) are 12 where SMS census API (monthly) has 6. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 3,
+      "summary": "3 power units values in Company Census CSV export (active only) are 15 where SMS census API (monthly) has 12. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 3,
+      "summary": "3 power units values in Company Census CSV export (active only) are 15 where SMS census API (monthly) has 13. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 3,
+      "summary": "3 power units values in Company Census CSV export (active only) are 16 where SMS census API (monthly) has 8. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 3,
+      "summary": "3 power units values in Company Census CSV export (active only) are 5 where SMS census API (monthly) has 0. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 3,
+      "summary": "3 power units values in Company Census CSV export (active only) are 6 where SMS census API (monthly) has 4. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 3,
+      "summary": "3 power units values in Company Census CSV export (active only) are 60 where SMS census API (monthly) has 30. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 3,
+      "summary": "3 power units values in Company Census CSV export (active only) are 7 where SMS census API (monthly) has 1. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 3,
+      "summary": "3 power units values in Company Census CSV export (active only) are 7 where SMS census API (monthly) has 2. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 3,
+      "summary": "3 power units values in Company Census CSV export (active only) are 7 where SMS census API (monthly) has 3. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 3,
+      "summary": "3 power units values in Company Census CSV export (active only) are 9 where SMS census API (monthly) has 5. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 30,
+      "summary": "30 power units values in Company Census CSV export (active only) are 3 where SMS census API (monthly) has 2. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 39,
+      "summary": "39 power units values in Company Census CSV export (active only) are 4 where SMS census API (monthly) has 2. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 4,
+      "summary": "4 power units values in Company Census CSV export (active only) are 2 where SMS census API (monthly) has 5. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 4,
+      "summary": "4 power units values in Company Census CSV export (active only) are 4 where SMS census API (monthly) has 5. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 4,
+      "summary": "4 power units values in Company Census CSV export (active only) are 5 where SMS census API (monthly) has 1. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 4,
+      "summary": "4 power units values in Company Census CSV export (active only) are 7 where SMS census API (monthly) has 6. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 4,
+      "summary": "4 power units values in Company Census CSV export (active only) are 8 where SMS census API (monthly) has 7. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 42,
+      "summary": "42 power units values in Company Census CSV export (active only) are 2 where SMS census API (monthly) has 0. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 5,
+      "summary": "5 power units values in Company Census CSV export (active only) are 3 where SMS census API (monthly) has 0. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 5,
+      "summary": "5 power units values in Company Census CSV export (active only) are 5 where SMS census API (monthly) has 3. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 5,
+      "summary": "5 power units values in Company Census CSV export (active only) are 6 where SMS census API (monthly) has 1. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 6,
+      "summary": "6 power units values in Company Census CSV export (active only) are 6 where SMS census API (monthly) has 2. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 6,
+      "summary": "6 power units values in Company Census CSV export (active only) are 7 where SMS census API (monthly) has 5. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 7,
+      "summary": "7 power units values in Company Census CSV export (active only) are 10 where SMS census API (monthly) has 5. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 8,
+      "summary": "8 power units values in Company Census CSV export (active only) are 0 where SMS census API (monthly) has 1. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 8,
+      "summary": "8 power units values in Company Census CSV export (active only) are 4 where SMS census API (monthly) has 1. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 9,
+      "summary": "9 power units values in Company Census CSV export (active only) are 5 where SMS census API (monthly) has 2. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 9,
+      "summary": "9 power units values in Company Census CSV export (active only) are 5 where SMS census API (monthly) has 4. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 9,
+      "summary": "9 power units values in Company Census CSV export (active only) are 6 where SMS census API (monthly) has 5. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 19,
+      "summary": "19 total drivers values in Company Census CSV export (active only) are 1 where SMS census API (monthly) has 2. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 22,
+      "summary": "22 total drivers values in Company Census CSV export (active only) are 2 where SMS census API (monthly) has 1. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 3,
+      "summary": "3 total drivers values in Company Census CSV export (active only) are 4 where SMS census API (monthly) has 3. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 3,
+      "summary": "3 total drivers values in Company Census CSV export (active only) are 5 where SMS census API (monthly) has 2. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 3,
+      "summary": "3 total drivers values in Company Census CSV export (active only) are 5 where SMS census API (monthly) has 3. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 3,
+      "summary": "3 total drivers values in Company Census CSV export (active only) are 5 where SMS census API (monthly) has 4. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 3,
+      "summary": "3 total drivers values in Company Census CSV export (active only) are 6 where SMS census API (monthly) has 2. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 3,
+      "summary": "3 total drivers values in Company Census CSV export (active only) are 6 where SMS census API (monthly) has 3. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 4,
+      "summary": "4 total drivers values in Company Census CSV export (active only) are 2 where SMS census API (monthly) has 4. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 4,
+      "summary": "4 total drivers values in Company Census CSV export (active only) are 4 where SMS census API (monthly) has 5. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 5,
+      "summary": "5 total drivers values in Company Census CSV export (active only) are 1 where SMS census API (monthly) has 4. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 5,
+      "summary": "5 total drivers values in Company Census CSV export (active only) are 3 where SMS census API (monthly) has 1. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 5,
+      "summary": "5 total drivers values in Company Census CSV export (active only) are 3 where SMS census API (monthly) has 2. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 7,
+      "summary": "7 total drivers values in Company Census CSV export (active only) are 4 where SMS census API (monthly) has 2. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 9,
+      "summary": "9 total drivers values in Company Census CSV export (active only) are 2 where SMS census API (monthly) has 3. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "IA",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 9,
+      "summary": "9 total drivers values in Company Census CSV export (active only) are 4 where SMS census API (monthly) has 1. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "VT",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "hazmat",
+      "count": 468,
+      "summary": "468 of 2,270 carriers with hazmat flag N in SMS census API (monthly) show Y in Company Census CSV export (active only); 1,780 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "VT",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 22,
+      "summary": "22 power units values in Company Census CSV export (active only) are 2 where SMS census API (monthly) has 1. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "VT",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 7,
+      "summary": "7 of 621 carriers with mileage year 2024 in SMS census API (monthly) show 2026 in Company Census CSV export (active only); 600 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "VT",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 5,
+      "summary": "5 of 285 carriers with mileage year 2023 in SMS census API (monthly) show 2025 in Company Census CSV export (active only); 276 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "VT",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 5,
+      "summary": "5 power units values in Company Census CSV export (active only) are 3 where SMS census API (monthly) has 2. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "VT",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "carrier_operation",
+      "count": 4,
+      "summary": "4 of 1,651 carriers with carrier operation A in SMS census API (monthly) show C in Company Census CSV export (active only); 1,629 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "VT",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "hazmat",
+      "count": 4,
+      "summary": "4 of 16 carriers with hazmat flag Y in SMS census API (monthly) show N in Company Census CSV export (active only); 10 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "VT",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 4,
+      "summary": "4 of 525 carriers with mileage year 2025 in SMS census API (monthly) show 2026 in Company Census CSV export (active only); 517 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "VT",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 4,
+      "summary": "4 of 621 carriers with mileage year 2024 in SMS census API (monthly) show 2025 in Company Census CSV export (active only); 600 match. Likely a lagging update or a different definition of the field."
+    },
+    {
+      "state": "VT",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "power_units",
+      "count": 4,
+      "summary": "4 power units values in Company Census CSV export (active only) are 6 where SMS census API (monthly) has 4. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "VT",
+      "entity": "sms_vs_census",
+      "kind": "number_change",
+      "field": "total_drivers",
+      "count": 4,
+      "summary": "4 total drivers values in Company Census CSV export (active only) are 1 where SMS census API (monthly) has 2. Repeated numeric values differ between sources."
+    },
+    {
+      "state": "VT",
+      "entity": "sms_vs_census",
+      "kind": "value_mapping",
+      "field": "mcs150_mileage_year",
+      "count": 3,
+      "summary": "3 of 285 carriers with mileage year 2023 in SMS census API (monthly) show 2026 in Company Census CSV export (active only); 276 match. Likely a lagging update or a different definition of the field."
+    }
+  ]
+}

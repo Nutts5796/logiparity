@@ -1,0 +1,5 @@
+Record ID,Total Amount,Record Date,Status Code,Empty,Reference only,Quantity
+001,"1,234.50",2026-11-02,Delivered,,private-a,"1,000"
+002,10.00,2026-11-03,delivered,,private-b,2
+003,11.25,2026-11-04,Delivered,,private-c,3
+004,12.00,2026-11-05,delivered,,private-d,4

@@ -103,3 +103,6 @@ export function validateConfig(config: Config, env: NodeJS.ProcessEnv = process.
 
 // Internal CLI access; excluded from the public adapters wrapper.
 export { requireOptionalAdapter } from './optional.js';
+
+export { readSample } from './sample.js';
+export type { SourceSample, SampleOptions } from './sample.js';

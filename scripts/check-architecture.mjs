@@ -34,6 +34,8 @@ for (const file of files) {
   const path = relative(root, file).split(sep).join('/'),
     layer = path.split('/')[0];
   const source = ts.createSourceFile(file, await readFile(file, 'utf8'), ts.ScriptTarget.Latest, true);
+  if (path === 'index.ts' && source.statements.some((node) => !ts.isExportDeclaration(node) || !node.moduleSpecifier))
+    failures.push('index.ts: public entry must contain re-exports only');
   if (!path.includes('/') && path !== 'index.ts') {
     const destination = compatibility[path];
     if (

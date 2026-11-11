@@ -207,3 +207,11 @@ XLSX quotas: 128 MiB per XML entry, 256 KiB text tokens, 32 KiB tags/attributes,
 Scenarios have separate schemas and typed `params`, `fixture` and `seconds` placeholders. Fixtures must stay inside the scenario directory tree, including realpaths; move old `../fixtures` layouts under that directory. Artifact downloads default to 64 MiB each (`target.artifacts[].maxBytes`), refuse redirects/symlinks and write atomically. Scenario `report.fileMode` has the same 0600 default. See [scenarios](scenarios.md).
 
 AI settings use a separate version-1 `--ai-config` with `redactFields`, `timeoutMs`, `maxFindings`. Provider URL/model/key use only the three LOGIPARITY_AI variables. Checks and scenarios never invoke AI automatically. See [AI reference](ai.md).
+
+## Setup drafts from samples
+
+`logiparity suggest --source reference=old.csv --source candidate=saved-response.json [--source excel=export.xlsx --sheet excel=Records] [--items 'candidate=$.data[*]'] [--sample-rows 200] [--output new-parity.yaml]` reads only local files. Sources are named and ordered; at least two and at most eight are required. XLSX requires an explicit sheet. JSON defaults to a root array or data array; another envelope needs --items. Files are at most 8 MiB, with up to 200 columns and 1–1,000 sampled rows (default 200); truncation is explicit. No API request is made.
+
+The command prints a draft, or creates a new private file without overwriting. It lists candidate keys with per-source uniqueness/presence, name/alias field matches, unmatched columns and type-evidence comments. Every sampled column remains mapped; missing counterparts retain TODO paths. Keys are not accepted automatically. Money currency/units, naive timestamp zones and REST origins/paths stay unresolved; case/whitespace folding remains off.
+
+The extra `TODO_REVIEW_REQUIRED` property deliberately fails strict validation. Resolve every key, mapping, type, unit, zone and endpoint TODO, then remove that marker before validate/check. No existing configuration parsing default is relaxed. Saved JSON is a mapping sample for a future REST source, not a new JSON-file adapter. See the [recipe](recipes/suggest.md) and the unfilled [setup-time protocol](evaluation/setup-time.md).

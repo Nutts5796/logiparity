@@ -1,0 +1,4 @@
+id,amount,status,date
+R1,10.00,posted,2026-11-02
+R2,20.00,pending,2026-11-03
+R3,30.00,posted,2026-11-04

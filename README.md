@@ -1,40 +1,30 @@
 # LogiParity
 
-The same shipment appears in an API, a dispatcher screen and an accounting export. A missing export row or a one-cent payout difference can survive ordinary endpoint tests. LogiParity compares the same records across those surfaces and checks orders after disruptions.
+LogiParity compares the same records across paginated APIs, CSV/Excel exports, databases and browser tables. It parses money and time strictly, matches by key rather than row order, and groups repeated differences into likely causes with a next step. The engine is domain-agnostic; logistics provides the existing example packs and public-data observations, not a requirement on your records.
 
-Keyed matching means joining records by a shared identifier, such as a shipment ID, regardless of row order. Composite keys can identify a load and its charge type together.
+Start with [generic records](examples/generic/README.md) or draft mappings from local samples with `logiparity suggest`. [Delivery](examples/demo/) and [freight settlement](examples/freight/) show API/export/UI parity, composite keys, rollups and disruption invariants. Their fixtures are synthetic. The public FMCSA monitor below provides observations on real public data; real-data cause accuracy has not been measured.
 
 ## Why this matters
 
-Delivery and freight systems move operational data between planning, dispatch and accounting. Each handoff can introduce a different defect:
-
-- A payout or settlement rounds differently in the API and accounting export.
-- The dispatcher screen keeps an old status after the backend updates it.
-- Replanning after a breakdown drops an order or assigns it twice.
-- An export loses a row at a page boundary.
-
-An endpoint test can pass while another surface shows different records. A contract test can confirm the response shape without comparing the same day's data across those surfaces. Operational checks also need to verify what happens to affected orders after a disruption. The demo bugs are synthetic reproductions of these failure classes.
+A record can agree with an API contract while its export, database copy or UI shows different values. Strict money/time parsing prevents accidental reinterpretation, and cause grouping makes a large set of observations easier to investigate. A cause remains a hypothesis: see the [measured synthetic results and human-review limits](docs/evaluation/README.md). Ordinary one-off findings remain visible and blocking.
 
 ## How it differs from tools you already use
 
-| Tool                                                                                           | Typical focus                                                                            |
-| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| [Postman](https://learning.postman.com/docs/tests-and-scripts/write-scripts/intro-to-scripts/) | API requests, scripts and automated API tests.                                           |
-| [Playwright](https://playwright.dev/docs/intro)                                                | Browser automation and end-to-end application tests.                                     |
-| [Pact](https://docs.pact.io/)                                                                  | Consumer and provider expectations at integration boundaries.                            |
-| [Great Expectations](https://docs.greatexpectations.io/docs/core/introduction/)                | Data validation through expectations and validation workflows.                           |
-| [data-diff style tools](https://github.com/datafold/data-diff)                                 | Record and value differences within or across database tables.                           |
-| **LogiParity**                                                                                 | Keyed comparisons across API, file, browser and SQL sources, plus disruption invariants. |
+Pairwise comparison is already well covered. These descriptions come from each project's own README, checked on 2026-11-11; they are not comparative performance benchmarks or exhaustive feature audits.
 
-One configuration compares records across browser tables, APIs, files and SQL. Scenario runs add invariant checks after disruptions, such as whether every order remains present and has one assignment.
+| Tool / own README                                                           | Verified focus and when it may fit better                                                                                                                                                                          |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [DuckDB](https://github.com/duckdb/duckdb/blob/main/README.md)              | Embedded analytical SQL over files and database connections; a strong fit when an ad hoc join/query already expresses the check.                                                                                   |
+| [DataComPy](https://github.com/capitalone/datacompy/blob/main/README.md)    | DataFrame/table comparisons across pandas, Polars, Spark and Snowflake, with statistics and configurable match tolerances; fits an existing DataFrame workflow.                                                    |
+| [reladiff](https://github.com/erezsh/reladiff/blob/master/README.md)        | Database-to-database hashing/partition comparison with computation in the database to reduce transferred data; fits large database tables.                                                                         |
+| [Reconlify](https://github.com/testuteab/reconlify-cli/blob/main/README.md) | Local exported-file reconciliation with YAML keys, column mappings, tolerances and normalization, plus text/log comparison; fits file/log rules without live source acquisition.                                   |
+| [duckdiff](https://github.com/OmUniyal/duckdiff/blob/main/README.md)        | DuckDB-backed N-way file comparison, keyed or duplicate-aware full-row modes, out-of-core execution and explicitly accepted fuzzy mappings; fits larger local-file workflows and is not limited to pairwise diffs. |
+
+LogiParity combines paginated REST, browser-table and read-only SQL adapters with file sources in one configuration, strict money/time parsing, cause grouping and total-difference explanations. The current engine indexes reference/candidate records in memory; it does not replace out-of-core SQL or database-native diffing. Scenario invariants are an additional opt-in facility demonstrated by the logistics packs. No claim is made that other tools cannot be extended to these workflows.
 
 ### When you may not need LogiParity
 
-- **A one-off check by someone fluent in SQL.** [DuckDB](https://duckdb.org/docs/) reads CSV, XLSX, JSON and PostgreSQL, and a `FULL OUTER JOIN` on the key finds missing rows and changed values. If you already know which defect you are looking for, a short query is often enough.
-- **Large tables between two databases.** [reladiff](https://github.com/erezsh/reladiff) compares tables by hashing segments, so it does not pull every row to your machine.
-- **Two DataFrames in Python.** [datacompy](https://github.com/capitalone/datacompy) reports row and column differences between pandas or Spark DataFrames.
-
-LogiParity is meant for the cases those tools leave to you: reading paginated REST APIs and browser tables, refusing money and time values it cannot parse unambiguously, grouping thousands of differences into a few likely causes with a next step, explaining a total's difference line by line, checking orders after disruptions, and returning CI-friendly exit codes and reports.
+Use a direct query for a small known check, a DataFrame comparison inside an existing pipeline, or a specialized database/file diff when source acquisition and likely-cause investigation are not the problem. The tools above already cover those cases; choose by the data surface and investigation needed.
 
 ## Install
 
@@ -57,9 +47,29 @@ npm install --save-dev --save-exact pg@8.23.1 pg-query-stream@4.17.1 pgsql-ast-p
 
 These are optional peers loaded only for UI or SQL configurations. Missing peers fail with exit 2 and the exact install command. External runtime dependencies are exact-pinned ordinary dependencies, so consumer `overrides` can patch them. See [dependencies and sizes](docs/dependencies.md) and the [offline kit](docs/release.md#offline-installation).
 
-Version **1.2.0** adds calendar dates, opt-in absent REST properties, exact number-total breakdowns and more precise cause labels; 1.2.1 fixes a report crash on blank number values.
+Development target **1.3.0** adds local-sample setup drafts, measured cause evaluation and contributor structure. Latest published version: 1.2.1. For this development snapshot use the local review tarball; registry examples apply after release.
 
 ## Quickstart
+
+The [generic local example](examples/generic/README.md) needs no service, browser or database:
+
+```sh
+cp -R node_modules/logiparity/examples/generic parity-example
+npx logiparity validate --config parity-example/parity.yaml
+npx logiparity check --config parity-example/parity.yaml
+```
+
+It contains a deliberate one-cent difference and is expected to exit 1. To start your own mapping, use local samples:
+
+```sh
+npx logiparity suggest --source reference=parity-example/reference.csv --source candidate=parity-example/candidate.csv --output parity-example/draft.yaml
+```
+
+Review every TODO before removing the blocking marker; no guess is accepted automatically. See the [suggest recipe](docs/recipes/suggest.md). Manual-vs-suggest setup time is [not measured](docs/evaluation/setup-time.md).
+
+## Logistics example packs
+
+### Synthetic delivery quickstart
 
 The installed package runs a synthetic delivery day with 55 drivers and 2,750 orders:
 
@@ -218,9 +228,9 @@ On public data, the [FMCSA Data Parity Monitor](https://nutts5796.github.io/fmcs
 
 ## How it is tested
 
-The automated suite passed 593 [unit](https://github.com/Nutts5796/logiparity/tree/main/tests/unit) and [adapter](https://github.com/Nutts5796/logiparity/tree/main/tests/adapters) tests. The 117 passing [end-to-end tests](https://github.com/Nutts5796/logiparity/tree/main/tests/e2e) exercise real Chromium, disposable PostgreSQL and synthetic HTTP services. Coverage includes core, adapters, scenarios and CLI; packages/ai is tested but excluded from this coverage figure. Unit/adapter line coverage is 91.94% (3,321/3,612), above the 80% gate: core 97.14%, adapters 91.01%, scenarios 82.29% and CLI 60.59%. Scenario runner.ts and CLI subprocess behavior are exercised by e2e and installed-package checks and do not increase unit-process coverage.
+The automated suite passed 617 [unit](https://github.com/Nutts5796/logiparity/tree/main/tests/unit) and [adapter](https://github.com/Nutts5796/logiparity/tree/main/tests/adapters) tests. The 119 passing [end-to-end tests](https://github.com/Nutts5796/logiparity/tree/main/tests/e2e) exercise real Chromium, disposable PostgreSQL and synthetic HTTP services. Coverage includes core, adapters, scenarios and CLI; packages/ai is tested but excluded from this coverage figure. Unit/adapter line coverage is 91.22% (3,503/3,840), above the 80% gate: core 97.15%, adapters 91.27%, scenarios 82.29% and CLI 65.83%. Scenario runner.ts and CLI subprocess behavior are exercised by e2e and installed-package checks and do not increase unit-process coverage.
 
-Installed-package checks cover both optional-peer profiles, public imports and declarations, installed demo/scenario commands and empty-cache offline installation. The 1.2.0 package check uses npm 11.6.0 for plain npm install, npm ci, npm audit and npm audit signatures in default and optional-peer consumer profiles. The full profile uses the exact recorded tested peers (Playwright 1.64.1), matching the lockfile browser and offline kit; public peer ranges remain unchanged. Historical 1.1.0 verification also covered six npm 10/11 profiles and coexistence with older compatible peers. The clean-source quickstart executed the README commands, including plain npm ci, and checked all report formats.
+Installed-package checks cover both optional-peer profiles, public imports and declarations, installed demo/scenario commands and empty-cache offline installation. The 1.3.0 package check uses npm 11.6.0 for plain npm install, npm ci, npm audit and npm audit signatures in default and optional-peer consumer profiles. The full profile uses the exact recorded tested peers (Playwright 1.64.1), matching the lockfile browser and offline kit; public peer ranges remain unchanged. Historical 1.1.0 verification also covered six npm 10/11 profiles and coexistence with older compatible peers. The earlier clean-source quickstart executed the README commands, including plain npm ci, and checked all report formats; that full quickstart was not rerun for 1.3.0.
 
 The seeded mixed-cause regression [m11-causes.test.ts](https://github.com/Nutts5796/logiparity/blob/main/tests/unit/m11-causes.test.ts) plants case, whitespace, numeric and consistent enum changes together. The seeded property-based test [filter-contributions.test.ts](https://github.com/Nutts5796/logiparity/blob/main/tests/unit/filter-contributions.test.ts) checks reconciliation while amounts and filter fields change independently. Regression cases include one-off differences that never become patterns, DST gaps and overlaps, capped pages, duplicate keys, source filters and currency partitions, XLSX amplification, temporary-file cleanup, path escape, redirect refusal and report symlinks. Tests and fixtures are synthetic; these results are not claims about production use. Live publication, Docker builds/image execution and real staging APIs are not tested by this review. Detailed commands and review limits are in the [milestone report](https://github.com/Nutts5796/logiparity/blob/main/docs/development/MILESTONE_REPORT.md).
 
@@ -253,7 +263,7 @@ Test and staging only. Read-only except scenario events you map yourself. No tel
 
 ## Status
 
-Version 1.2.1 — 2026-11-08. Maintained by Sergei Orekhovskii.
+Development target 1.3.0; latest published version 1.2.1. Maintained by Sergei Orekhovskii.
 
 Pilots and feedback: share a sanitized use case or defect through [Issues](https://github.com/Nutts5796/logiparity/issues).
 
@@ -263,6 +273,8 @@ Sergei Orekhovskii, the maintainer, is a QA engineer who previously ran transpor
 
 ## Reference
 
+- [Generic examples](examples/generic/README.md), [suggest recipe](docs/recipes/suggest.md), [cause evaluation](docs/evaluation/README.md)
+- [Architecture](docs/architecture.md) and [contributor rules](AGENTS.md)
 - [Configuration](docs/configuration.md), [scenarios](docs/scenarios.md) and [optional AI drafts](docs/ai.md)
 - [Socrata/FMCSA recipe](docs/recipes/socrata.md)
 - [Reports](docs/report-formats.md), [JSON schema](docs/report-schema.md) and [adapter development](docs/writing-adapters.md)

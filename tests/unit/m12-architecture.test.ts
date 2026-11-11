@@ -31,6 +31,9 @@ it('allows lower/runtime and cross-concern type dependencies, rejects reversals 
       await writeFile(join(dir, 'values/value.ts'), text);
       await expect(run(process.execPath, [script, dir])).rejects.toMatchObject({ code: 1 });
     }
+    await writeFile(join(dir, 'values/value.ts'), 'export type V = string;');
+    await writeFile(join(dir, 'index.ts'), 'export const hidden = 1;');
+    await expect(run(process.execPath, [script, dir])).rejects.toMatchObject({ code: 1 });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
