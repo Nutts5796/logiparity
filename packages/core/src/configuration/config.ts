@@ -4,16 +4,16 @@ import {
   referencedEnvironment,
   rememberEnvironment,
   shortSecretWarnings,
-} from './diagnostics.js';
+} from '../foundation/diagnostics.js';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { parseDocument } from 'yaml';
 import { z } from 'zod';
-import { normalize, sourceRule } from './normalize.js';
-import { validAllowedHost } from './hosts.js';
+import { normalize, sourceRule } from '../values/normalize.js';
+import { validAllowedHost } from '../foundation/hosts.js';
 import { DateTime } from 'luxon';
-import { findingCategories } from './policy.js';
-import { formatHasTime, isCalendarFormat } from './calendar.js';
+import { findingCategories } from '../foundation/policy.js';
+import { formatHasTime, isCalendarFormat } from '../values/calendar.js';
 
 const name = z.string().min(1);
 const locale = name.refine((value) => {

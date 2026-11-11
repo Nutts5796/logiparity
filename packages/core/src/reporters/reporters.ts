@@ -1,18 +1,25 @@
-import { reconciliationDetails } from './reconciliation-display.js';
-import { aggregateDisplay, rawAggregateDisplay } from './money-display.js';
-import { safeConsole, redactTree, secretValues } from './diagnostics.js';
-import { atomicReportFile, ensureReportDirectory } from './atomic-file.js';
+import { reconciliationDetails } from '../presentation/reconciliation-display.js';
+import { aggregateDisplay, rawAggregateDisplay } from '../presentation/money-display.js';
+import { safeConsole, redactTree, secretValues } from '../foundation/diagnostics.js';
+import { atomicReportFile, ensureReportDirectory } from '../foundation/atomic-file.js';
 import { join } from 'node:path';
-import { reportLabels, uncertainKeyText, humanize } from './labels.js';
-import { errorText, type Config } from './config.js';
-import type { Report } from './types.js';
-import { reportGroups, presentationFindings } from './groups.js';
-import { humanFinding, reportCounts, quantity, mergedPatternWords, typeLabels, matchingHeadline } from './human.js';
-import { isBlocking } from './policy.js';
+import { reportLabels, uncertainKeyText, humanize } from '../presentation/labels.js';
+import { errorText, type Config } from '../configuration/config.js';
+import type { Report } from '../foundation/types.js';
+import { reportGroups, presentationFindings } from '../causes/groups.js';
+import {
+  humanFinding,
+  reportCounts,
+  quantity,
+  mergedPatternWords,
+  typeLabels,
+  matchingHeadline,
+} from '../presentation/human.js';
+import { isBlocking } from '../foundation/policy.js';
 import { htmlReport } from './html.js';
 import { junitReport } from './junit.js';
 import { markdownReport } from './markdown.js';
-import type { ReportPresentation } from './money-display.js';
+import type { ReportPresentation } from '../presentation/money-display.js';
 
 export function reportExitCode(report: Report): 0 | 1 | 2 {
   return report.findings.some((f) => f.type === 'source_error') ? 2 : report.findings.some(isBlocking) ? 1 : 0;

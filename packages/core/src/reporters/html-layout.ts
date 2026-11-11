@@ -1,6 +1,6 @@
-import { escapeMarkup as escape } from './report-utils.js';
-import { numberText } from './human.js';
-import { brandMark, studioStyle, themeButton } from './studio.js';
+import { escapeMarkup as escape } from '../presentation/report-utils.js';
+import { numberText } from '../presentation/human.js';
+import { brandMark, studioStyle, themeButton } from '../presentation/studio.js';
 export function reportHeader(header: string): string {
   return `<header class="top"><div class="brand">${brandMark}LogiParity <span class="sub">/ Reconciliation report</span></div>
 <div class="top-r"><span class="chip">${escape(header)}</span>${themeButton}</div></header>`;

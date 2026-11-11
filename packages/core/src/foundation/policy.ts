@@ -1,4 +1,4 @@
-import type { EntityConfig } from './config.js';
+import type { EntityConfig } from '../configuration/config.js';
 import type { Finding, FindingType, Report } from './types.js';
 
 export const findingCategories = ['missing', 'extra', 'mismatch', 'aggregate', 'duplicate', 'invalid'] as const;

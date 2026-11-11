@@ -1,5 +1,5 @@
-import type { RowFilter } from './config.js';
-import type { SourceConfig } from './config.js';
+import type { RowFilter } from '../configuration/config.js';
+import type { SourceConfig } from '../configuration/config.js';
 
 export const wallClock = Symbol.for('logiparity.wallClock');
 export const sourceIssue = Symbol.for('logiparity.sourceIssue');

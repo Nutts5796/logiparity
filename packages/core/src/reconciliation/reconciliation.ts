@@ -1,8 +1,8 @@
-import type { EntityConfig } from './config.js';
-import type { SourceState, Row } from './source-state.js';
-import type { AggregateResult, AggregateReconciliation, EntitySummary, Report } from './types.js';
-import { matchesFilter } from './filters.js';
-import { negateDecimal, sumDecimal } from './aggregates.js';
+import type { EntityConfig } from '../configuration/config.js';
+import type { SourceState, Row } from '../matching/source-state.js';
+import type { AggregateResult, AggregateReconciliation, EntitySummary, Report } from '../foundation/types.js';
+import { matchesFilter } from '../values/filters.js';
+import { negateDecimal, sumDecimal } from '../values/aggregates.js';
 
 type Amount = bigint | string;
 const sum = (...values: Amount[]): Amount =>

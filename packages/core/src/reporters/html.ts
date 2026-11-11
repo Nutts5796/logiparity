@@ -1,12 +1,22 @@
-import { DecimalSum, displayDecimal, negateDecimal, sumDecimal } from './aggregates.js';
+import { DecimalSum, displayDecimal, negateDecimal, sumDecimal } from '../values/aggregates.js';
 import { reportHeader, reportHero, findingDonut, findingsSection, reportDocument } from './html-layout.js';
-import { redactTree, secretValues } from './diagnostics.js';
-import { aggregateDisplay, rawAggregateDisplay, aggregateDifference, aggregateStatus } from './money-display.js';
+import { redactTree, secretValues } from '../foundation/diagnostics.js';
+import {
+  aggregateDisplay,
+  rawAggregateDisplay,
+  aggregateDifference,
+  aggregateStatus,
+} from '../presentation/money-display.js';
 import { createHash } from 'node:crypto';
-import { groupMembership, reportGroups, accountedFindingIndexes } from './groups.js';
-import { reportLabels, humanize, uncertainKeyText } from './labels.js';
-import { formatMoneyMajor, readableDatetime, displayTimezoneLabel, type ReportPresentation } from './money-display.js';
-import { escapeMarkup as escape } from './report-utils.js';
+import { groupMembership, reportGroups, accountedFindingIndexes } from '../causes/groups.js';
+import { reportLabels, humanize, uncertainKeyText } from '../presentation/labels.js';
+import {
+  formatMoneyMajor,
+  readableDatetime,
+  displayTimezoneLabel,
+  type ReportPresentation,
+} from '../presentation/money-display.js';
+import { escapeMarkup as escape } from '../presentation/report-utils.js';
 import {
   matchingHeadline,
   humanFinding,
@@ -15,11 +25,11 @@ import {
   numberText,
   typeLabels,
   patternWords,
-} from './human.js';
+} from '../presentation/human.js';
 import { patternCards, kindInfo, icon } from './html-patterns.js';
-import { themeScript } from './studio.js';
-import { isBlocking } from './policy.js';
-import type { Report, Finding, AggregateResult, EntitySummary } from './types.js';
+import { themeScript } from '../presentation/studio.js';
+import { isBlocking } from '../foundation/policy.js';
+import type { Report, Finding, AggregateResult, EntitySummary } from '../foundation/types.js';
 const columns = {
   key: 0,
   source: 1,
@@ -164,9 +174,9 @@ function reconciliationCards(report: Report, presentation: ReportPresentation): 
             const partitions = aggregate.reconciliationByCurrency
               ? Object.entries(value).map(([currency, parts]) => ({
                   currency,
-                  parts: parts as import('./types.js').AggregateReconciliation,
+                  parts: parts as import('../foundation/types.js').AggregateReconciliation,
                 }))
-              : [{ currency: undefined, parts: value as import('./types.js').AggregateReconciliation }];
+              : [{ currency: undefined, parts: value as import('../foundation/types.js').AggregateReconciliation }];
             return partitions.flatMap(({ currency, parts }) => {
               const actual = currency
                   ? (aggregate.valuesByCurrency?.[source]?.[currency] ?? 0n)

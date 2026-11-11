@@ -1,5 +1,5 @@
-import { isBlocking } from './policy.js';
-import type { Finding, NormalizedValue, Report } from './types.js';
+import { isBlocking } from '../foundation/policy.js';
+import type { Finding, NormalizedValue, Report } from '../foundation/types.js';
 
 export const findingTypes = [
   'missing_in_source',

@@ -1,8 +1,13 @@
-import { patternWords } from './human.js';
-import { ordinal } from './labels.js';
-import type { EntityConfig } from './config.js';
-import type { Finding, FindingGroup, Report } from './types.js';
-import { durationValue, formatMoneyMajor, integerValue, type ReportPresentation } from './money-display.js';
+import { patternWords } from '../presentation/human.js';
+import { ordinal } from '../presentation/labels.js';
+import type { EntityConfig } from '../configuration/config.js';
+import type { Finding, FindingGroup, Report } from '../foundation/types.js';
+import {
+  durationValue,
+  formatMoneyMajor,
+  integerValue,
+  type ReportPresentation,
+} from '../presentation/money-display.js';
 
 export interface PatternOptions {
   minCount?: number;

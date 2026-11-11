@@ -1,5 +1,7 @@
 # Contributing
 
+Start with [AGENTS.md](AGENTS.md) for package boundaries, extension points and exact checks, and [architecture](docs/architecture.md) for data flow and the public/internal API boundary.
+
 Bug reports, synthetic reproductions, documentation improvements and adapter work are welcome. Start with a small issue describing the problem and expected behavior. For a larger change, discuss the proposed interface before implementing it. The [roadmap](docs/roadmap.md) lists starter tasks.
 
 ## Setup

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 const font = (name: string) =>
-  readFileSync(new URL(`../assets/fonts/${name}-latin.woff2`, import.meta.url)).toString('base64');
+  readFileSync(new URL(`../../assets/fonts/${name}-latin.woff2`, import.meta.url)).toString('base64');
 export const studioStyle = `
 @font-face { font-family: Manrope; font-style: normal; font-weight: 500 800; font-display: swap; src: url(data:font/woff2;base64,${font('manrope')}) format('woff2'); }
 @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400 600; font-display: swap; src: url(data:font/woff2;base64,${font('jetbrainsmono')}) format('woff2'); }

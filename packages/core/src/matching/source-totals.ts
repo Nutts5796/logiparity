@@ -1,7 +1,7 @@
-import type { EntityConfig, SourceConfig, ComparisonRule } from './config.js';
+import type { EntityConfig, SourceConfig, ComparisonRule } from '../configuration/config.js';
 import type { Row, SourceState } from './source-state.js';
-import { DecimalSum } from './aggregates.js';
-import { matchesFilter } from './filters.js';
+import { DecimalSum } from '../values/aggregates.js';
+import { matchesFilter } from '../values/filters.js';
 
 export function rowCurrency(rule: ComparisonRule, config: SourceConfig, row: Record<string, unknown>): string {
   const field = rule.currencyField ?? config.currencyField;

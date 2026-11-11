@@ -1,13 +1,13 @@
-import { reconciliationDetails } from './reconciliation-display.js';
-import { redactTree, secretValues } from './diagnostics.js';
-import { reportGroups } from './groups.js';
-import { mergedPatternWords } from './human.js';
-import { isBlocking } from './policy.js';
-import { entityNames, escapeMarkup, findingTypes } from './report-utils.js';
-import { humanFinding, quantity, typeLabels } from './human.js';
-import type { ReportPresentation } from './money-display.js';
-import { reportLabels } from './labels.js';
-import type { Report } from './types.js';
+import { reconciliationDetails } from '../presentation/reconciliation-display.js';
+import { redactTree, secretValues } from '../foundation/diagnostics.js';
+import { reportGroups } from '../causes/groups.js';
+import { mergedPatternWords } from '../presentation/human.js';
+import { isBlocking } from '../foundation/policy.js';
+import { entityNames, escapeMarkup, findingTypes } from '../presentation/report-utils.js';
+import { humanFinding, quantity, typeLabels } from '../presentation/human.js';
+import type { ReportPresentation } from '../presentation/money-display.js';
+import { reportLabels } from '../presentation/labels.js';
+import type { Report } from '../foundation/types.js';
 
 function xml(input: string): string {
   const valid = [...input]

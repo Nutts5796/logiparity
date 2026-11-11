@@ -1,16 +1,16 @@
-import { reportLabels } from './labels.js';
-import { limitFindings, appendFinding, FindingsLimitError } from './finding-limit.js';
-import { secretValues, redactSecrets, redactTree } from './diagnostics.js';
-import { keyFields, type EntityConfig, type Config } from './config.js';
-import type { Report, Finding, SourceReader, EntitySummary } from './types.js';
+import { reportLabels } from '../presentation/labels.js';
+import { limitFindings, appendFinding, FindingsLimitError } from '../foundation/finding-limit.js';
+import { secretValues, redactSecrets, redactTree } from '../foundation/diagnostics.js';
+import { keyFields, type EntityConfig, type Config } from '../configuration/config.js';
+import type { Report, Finding, SourceReader, EntitySummary } from '../foundation/types.js';
 import { readSource, type SourceState } from './source-state.js';
-import { equalValues } from './normalize.js';
-import { aggregateEqual, sumDecimal } from './aggregates.js';
-import { applyFailurePolicies } from './policy.js';
-import { groupFindings, attachGroupMembership } from './groups.js';
-import { collectReconciliation, reconcileAggregates } from './reconciliation.js';
-import { keyText } from './keys.js';
-import { formatMoneyMajor } from './money-display.js';
+import { equalValues } from '../values/normalize.js';
+import { aggregateEqual, sumDecimal } from '../values/aggregates.js';
+import { applyFailurePolicies } from '../foundation/policy.js';
+import { groupFindings, attachGroupMembership } from '../causes/groups.js';
+import { collectReconciliation, reconcileAggregates } from '../reconciliation/reconciliation.js';
+import { keyText } from '../foundation/keys.js';
+import { formatMoneyMajor } from '../presentation/money-display.js';
 function displayZone(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   try {

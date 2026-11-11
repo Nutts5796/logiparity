@@ -1,5 +1,5 @@
-import type { EntityConfig, RowFilter } from './config.js';
-import type { NormalizedValue } from './types.js';
+import type { EntityConfig, RowFilter } from '../configuration/config.js';
+import type { NormalizedValue } from '../foundation/types.js';
 import { normalize, sourceRule } from './normalize.js';
 export function matchesFilter(
   row: Record<string, NormalizedValue>,

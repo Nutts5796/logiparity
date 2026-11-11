@@ -1,4 +1,4 @@
-import type { EntityConfig } from './config.js';
+import type { EntityConfig } from '../configuration/config.js';
 import type { ReportPresentation } from './money-display.js';
 
 export function humanize(name: string): string {

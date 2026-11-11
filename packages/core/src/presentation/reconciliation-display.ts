@@ -1,7 +1,7 @@
 import { reportLabels, uncertainKeyText } from './labels.js';
 import { formatMoneyMajor, type ReportPresentation } from './money-display.js';
-import type { Report, AggregateReconciliation } from './types.js';
-import { displayDecimal, sumDecimal } from './aggregates.js';
+import type { Report, AggregateReconciliation } from '../foundation/types.js';
+import { displayDecimal, sumDecimal } from '../values/aggregates.js';
 
 export function reconciliationDetails(
   report: Report,

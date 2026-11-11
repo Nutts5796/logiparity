@@ -1,7 +1,7 @@
 import { DateTime } from 'luxon';
 import type { ExplainedFormat } from 'luxon';
-import type { ComparisonRule, SourceConfig } from './config.js';
-import { wallClock, type NormalizedValue } from './types.js';
+import type { ComparisonRule, SourceConfig } from '../configuration/config.js';
+import { wallClock, type NormalizedValue } from '../foundation/types.js';
 import { normalizeDate } from './calendar.js';
 
 export function sourceRule(

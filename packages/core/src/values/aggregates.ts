@@ -1,6 +1,6 @@
 import { matchesFilter } from './filters.js';
-import type { AggregateConfig, EntityConfig, SourceConfig } from './config.js';
-import type { NormalizedValue } from './types.js';
+import type { AggregateConfig, EntityConfig, SourceConfig } from '../configuration/config.js';
+import type { NormalizedValue } from '../foundation/types.js';
 
 // Exact decimal addition of canonical normalized numbers keeps sums independent
 // of record order and avoids artifacts such as 0.1 + 0.2 !== 0.3.

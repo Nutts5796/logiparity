@@ -1,15 +1,15 @@
-import { reconciliationDetails } from './reconciliation-display.js';
-import { redactTree, secretValues } from './diagnostics.js';
+import { reconciliationDetails } from '../presentation/reconciliation-display.js';
+import { redactTree, secretValues } from '../foundation/diagnostics.js';
 import {
   aggregateDisplay,
   rawAggregateDisplay,
   aggregateDifference,
   aggregateStatus,
   displayTimezoneLabel,
-} from './money-display.js';
-import { reportGroups, groupMembership, accountedFindingIndexes } from './groups.js';
-import { verdict } from './report-utils.js';
-import { reportLabels, uncertainKeyText } from './labels.js';
+} from '../presentation/money-display.js';
+import { reportGroups, groupMembership, accountedFindingIndexes } from '../causes/groups.js';
+import { verdict } from '../presentation/report-utils.js';
+import { reportLabels, uncertainKeyText } from '../presentation/labels.js';
 import {
   matchingHeadline,
   humanFinding,
@@ -18,9 +18,9 @@ import {
   typeLabels,
   mergedPatternWords,
   markdownCell as cell,
-} from './human.js';
-import { type ReportPresentation } from './money-display.js';
-import type { Report, Finding } from './types.js';
+} from '../presentation/human.js';
+import { type ReportPresentation } from '../presentation/money-display.js';
+import type { Report, Finding } from '../foundation/types.js';
 const row = (finding: Finding, presentation: ReportPresentation) => {
   const item = humanFinding(finding, presentation);
   return `| ${[item.key, item.source, item.field, item.reference, item.sourceValue, item.difference, finding.accounting ? `Follows from: ${finding.accounting.causes.join(', ')}` : item.details || item.type].map(cell).join(' | ')} |`;

@@ -1,17 +1,24 @@
-import { resourceLimitMessage } from './resource-limit.js';
-import { reportLabels } from './labels.js';
-import { appendFinding } from './finding-limit.js';
-import { humanize } from './labels.js';
+import { resourceLimitMessage } from '../foundation/resource-limit.js';
+import { reportLabels } from '../presentation/labels.js';
+import { appendFinding } from '../foundation/finding-limit.js';
+import { humanize } from '../presentation/labels.js';
 import { rowCurrency, recordRawTotals, measureCurrencies } from './source-totals.js';
-import { keyFields, errorText, type EntityConfig, type SourceConfig } from './config.js';
-import { sourceRule, normalize } from './normalize.js';
-import { matchesFilter } from './filters.js';
-import { keyText } from './keys.js';
-import { formatMoneyMajor } from './money-display.js';
-import { DecimalSum, measureAggregate } from './aggregates.js';
-import { sourceRow, sourceIssue, type Finding, type NormalizedValue, type SourceReader, type Report } from './types.js';
-import { redactSecrets } from './diagnostics.js';
-import { SourceError } from './source-error.js';
+import { keyFields, errorText, type EntityConfig, type SourceConfig } from '../configuration/config.js';
+import { sourceRule, normalize } from '../values/normalize.js';
+import { matchesFilter } from '../values/filters.js';
+import { keyText } from '../foundation/keys.js';
+import { formatMoneyMajor } from '../presentation/money-display.js';
+import { DecimalSum, measureAggregate } from '../values/aggregates.js';
+import {
+  sourceRow,
+  sourceIssue,
+  type Finding,
+  type NormalizedValue,
+  type SourceReader,
+  type Report,
+} from '../foundation/types.js';
+import { redactSecrets } from '../foundation/diagnostics.js';
+import { SourceError } from '../foundation/source-error.js';
 export type Row = Record<string, NormalizedValue>;
 export interface SourceState {
   rows: Map<string, Row>;
